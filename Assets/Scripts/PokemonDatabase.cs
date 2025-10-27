@@ -9,8 +9,8 @@ public sealed class PokemonDatabase
     public static PokemonDatabase Instance => _instance ??= new PokemonDatabase();
 
 
-    private Dictionary<int, Pokemon> byId = new();
-    private Dictionary<string, Pokemon> byKey = new();
+    private readonly Dictionary<int, Pokemon> byId = new();
+    private readonly Dictionary<string, Pokemon> byKey = new();
     private List<Pokemon> all = new();
 
 

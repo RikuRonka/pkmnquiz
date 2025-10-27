@@ -10,6 +10,8 @@ public class Pokemon
     public int generation; // 1..9
     public string sprite; // Resources path (optional), e.g., "Sprites/001"
     public string[] aliases; // accepted alternative guesses
+    public int baseId;          // optional
+    public string formKey;
 }
 
 

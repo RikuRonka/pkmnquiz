@@ -1,0 +1,106 @@
+## Alola 
+Rowlet
+Dartrix
+Decidueye
+Litten
+Torracat
+Incineroar
+Popplio
+Brionne
+Primarina
+Yungoos
+Gumshoos
+Rattata (Alola)
+Raticate (Alola)
+Raichu (Alola)
+Grubbin
+Charjabug
+Vikavolt
+Meowth (Alola)
+Persian (Alola)
+Grimer (Alola)
+Muk (Alola)
+Crabrawler
+Crabominable
+Diglett (Alola)
+Dugtrio (Alola)
+Oricorio
+Cutiefly
+Ribombee
+Rockruff
+Lycanroc
+Wishiwashi
+Mareanie
+Toxapex
+Mudbray
+Mudsdale
+Dewpider
+Araquanid
+Fomantis
+Lurantis
+Morelull
+Shiinotic
+Salandit
+Salazzle
+Marowak (Alola)
+Stufful
+Bewear
+Bounsweet
+Steenee
+Tsareena
+Comfey
+Oranguru
+Passimian
+Wimpod
+Golisopod
+Sandygast
+Palossand
+Pyukumuku
+Type: Null
+Silvally
+Minior
+Komala
+Turtonator
+Togedemaru
+Geodude (Alola)
+Graveler (Alola)
+Golem (Alola)
+Mimikyu
+Bruxish
+Drampa
+Sandshrew (Alola)
+Sandslash (Alola)
+Vulpix (Alola)
+Ninetales (Alola)
+Dhelmise
+Exeggutor (Alola)
+Jangmo-o
+Hakamo-o
+Kommo-o
+Tapu Koko
+Tapu Lele
+Tapu Bulu
+Tapu Fini
+Cosmog
+Cosmoem
+Solgaleo
+Lunala
+Nihilego
+Buzzwole
+Pheromosa
+Xurkitree
+Celesteela
+Kartana
+Guzzlord
+Necrozma
+Magearna
+Marshadow
+Poipole
+Naganadel
+Stakataka
+Blacephalon
+Zeraora
+
+## Unknown
+Meltan
+Melmetal
