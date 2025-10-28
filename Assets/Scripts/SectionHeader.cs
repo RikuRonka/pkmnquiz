@@ -1,4 +1,3 @@
-// SectionHeader.cs
 using TMPro;
 using UnityEngine;
 

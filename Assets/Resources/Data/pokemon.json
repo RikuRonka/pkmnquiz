@@ -1526,7 +1526,63 @@
   { "id":1024, "name":"Terapagos",     "generation":9, "types":["Normal"],
     "aliases": ["Terapagos Terastal Form","Terapagos Stellar Form"] },
 
-  { "id":1025, "name":"Pecharunt",     "generation":9, "types":["Poison","Ghost"] }
+  { "id":1025, "name":"Pecharunt",     "generation":9, "types":["Poison","Ghost"] },
+  { "id":3001,"name":"Venusaur (Mega)","generation":6,"types":["Grass","Poison"],"baseId":3,"formKey":"mega","aliases":["Mega Venusaur","Venusaur Mega"]},
+  {"id":6002,"name":"Charizard (Mega X)","generation":6,"types":["Fire","Dragon"],"baseId":6,"formKey":"megax","aliases":["Mega Charizard X","Charizard Mega X","Charizard X"]},
+  {"id":6003,"name":"Charizard (Mega Y)","generation":6,"types":["Fire","Flying"],"baseId":6,"formKey":"megay","aliases":["Mega Charizard Y","Charizard Mega Y","Charizard Y"]},
+  {"id":9001,"name":"Blastoise (Mega)","generation":6,"types":["Water"],"baseId":9,"formKey":"mega","aliases":["Mega Blastoise","Blastoise Mega"]},
+
+  {"id":150012,"name":"Beedrill (Mega)","generation":6,"types":["Bug","Poison"],"baseId":15,"formKey":"mega","aliases":["Mega Beedrill","Beedrill Mega"]},
+  {"id":180012,"name":"Pidgeot (Mega)","generation":6,"types":["Normal","Flying"],"baseId":18,"formKey":"mega","aliases":["Mega Pidgeot","Pidgeot Mega"]},
+  {"id":65001,"name":"Alakazam (Mega)","generation":6,"types":["Psychic"],"baseId":65,"formKey":"mega","aliases":["Mega Alakazam","Alakazam Mega"]},
+  {"id":80001,"name":"Gengar (Mega)","generation":6,"types":["Ghost","Poison"],"baseId":94,"formKey":"mega","aliases":["Mega Gengar","Gengar Mega"]},
+  {"id":115001,"name":"Kangaskhan (Mega)","generation":6,"types":["Normal"],"baseId":115,"formKey":"mega","aliases":["Mega Kangaskhan","Kangaskhan Mega"]},
+  {"id":127001,"name":"Pinsir (Mega)","generation":6,"types":["Bug","Flying"],"baseId":127,"formKey":"mega","aliases":["Mega Pinsir","Pinsir Mega"]},
+  {"id":130001,"name":"Gyarados (Mega)","generation":6,"types":["Water","Dark"],"baseId":130,"formKey":"mega","aliases":["Mega Gyarados","Gyarados Mega"]},
+  {"id":142001,"name":"Aerodactyl (Mega)","generation":6,"types":["Rock","Flying"],"baseId":142,"formKey":"mega","aliases":["Mega Aerodactyl","Aerodactyl Mega"]},
+
+  {"id":150002,"name":"Mewtwo (Mega X)","generation":6,"types":["Psychic","Fighting"],"baseId":150,"formKey":"megax","aliases":["Mega Mewtwo X","Mewtwo Mega X","Mewtwo X"]},
+  {"id":150003,"name":"Mewtwo (Mega Y)","generation":6,"types":["Psychic"],"baseId":150,"formKey":"megay","aliases":["Mega Mewtwo Y","Mewtwo Mega Y","Mewtwo Y"]},
+
+  {"id":181001,"name":"Ampharos (Mega)","generation":6,"types":["Electric","Dragon"],"baseId":181,"formKey":"mega","aliases":["Mega Ampharos","Ampharos Mega"]},
+  {"id":208001,"name":"Steelix (Mega)","generation":6,"types":["Steel","Ground"],"baseId":208,"formKey":"mega","aliases":["Mega Steelix","Steelix Mega"]},
+  {"id":212001,"name":"Scizor (Mega)","generation":6,"types":["Bug","Steel"],"baseId":212,"formKey":"mega","aliases":["Mega Scizor","Scizor Mega"]},
+  {"id":214001,"name":"Heracross (Mega)","generation":6,"types":["Bug","Fighting"],"baseId":214,"formKey":"mega","aliases":["Mega Heracross","Heracross Mega"]},
+  {"id":229001,"name":"Houndoom (Mega)","generation":6,"types":["Dark","Fire"],"baseId":229,"formKey":"mega","aliases":["Mega Houndoom","Houndoom Mega"]},
+  {"id":248001,"name":"Tyranitar (Mega)","generation":6,"types":["Rock","Dark"],"baseId":248,"formKey":"mega","aliases":["Mega Tyranitar","Tyranitar Mega"]},
+
+  {"id":254001,"name":"Sceptile (Mega)","generation":6,"types":["Grass","Dragon"],"baseId":254,"formKey":"mega","aliases":["Mega Sceptile","Sceptile Mega"]},
+  {"id":257001,"name":"Blaziken (Mega)","generation":6,"types":["Fire","Fighting"],"baseId":257,"formKey":"mega","aliases":["Mega Blaziken","Blaziken Mega"]},
+  {"id":260001,"name":"Swampert (Mega)","generation":6,"types":["Water","Ground"],"baseId":260,"formKey":"mega","aliases":["Mega Swampert","Swampert Mega"]},
+  {"id":282001,"name":"Gardevoir (Mega)","generation":6,"types":["Psychic","Fairy"],"baseId":282,"formKey":"mega","aliases":["Mega Gardevoir","Gardevoir Mega"]},
+  {"id":303001,"name":"Mawile (Mega)","generation":6,"types":["Steel","Fairy"],"baseId":303,"formKey":"mega","aliases":["Mega Mawile","Mawile Mega"]},
+  {"id":306001,"name":"Aggron (Mega)","generation":6,"types":["Steel"],"baseId":306,"formKey":"mega","aliases":["Mega Aggron","Aggron Mega"]},
+  {"id":308001,"name":"Medicham (Mega)","generation":6,"types":["Fighting","Psychic"],"baseId":308,"formKey":"mega","aliases":["Mega Medicham","Medicham Mega"]},
+  {"id":310001,"name":"Manectric (Mega)","generation":6,"types":["Electric"],"baseId":310,"formKey":"mega","aliases":["Mega Manectric","Manectric Mega"]},
+  {"id":319001,"name":"Sharpedo (Mega)","generation":6,"types":["Water","Dark"],"baseId":319,"formKey":"mega","aliases":["Mega Sharpedo","Sharpedo Mega"]},
+  {"id":323001,"name":"Camerupt (Mega)","generation":6,"types":["Fire","Ground"],"baseId":323,"formKey":"mega","aliases":["Mega Camerupt","Camerupt Mega"]},
+  {"id":334001,"name":"Altaria (Mega)","generation":6,"types":["Dragon","Fairy"],"baseId":334,"formKey":"mega","aliases":["Mega Altaria","Altaria Mega"]},
+  {"id":354001,"name":"Banette (Mega)","generation":6,"types":["Ghost"],"baseId":354,"formKey":"mega","aliases":["Mega Banette","Banette Mega"]},
+  {"id":359001,"name":"Absol (Mega)","generation":6,"types":["Dark"],"baseId":359,"formKey":"mega","aliases":["Mega Absol","Absol Mega"]},
+  {"id":362001,"name":"Glalie (Mega)","generation":6,"types":["Ice"],"baseId":362,"formKey":"mega","aliases":["Mega Glalie","Glalie Mega"]},
+  {"id":380001,"name":"Latias (Mega)","generation":6,"types":["Dragon","Psychic"],"baseId":380,"formKey":"mega","aliases":["Mega Latias","Latias Mega"]},
+  {"id":381001,"name":"Latios (Mega)","generation":6,"types":["Dragon","Psychic"],"baseId":381,"formKey":"mega","aliases":["Mega Latios","Latios Mega"]},
+
+  {"id":445001,"name":"Garchomp (Mega)","generation":6,"types":["Dragon","Ground"],"baseId":445,"formKey":"mega","aliases":["Mega Garchomp","Garchomp Mega"]},
+  {"id":448001,"name":"Lucario (Mega)","generation":6,"types":["Fighting","Steel"],"baseId":448,"formKey":"mega","aliases":["Mega Lucario","Lucario Mega"]},
+  {"id":460001,"name":"Abomasnow (Mega)","generation":6,"types":["Grass","Ice"],"baseId":460,"formKey":"mega","aliases":["Mega Abomasnow","Abomasnow Mega"]},
+  {"id":475001,"name":"Gallade (Mega)","generation":6,"types":["Psychic","Fighting"],"baseId":475,"formKey":"mega","aliases":["Mega Gallade","Gallade Mega"]},
+  {"id":428001, "name":"Lopunny (Mega)","generation":6,"types":["Normal","Fighting"],"baseId":428,"formKey":"mega","aliases":["Mega Lopunny","Lopunny Mega"]},
+
+  {"id":302001,"name":"Sableye (Mega)","generation":6,"types":["Dark","Ghost"],"baseId":302,"formKey":"mega","aliases":["Mega Sableye","Sableye Mega"]},
+  {"id":362002,"name":"Glalie (Mega)","generation":6,"types":["Ice"],"baseId":362,"formKey":"mega","aliases":["Mega Glalie","Glalie Mega"]},
+  {"id":373001,"name":"Salamence (Mega)","generation":6,"types":["Dragon","Flying"],"baseId":373,"formKey":"mega","aliases":["Mega Salamence","Salamence Mega"]},
+  {"id":376001,"name":"Metagross (Mega)","generation":6,"types":["Steel","Psychic"],"baseId":376,"formKey":"mega","aliases":["Mega Metagross","Metagross Mega"]},
+
+  {"id":531001,"name":"Audino (Mega)","generation":6,"types":["Normal","Fairy"],"baseId":531,"formKey":"mega","aliases":["Mega Audino","Audino Mega"]},
+
+  {"id":719001,"name":"Diancie (Mega)","generation":6,"types":["Rock","Fairy"],"baseId":719,"formKey":"mega","aliases":["Mega Diancie","Diancie Mega"]},
+  {"id":384001,"name":"Rayquaza (Mega)","generation":6,"types":["Dragon","Flying"],"baseId":384,"formKey":"mega","aliases":["Mega Rayquaza","Rayquaza Mega"]}
 
   ]
 }

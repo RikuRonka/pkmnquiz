@@ -1,4 +1,5 @@
 // DexOrder.cs
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -34,7 +35,7 @@ public static class DexOrder
         {
             var line = raw.Trim();
             if (string.IsNullOrEmpty(line)) continue;
-            if (line.StartsWith("#")) continue;
+            if (line.StartsWith('#')) continue;
 
             if (line.StartsWith("## "))
             {
@@ -67,18 +68,55 @@ public static class DexOrder
         return baseId * 10 + formBias;
     }
 
-    public static string GetSection(Pokemon p)
+    public static string GetSection(Pokemon p, int gen)
     {
-        if (TryGetEntry(p.name, out var e)) return e.section;
-        if (p.aliases != null)
-            foreach (var a in p.aliases)
-                if (TryGetEntry(a, out e)) return e.section;
-        return null;
+        if (p == null) return string.Empty;
+
+        return gen switch
+        {
+            6 => Helpers.IsMega(p) ? "Mega Evolutions" : "Kalos (Gen 6)",
+
+            8 => Helpers.IsGmax(p) ? "Gigantamax"
+                 : Helpers.IsHisui(p) ? "Hisui Forms"
+                 : "Galar (Gen 8)",
+
+            9 => /* if you add paradox tagging later */ "Paldea (Gen 9)",
+
+            _ => Helpers.GetGenTitle(gen),
+        };
     }
 
     private static bool TryGetEntry(string rawName, out Entry e)
     {
         var key = GuessNormalizer.Key(rawName);
         return _byKey.TryGetValue(key, out e);
+    }
+
+    public static int GetSectionOrder(string name, int gen)
+    {
+        // Gen 6: base first, megas after
+        if (gen == 6)
+        {
+            if (string.Equals(name, "Kalos (Gen 6)")) return 0;
+            if (string.Equals(name, "Mega Evolutions")) return 1;
+        }
+
+        // Gen 8 example (if you use these)
+        if (gen == 8)
+        {
+            if (string.Equals(name, "Galar (Gen 8)")) return 0;
+            if (string.Equals(name, "Gigantamax")) return 1;
+            if (string.Equals(name, "Hisui")) return 2;
+        }
+
+        // Gen 9 example
+        if (gen == 9)
+        {
+            if (string.Equals(name, "Paldea (Gen 9)")) return 0;
+            if (string.Equals(name, "Kitakami")) return 1;
+            if (string.Equals(name, "Blueberry")) return 2;
+        }
+
+        return 0; // default
     }
 }

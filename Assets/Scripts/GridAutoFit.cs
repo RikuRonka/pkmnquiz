@@ -1,97 +1,82 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-[ExecuteAlways, RequireComponent(typeof(GridLayoutGroup))]
+[RequireComponent(typeof(GridLayoutGroup))]
+[RequireComponent(typeof(LayoutElement))]
 public class GridAutoFit : MonoBehaviour
 {
-    public RectTransform viewport;          // assign ScrollView.viewport
-    public GridLayoutGroup grid;            // the grid holding cards
-    public int itemCount;                   // how many cards are in this grid
-    private RectTransform _rt;
+    [Header("Wiring")]
+    public RectTransform Viewport;     // assign from QuizManager
+    public RectTransform Header;       // section header rect
 
-    [Header("Limits")]
-    public int minColumns = 3;
-    public int maxColumns = 30;
+    [Header("Layout")]
+    public float OuterMarginX = 16f;
+    public float OuterMarginY = 16f;
+    public float Spacing = 8f;
+    public int MinCols = 12;
+    public int MaxCols = 60;
+    [Range(32, 256)] public float MaxCell = 140f;
 
-    [Header("Extra vertical margin (pixels) to reserve")]
-    public float verticalReserve = 0f;      // e.g. header height above the grid if needed
+    [Header("Data")]
+    public int ItemCount = 0;
 
-
-    void Reset()
-    {
-        grid = GetComponent<GridLayoutGroup>();
-        _rt = GetComponent<RectTransform>();
-    }
-
-    void OnEnable()
-    {
-        _rt = GetComponent<RectTransform>();
-        Fit();
-    }
-
-    void OnRectTransformDimensionsChange()
-    {
-        // re-fit when the viewport or canvas size changes
-        Fit();
-    }
+    GridLayoutGroup grid;
+    LayoutElement layoutElem;
 
     void Awake()
     {
         grid = GetComponent<GridLayoutGroup>();
-        _rt = GetComponent<RectTransform>();
-
-        // Auto-wire if missing (works in prefab instances)
-        if (!viewport)
-        {
-            var sr = GetComponentInParent<ScrollRect>(true);
-            if (sr) viewport = sr.viewport ? sr.viewport : sr.GetComponent<RectTransform>();
-        }
+        layoutElem = GetComponent<LayoutElement>();
     }
 
-    public void SetItemCount(int count)
+    public void Recalculate()
     {
-        itemCount = Mathf.Max(0, count);
-        Fit();
-    }
+        if (!Viewport || ItemCount <= 0) return;
 
-    public void Fit()
-    {
-        if (!grid || itemCount <= 0) return;
-
-        var view = viewport ? viewport.rect : _rt.rect;
-
+        var vp = Viewport.rect;
+        float headH = Header ? Header.rect.height : 0f;
         var pad = grid.padding;
-        float availW = view.width - pad.left - pad.right;
-        float availH = view.height - pad.top - pad.bottom - verticalReserve;
 
-        if (availW <= 0 || availH <= 0) return;
+        float availW = Mathf.Max(1f, vp.width - OuterMarginX * 2f - (pad.left + pad.right));
+        float availH = Mathf.Max(1f, vp.height - OuterMarginY * 2f - headH - (pad.top + pad.bottom));
 
-        int bestCols = minColumns;
+        int bestCols = MinCols;
         float bestCell = 0f;
 
-        // Search for the columns that give the biggest square cell that fits both axes.
-        for (int cols = minColumns; cols <= maxColumns; cols++)
+        for (int cols = MinCols; cols <= MaxCols; cols++)
         {
-            float cellW = (availW - grid.spacing.x * (cols - 1)) / cols;
-            if (cellW <= 0) continue;
+            float cell = (availW - Spacing * (cols - 1)) / cols;
+            if (cell <= 1f) continue;
 
-            int rows = Mathf.CeilToInt((float)itemCount / cols);
-            float cellH = (availH - grid.spacing.y * (rows - 1)) / Mathf.Max(1, rows);
-            float cell = Mathf.Min(cellW, cellH);
+            int rows = Mathf.CeilToInt((float)ItemCount / cols);
+            float gridH = rows * cell + Mathf.Max(0, rows - 1) * Spacing;
 
-            if (cell > bestCell)
+            if (gridH <= availH && cell > bestCell)
             {
                 bestCell = cell;
                 bestCols = cols;
             }
         }
 
-        bestCell = Mathf.Max(1f, bestCell);
+        if (bestCell <= 0f)
+        {
+            bestCols = MaxCols;
+            bestCell = (availW - Spacing * (bestCols - 1)) / bestCols;
+        }
 
+        bestCell = Mathf.Min(bestCell, MaxCell);
+
+        grid.startAxis = GridLayoutGroup.Axis.Horizontal;
+        grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         grid.constraintCount = bestCols;
         grid.cellSize = new Vector2(bestCell, bestCell);
+        grid.spacing = new Vector2(Spacing, Spacing);
 
-        LayoutRebuilder.ForceRebuildLayoutImmediate(grid.GetComponent<RectTransform>());
+        int rowsFinal = Mathf.CeilToInt((float)ItemCount / bestCols);
+        float finalGrid = rowsFinal * bestCell + Mathf.Max(0, rowsFinal - 1) * Spacing;
+
+        layoutElem.preferredHeight = finalGrid;
+        LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
     }
 }

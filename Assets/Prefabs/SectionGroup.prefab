@@ -10,9 +10,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1674755790142928699}
   - component: {fileID: 9218015356887209021}
-  - component: {fileID: 4162131943189742458}
-  - component: {fileID: 6067143964236978897}
-  - component: {fileID: 7714452511023227903}
   m_Layer: 5
   m_Name: GridRoot
   m_TagString: Untagged
@@ -63,56 +60,6 @@ MonoBehaviour:
   m_Spacing: {x: 8, y: 8}
   m_Constraint: 1
   m_ConstraintCount: 14
---- !u!114 &4162131943189742458
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 120409663504064882}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 306cc8c2b49d7114eaa3623786fc2126, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.LayoutElement
-  m_IgnoreLayout: 0
-  m_MinWidth: -1
-  m_MinHeight: -1
-  m_PreferredWidth: -1
-  m_PreferredHeight: -1
-  m_FlexibleWidth: -1
-  m_FlexibleHeight: -1
-  m_LayoutPriority: 1
---- !u!114 &6067143964236978897
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 120409663504064882}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b9767142d0e055c429883b5391119b66, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GridPreferredHeight
---- !u!114 &7714452511023227903
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 120409663504064882}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d80dc5a881fed964eba523b2d8cfa2d0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GridAutoFit
-  viewport: {fileID: 0}
-  grid: {fileID: 9218015356887209021}
-  itemCount: 0
-  minColumns: 3
-  maxColumns: 30
-  verticalReserve: 0
 --- !u!1 &7565292023961007417
 GameObject:
   m_ObjectHideFlags: 0
@@ -173,7 +120,7 @@ MonoBehaviour:
   m_ChildAlignment: 0
   m_Spacing: 5
   m_ChildForceExpandWidth: 1
-  m_ChildForceExpandHeight: 1
+  m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 0
   m_ChildControlHeight: 0
   m_ChildScaleWidth: 0
@@ -205,7 +152,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12d1c8e03c676dd48a44c11afdc42030, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SectionGroup
-  header: {fileID: 7286974159161876769}
+  headerRect: {fileID: 0}
+  headerLabel: {fileID: 9087307359504771461}
   gridRoot: {fileID: 1674755790142928699}
 --- !u!1001 &6983061789346117976
 PrefabInstance:
@@ -321,14 +269,14 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 7925108147441536093, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
   m_PrefabInstance: {fileID: 6983061789346117976}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &7286974159161876769 stripped
+--- !u!114 &9087307359504771461 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 416681718957693049, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
+  m_CorrespondingSourceObject: {fileID: 2230487252050841821, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
   m_PrefabInstance: {fileID: 6983061789346117976}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5543238e4a22ad14187ba533dc7555a6, type: 3}
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SectionHeader
+  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI

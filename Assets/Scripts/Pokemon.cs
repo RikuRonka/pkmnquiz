@@ -12,6 +12,7 @@ public class Pokemon
     public string[] aliases; // accepted alternative guesses
     public int baseId;          // optional
     public string formKey;
+    public string dlcKey;
 }
 
 

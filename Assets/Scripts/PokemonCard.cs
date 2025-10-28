@@ -12,6 +12,9 @@ public class PokemonCard : MonoBehaviour
     [SerializeField] private Image typeIconR;         // "TypeIconR"
     [SerializeField] private Image highlight;         // "Highlight"  <-- NEW
 
+    [Header("Layout")]
+    [SerializeField] private float spritePadding = 6f; // px inset from cell edges
+
     private Pokemon data;
     private Sprite loadedSprite;
     private bool revealed, hintVisible;
@@ -38,29 +41,100 @@ public class PokemonCard : MonoBehaviour
         if (!highlight) highlight = transform.Find("Highlight")?.GetComponent<Image>();
 
         rt = (RectTransform)transform;
-        baseAnchoredPos = rt.anchoredPosition;
-        baseRotation = rt.localRotation;
 
-        if (highlight) { var c = highlight.color; c.a = 0f; highlight.color = c; }
+        // Basic image setup
+        if (spriteImage) { spriteImage.preserveAspect = true; spriteImage.raycastTarget = false; }
+        if (placeholderImage) { placeholderImage.preserveAspect = true; placeholderImage.raycastTarget = false; }
+        if (highlight)
+        {
+            var c = highlight.color; c.a = 0f; highlight.color = c;
+            highlight.raycastTarget = false;
+        }
+
+        // Make sure NO AspectRatioFitter remains on these children
+        var f1 = spriteImage ? spriteImage.GetComponent<AspectRatioFitter>() : null;
+        var f2 = placeholderImage ? placeholderImage.GetComponent<AspectRatioFitter>() : null;
+        if (f1) Destroy(f1);
+        if (f2) Destroy(f2);
+
+        // Initial fit
+        ResizeArtToCell();
     }
+
+
+    // --- Add this helper in PokemonCard ---
+    private static void FitImageAsCenteredSquare(Image img, float pad)
+    {
+        if (!img) return;
+
+        // If a fitter was added earlier, remove it so it doesn't fight our sizing.
+        var fitter = img.GetComponent<AspectRatioFitter>();
+        if (fitter) Destroy(fitter);
+
+        img.type = Image.Type.Simple;
+        img.preserveAspect = true;
+
+        var parent = img.rectTransform.parent as RectTransform;
+        if (!parent) return;
+
+        // Side = min(parent W, parent H) minus padding on both sides
+        float side = Mathf.Max(0f, Mathf.Min(parent.rect.width, parent.rect.height) - pad * 2f);
+
+        var rt = img.rectTransform;
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f); // NOT stretched
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = Vector2.zero;
+        rt.sizeDelta = new Vector2(side, side);                // centered square
+    }
+
 
     public void Bind(Pokemon p)
     {
         data = p; revealed = false; hintVisible = false;
 
         loadedSprite = SpriteLibrary.Instance.ByPokemon(p);
-        if (spriteImage) { spriteImage.preserveAspect = true; spriteImage.type = Image.Type.Simple; spriteImage.sprite = loadedSprite; spriteImage.enabled = false; }
-        if (placeholderImage) { placeholderImage.preserveAspect = true; placeholderImage.type = Image.Type.Simple; placeholderImage.enabled = true; }
+        if (spriteImage)
+        {
+            spriteImage.sprite = loadedSprite;
+            spriteImage.enabled = false; // hidden until Reveal()
+        }
+        if (placeholderImage)
+        {
+            placeholderImage.enabled = true;
+        }
 
         StopHighlight();
         StopShake();
         HideTypeIcons();
+        ResizeArtToCell();
     }
 
+    private void ResizeArtToCell()
+    {
+        if (!rt) return;
+
+        float side = Mathf.Max(0f, Mathf.Min(rt.rect.width, rt.rect.height) - spritePadding * 2f);
+
+        void Size(Image img)
+        {
+            if (!img) return;
+            var r = img.rectTransform;
+            r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);  // center
+            r.pivot = new Vector2(0.5f, 0.5f);
+            r.anchoredPosition = Vector2.zero;
+            r.sizeDelta = new Vector2(side, side);               // centered square
+            img.preserveAspect = true;
+            img.type = Image.Type.Simple;
+        }
+
+        Size(spriteImage);
+        Size(placeholderImage);
+    }
     public void Reveal()
     {
         if (revealed || data == null) return;
         revealed = true;
+
         if (placeholderImage) placeholderImage.enabled = false;
         if (spriteImage) spriteImage.enabled = true;
 
@@ -104,7 +178,7 @@ public class PokemonCard : MonoBehaviour
         if (rt.rect.width <= 0 || rt.rect.height <= 0) return;
         float side = Mathf.Min(rt.rect.width, rt.rect.height);
 
-        void Place(Image img, float size, Vector2 pos)
+        static void Place(Image img, float size, Vector2 pos)
         {
             if (!img) return;
             var irt = img.rectTransform;
@@ -130,18 +204,27 @@ public class PokemonCard : MonoBehaviour
 
     private void OnRectTransformDimensionsChange()
     {
+        // keep type-hint layout behavior
         if (hintVisible) LayoutHintIcons();
+
+        // re-fit when the grid/cell size changes
+        FitImageAsCenteredSquare(spriteImage, spritePadding);
+        FitImageAsCenteredSquare(placeholderImage, spritePadding);
+        FitArtToCell();
     }
 
     public void FlashHighlight(float durationOverride = -1f)
     {
         if (!highlight) { ShakeOnly(); return; }
+
+        // ensure highlight renders above sprite
+        highlight.transform.SetAsLastSibling();  // NEW
+
         float d = durationOverride > 0f ? durationOverride : highlightDuration;
 
         if (highlightCo != null) StopCoroutine(highlightCo);
         highlightCo = StartCoroutine(FlashCo(d));
 
-        // run shake in parallel
         ShakeOnly();
     }
 
@@ -217,5 +300,27 @@ public class PokemonCard : MonoBehaviour
                 rt.localRotation = baseRotation;
             }
         }
+    }
+    private void FitArtToCell()
+    {
+        var cell = (RectTransform)transform;
+        if (!spriteImage || cell.rect.width <= 0f || cell.rect.height <= 0f) return;
+
+        float side = Mathf.Min(cell.rect.width, cell.rect.height) * 0.9f;
+
+        void Size(Image img)
+        {
+            if (!img) return;
+            var r = img.rectTransform;
+            r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);
+            r.pivot = new Vector2(0.5f, 0.5f);
+            r.sizeDelta = new Vector2(side, side);
+            r.anchoredPosition = Vector2.zero;
+            img.preserveAspect = true;
+            img.type = Image.Type.Simple;
+        }
+
+        Size(spriteImage);
+        Size(placeholderImage);
     }
 }

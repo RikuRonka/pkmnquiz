@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
@@ -8,6 +9,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using static UnityEngine.Rendering.CoreUtils;
 
 public class QuizManager : MonoBehaviour
 {
@@ -21,7 +23,6 @@ public class QuizManager : MonoBehaviour
     public TMP_InputField minutesInput;
 
     [Header("Grid")]
-    public Transform gridContent;
     public PokemonCard cardPrefab;
 
     [Header("Config")]
@@ -49,30 +50,8 @@ public class QuizManager : MonoBehaviour
     public SectionHeader sectionHeaderPrefab;
     public SectionGroup sectionGroupPrefab;   // assign in Inspector
     public Transform content;                 // ScrollView/Viewport/Content
-
-    // Add this helper somewhere in QuizManager:
-    private static string GenTitle(int gen) => gen switch
-    {
-        1 => "Kanto (Gen 1)",
-        2 => "Johto (Gen 2)",
-        3 => "Hoenn (Gen 3)",
-        4 => "Sinnoh (Gen 4)",
-        5 => "Unova (Gen 5)",
-        6 => "Kalos (Gen 6)",
-        7 => "Alola (Gen 7)",
-        8 => "Galar (Gen 8)",
-        9 => "Paldea (Gen 9)",
-        _ => $"Gen {gen}"
-    };
-
-    // Call this after you’ve resolved generation & any special subset:
-    private void SetQuizTitle(string subset = null)
-    {
-        if (!quizTitle) return;
-        var baseTitle = $"{GenTitle(generation)} (Gen {generation})";
-        quizTitle.text = string.IsNullOrEmpty(subset) ? baseTitle : $"{baseTitle} — {subset}";
-    }
-
+    private List<SectionGroup> _builtSections = new();
+    private Vector2 _lastVpSize;
     private void Awake()
     {
         PokemonDatabase.Instance.LoadIfNeeded();
@@ -91,8 +70,6 @@ public class QuizManager : MonoBehaviour
         TypeIconLibrary.Instance.Preload();
         if (hintTypeBtn) hintTypeBtn.onClick.AddListener(RevealTypeHintForOne);
 
-        if (resetBtn) resetBtn.onClick.AddListener(ResetGame);
-
         if (guessInput) guessInput.onValueChanged.AddListener(OnGuessChanged);
 
         if (noTimerToggle) noTimerToggle.onValueChanged.AddListener(_ => ResetTimerOnly());
@@ -108,6 +85,27 @@ public class QuizManager : MonoBehaviour
             resetBtn.onClick.RemoveAllListeners();
             resetBtn.onClick.AddListener(OnResetClicked);
         }
+        EnsureUIContracts();
+    }
+
+    private void EnsureUIContracts()
+    {
+        // Content must have VLG + CSF for sections to stack and size
+        if (!content) content = scrollRect ? scrollRect.content : null;
+        if (!content) return;
+
+        var crt = content as RectTransform;
+        var vlg = crt.GetOrAdd<VerticalLayoutGroup>();
+        vlg.childAlignment = TextAnchor.UpperLeft;
+        vlg.spacing = 16f;
+        vlg.childControlWidth = true;
+        vlg.childControlHeight = false;
+        vlg.childForceExpandWidth = true;
+        vlg.childForceExpandHeight = false;
+
+        var csf = crt.GetOrAdd<ContentSizeFitter>();
+        csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
     }
 
     private void Start()
@@ -119,6 +117,7 @@ public class QuizManager : MonoBehaviour
         if (noTimerToggle) noTimerToggle.isOn = GameSettings.Minutes <= 0;
         if (minutesInput) minutesInput.text = GameSettings.Minutes > 0 ? GameSettings.Minutes.ToString() : "35";
         if (dexOrderToggle) dexOrderToggle.isOn = GameSettings.DexOrder;
+        if (quizTitle) quizTitle.text = Helpers.GetGenTitle(generation);
         BuildTargetList();
         RebuildGrid();
         ResetTimerOnly();
@@ -148,13 +147,22 @@ public class QuizManager : MonoBehaviour
         OnBackToMenuClicked();
 #endif
 
-        // ----- Stopwatch mode -----
         if (!IsDialogOpen())              // don't count while confirm dialog is open
         {
             elapsed += Time.deltaTime;    // count up
             if (timerText)
                 timerText.text = TimeSpan.FromSeconds(elapsed).ToString(@"hh\:mm\:ss");
-            // If you prefer centiseconds: @"mm\:ss\.ff"
+        }
+
+
+        var vp = scrollRect ? scrollRect.viewport : null;
+        if (!vp || _builtSections.Count == 0) return;
+
+        var sz = vp.rect.size;
+        if (sz != _lastVpSize)
+        {
+            _lastVpSize = sz;
+            FitAllSectionsOnePass(vp, _builtSections);
         }
     }
 
@@ -172,7 +180,6 @@ public class QuizManager : MonoBehaviour
                 if (cardById.TryGetValue(target.id, out var already))
                 {
                     already.FlashHighlight();
-                    FocusCard(already.transform as RectTransform);
                 }
                 continue;
             }
@@ -259,123 +266,123 @@ public class QuizManager : MonoBehaviour
         );
     }
 
-    private void RebuildGrid()
+    private void FitAllSectionsOnePass(RectTransform viewport, List<SectionGroup> sections)
     {
-        foreach (Transform c in content) Destroy(c.gameObject);
-        cardById.Clear(); hinted.Clear(); solved.Clear();
-
-        var ordered = targetList.OrderBy(p => DexOrder.GetIndex(p));
-
-        var groups = new Dictionary<string, SectionGroup>();
-        bool defaultHeaderSet = false; // only set gen title once for the default section
-        string genTitle = GenTitle(generation);
-
-        static string Key(string s) => string.IsNullOrEmpty(s) ? "" : s;
-
-        foreach (var p in ordered)
-        {
-            string sectionName = Key(DexOrder.GetSection(p)); // "", "Gigantamax", "Hisui", etc.
-
-            if (!groups.TryGetValue(sectionName, out var grp))
-            {
-                grp = Instantiate(sectionGroupPrefab, content);
-
-                // If this is the default (no subsection), show the generation title (once).
-                string titleToUse = sectionName;
-                if (string.IsNullOrEmpty(sectionName) && !defaultHeaderSet)
-                {
-                    titleToUse = genTitle;
-                    defaultHeaderSet = true;
-                }
-
-                grp.SetTitle(titleToUse);  // will show title or blank if you prefer to hide
-                groups[sectionName] = grp;
-            }
-
-            var card = Instantiate(cardPrefab, groups[sectionName].gridRoot);
-            card.Bind(p);
-            cardById[p.id] = card;
-        }
-
-        UpdateScore();
-
-        var vlg = content.GetComponent<UnityEngine.UI.VerticalLayoutGroup>();
-        if (vlg) vlg.spacing = 16f;
-    }
-
-    public void FitAllSectionsToViewport(RectTransform viewport, List<SectionGroup> sections)
-    {
-        // Gather counts & header heights
-        float vGroupSpacing = 0f;
         var vlg = content.GetComponent<VerticalLayoutGroup>();
-        if (vlg) vlg = content.GetComponent<VerticalLayoutGroup>();
-        if (vlg) vGroupSpacing = vlg.spacing;
+        float vSpacing = vlg ? vlg.spacing : 12f;
 
-        int minCols = 3, maxCols = 40;
-        float padL = 0, padR = 0, padT = 0, padB = 0;
-        Vector2 spacing = Vector2.zero;
+        // read one grid’s padding/spacing (assume shared)
+        var g0 = sections[0].gridRoot.GetComponent<GridLayoutGroup>();
+        var pad = g0 ? g0.padding : new RectOffset();
+        var gap = g0 ? g0.spacing : new Vector2(8, 8);
 
-        // Assume all grids use the same GridLayoutGroup settings
-        var sampleGrid = sections[0].gridRoot.GetComponent<GridLayoutGroup>();
-        if (sampleGrid)
-        {
-            padL = sampleGrid.padding.left; padR = sampleGrid.padding.right;
-            padT = sampleGrid.padding.top; padB = sampleGrid.padding.bottom;
-            spacing = sampleGrid.spacing;
-        }
+        float availW = viewport.rect.width - pad.left - pad.right - 32f; // 32 = outer margins if any
+        float availH = viewport.rect.height - pad.top - pad.bottom - 32f;
 
-        float availW = viewport.rect.width - padL - padR;
-        float availH = viewport.rect.height - padT - padB;
-
-        // Try columns and choose the largest cell that fits total height
-        int bestCols = minCols;
+        int bestCols = 12;
         float bestCell = 0f;
+        const float MAX_CELL = 140f;
+        int minCols = 12, maxCols = 60;
 
         for (int cols = minCols; cols <= maxCols; cols++)
         {
-            float cellW = (availW - spacing.x * (cols - 1)) / cols;
-            if (cellW <= 0) continue;
+            float cell = (availW - gap.x * (cols - 1)) / cols;
+            if (cell <= 1f) continue;
 
-            float totalHeight = 0f;
+            float totalH = 0f;
             for (int i = 0; i < sections.Count; i++)
             {
-                var s = sections[i];
-                int count = s.CardCount; // you’ll need to expose this on SectionGroup
+                int count = sections[i].CardCount;
                 int rows = Mathf.CeilToInt((float)count / cols);
-
-                // header
-                totalHeight += s.HeaderHeight;    // expose this too (textRect.rect.height + margins)
-                                                  // grid height with rows
-                totalHeight += rows * cellW + Mathf.Max(0, rows - 1) * spacing.y;
-
-                // spacing between sections
-                if (i < sections.Count - 1) totalHeight += vGroupSpacing;
+                totalH += sections[i].HeaderHeight;
+                totalH += rows * cell + Mathf.Max(0, rows - 1) * gap.y;
+                if (i < sections.Count - 1) totalH += vSpacing;
             }
 
-            // If total fits, it's a candidate; choose the biggest cell possible
-            if (totalHeight <= availH && cellW > bestCell)
+            if (totalH <= availH && cell > bestCell)
             {
-                bestCell = cellW;
+                bestCell = cell;
                 bestCols = cols;
             }
         }
 
-        // Fallback if nothing fit, still pick the smallest possible columns
         if (bestCell <= 0f)
         {
             bestCols = maxCols;
-            bestCell = (availW - spacing.x * (bestCols - 1)) / bestCols;
+            bestCell = (availW - gap.x * (bestCols - 1)) / bestCols;
         }
+        bestCell = Mathf.Min(bestCell, MAX_CELL);
 
-        // Apply to every section grid
+        // Apply to all grids
         foreach (var s in sections)
         {
             var g = s.gridRoot.GetComponent<GridLayoutGroup>();
-            if (!g) continue;
+            var le = s.gridRoot.GetComponent<LayoutElement>();
             g.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
             g.constraintCount = bestCols;
             g.cellSize = new Vector2(bestCell, bestCell);
-            LayoutRebuilder.ForceRebuildLayoutImmediate(g.GetComponent<RectTransform>());
+            g.spacing = gap;
+
+            int rows = Mathf.CeilToInt((float)s.CardCount / bestCols);
+            float h = rows * bestCell + Mathf.Max(0, rows - 1) * gap.y;
+            if (le) le.preferredHeight = h;
+        }
+    }
+
+    private void RebuildGrid()
+    {
+        // safety
+        if (!scrollRect || !scrollRect.viewport) { Debug.LogError("ScrollRect/Viewport missing"); return; }
+        var viewport = scrollRect.viewport;
+
+        // clear
+        foreach (Transform c in content) Destroy(c.gameObject);
+        cardById.Clear(); solved.Clear(); hinted.Clear();
+
+        // order, group, build sections
+        var ordered = targetList.OrderBy(p => DexOrder.GetIndex(p)).ToList();
+        var groups = new Dictionary<string, SectionGroup>();
+        _builtSections.Clear();
+
+        foreach (var p in ordered)
+        {
+            string title = DexOrder.GetSection(p, generation) ?? Helpers.GetGenTitle(generation);
+            if (!groups.TryGetValue(title, out var grp))
+            {
+                grp = Instantiate(sectionGroupPrefab, content);
+                grp.EnsureLayout(scrollRect ? scrollRect.viewport : null);
+                grp.SetTitle(title);
+                groups[title] = grp;
+                _builtSections.Add(grp);
+            }
+
+            var card = Instantiate(cardPrefab, grp.gridRoot);
+            card.Bind(p);
+            cardById[p.id] = card;
+        }
+
+        // Order sections by your section order
+        var orderedSections = groups
+            .Select(kvp => new { name = kvp.Key, grp = kvp.Value, order = DexOrder.GetSectionOrder(kvp.Key, generation) })
+            .OrderBy(s => s.order).ToList();
+        for (int i = 0; i < orderedSections.Count; i++)
+            orderedSections[i].grp.transform.SetSiblingIndex(i);
+
+        UpdateScore();
+
+        // fit once next frame
+        StartCoroutine(FitAfterFrame());
+    }
+
+    private IEnumerator FitAfterFrame()
+    {
+        yield return null;                         // let layout settle so viewport/header rects are valid
+        var vp = scrollRect ? scrollRect.viewport : null;
+        if (vp && _builtSections.Count > 0)
+        {
+            FitAllSectionsOnePass(vp, _builtSections);
+            _lastVpSize = vp.rect.size;           // initialize resize watcher
+            Canvas.ForceUpdateCanvases();
         }
     }
 
@@ -401,30 +408,49 @@ public class QuizManager : MonoBehaviour
     private void BuildTargetList()
     {
         var all = PokemonDatabase.Instance.All().AsEnumerable();
-        if (generation > 0)
-            all = all.Where(p => p.generation == generation);
 
+        if (generation > 0)
+        {
+            // Base set for the generation
+            var genSet = all.Where(p => p.generation == generation);
+
+            // Extras by generation
+            IEnumerable<Pokemon> extras = Enumerable.Empty<Pokemon>();
+
+            if (generation == 6)
+            {
+                // Include Mega evolutions (introduced in Gen 6 no matter the base species' gen)
+                extras = all.Where(Helpers.IsMega);
+            }
+            else if (generation == 8)
+            {
+                // Include Gigantamax + Hisui forms in Galar quiz
+                extras = all.Where(p => Helpers.IsGmax(p) || Helpers.IsHisui(p));
+            }
+            else if (generation == 9)
+            {
+                // If you have DLC/expedition subsets marked via formKey/tags, add them here.
+                // Example: formKey: "kitakami" / "blueberry"
+                extras = all.Where(p => Helpers.HasForm(p, "kitakami") || Helpers.HasForm(p, "blueberry"));
+            }
+
+            all = genSet.Concat(extras).Distinct();
+        }
+
+        // Optional type filter
         if (GameSettings.TypeFilter != null && GameSettings.TypeFilter.Length > 0)
         {
             var allowed = new HashSet<string>(GameSettings.TypeFilter.Select(t => t.Trim().ToLowerInvariant()));
             all = all.Where(p => p.types != null && p.types.Any(t => allowed.Contains(t.ToLowerInvariant())));
         }
 
-        // Load specific dex order file for this generation (if any)
         DexOrder.LoadForGeneration(generation);
 
-      //  if (dexOrderToggle != null && dexOrderToggle.isOn)
-      if(generation.Equals(7) || generation.Equals(8))
-        {
+        // Use dex order for gens where we have a file
+        if (generation == 7 || generation == 8)
             targetList = all.OrderBy(p => DexOrder.GetIndex(p)).ToList();
-        }
-      else
-        {
+        else
             targetList = all.ToList();
-        }
-          
-      //  else
-          //  targetList = all.OrderBy(_ => UnityEngine.Random.value).ToList(); // or your chaos
     }
 
     private void ResetTimerOnly()
@@ -435,7 +461,7 @@ public class QuizManager : MonoBehaviour
 
     private bool HasInQuizContinuation(string text)
     {
-        var typed = KeyKeepDigits(text);               // "porygon"
+        var typed = KeyKeepDigits(text);
         if (string.IsNullOrEmpty(typed)) return false;
 
         foreach (var p in PokemonDatabase.Instance.All())
@@ -664,7 +690,6 @@ public class QuizManager : MonoBehaviour
                     if (cardById.TryGetValue(altTarget.id, out var altAlready))
                     {
                         altAlready.FlashHighlight();
-                        FocusCard(altAlready.transform as RectTransform);
                     }
                     guessInput?.SetTextWithoutNotify(string.Empty);
                     guessInput?.ActivateInputField();
@@ -677,7 +702,6 @@ public class QuizManager : MonoBehaviour
             if (cardById.TryGetValue(target.id, out var already))
             {
                 already.FlashHighlight();
-                FocusCard(already.transform as RectTransform);
             }
             guessInput?.SetTextWithoutNotify(string.Empty);
             guessInput?.ActivateInputField();
@@ -780,20 +804,4 @@ public class QuizManager : MonoBehaviour
         toast?.Show($"Finished in {TimeSpan.FromSeconds(elapsed):hh\\:mm\\:ss}", 2.5f);
     }
 
-    private void FocusCard(RectTransform card)
-    {
-        if (!scrollRect || !card) return;
-
-        var content = scrollRect.content;
-        var viewport = scrollRect.viewport;
-
-        Canvas.ForceUpdateCanvases();
-
-        float contentH = content.rect.height;
-        float viewH = viewport.rect.height;
-        float y = Mathf.Abs(card.anchoredPosition.y);
-        float target = 1f - Mathf.Clamp01((y - viewH * 0.5f) / Mathf.Max(1f, contentH - viewH));
-
-        scrollRect.verticalNormalizedPosition = target;
-    }
 }
