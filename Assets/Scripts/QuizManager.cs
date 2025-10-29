@@ -66,7 +66,7 @@ public class QuizManager : MonoBehaviour
             Debug.LogError("[PokemonDB] Duplicate IDs detected:\n" +
                            string.Join("\n", dupes.Select(d => $"{d.id}: {d.names}")));
         }
-        SpriteLibrary.Instance.Preload();
+        StartCoroutine(SpriteLibrary.Instance.PreloadAsync(targetList.Select(t => t.id)));
         TypeIconLibrary.Instance.Preload();
         if (hintTypeBtn) hintTypeBtn.onClick.AddListener(RevealTypeHintForOne);
 
@@ -152,17 +152,6 @@ public class QuizManager : MonoBehaviour
             elapsed += Time.deltaTime;    // count up
             if (timerText)
                 timerText.text = TimeSpan.FromSeconds(elapsed).ToString(@"hh\:mm\:ss");
-        }
-
-
-        var vp = scrollRect ? scrollRect.viewport : null;
-        if (!vp || _builtSections.Count == 0) return;
-
-        var sz = vp.rect.size;
-        if (sz != _lastVpSize)
-        {
-            _lastVpSize = sz;
-            FitAllSectionsOnePass(vp, _builtSections);
         }
     }
 
@@ -266,125 +255,82 @@ public class QuizManager : MonoBehaviour
         );
     }
 
-    private void FitAllSectionsOnePass(RectTransform viewport, List<SectionGroup> sections)
-    {
-        var vlg = content.GetComponent<VerticalLayoutGroup>();
-        float vSpacing = vlg ? vlg.spacing : 12f;
-
-        // read one grid’s padding/spacing (assume shared)
-        var g0 = sections[0].gridRoot.GetComponent<GridLayoutGroup>();
-        var pad = g0 ? g0.padding : new RectOffset();
-        var gap = g0 ? g0.spacing : new Vector2(8, 8);
-
-        float availW = viewport.rect.width - pad.left - pad.right - 32f; // 32 = outer margins if any
-        float availH = viewport.rect.height - pad.top - pad.bottom - 32f;
-
-        int bestCols = 12;
-        float bestCell = 0f;
-        const float MAX_CELL = 140f;
-        int minCols = 12, maxCols = 60;
-
-        for (int cols = minCols; cols <= maxCols; cols++)
-        {
-            float cell = (availW - gap.x * (cols - 1)) / cols;
-            if (cell <= 1f) continue;
-
-            float totalH = 0f;
-            for (int i = 0; i < sections.Count; i++)
-            {
-                int count = sections[i].CardCount;
-                int rows = Mathf.CeilToInt((float)count / cols);
-                totalH += sections[i].HeaderHeight;
-                totalH += rows * cell + Mathf.Max(0, rows - 1) * gap.y;
-                if (i < sections.Count - 1) totalH += vSpacing;
-            }
-
-            if (totalH <= availH && cell > bestCell)
-            {
-                bestCell = cell;
-                bestCols = cols;
-            }
-        }
-
-        if (bestCell <= 0f)
-        {
-            bestCols = maxCols;
-            bestCell = (availW - gap.x * (bestCols - 1)) / bestCols;
-        }
-        bestCell = Mathf.Min(bestCell, MAX_CELL);
-
-        // Apply to all grids
-        foreach (var s in sections)
-        {
-            var g = s.gridRoot.GetComponent<GridLayoutGroup>();
-            var le = s.gridRoot.GetComponent<LayoutElement>();
-            g.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            g.constraintCount = bestCols;
-            g.cellSize = new Vector2(bestCell, bestCell);
-            g.spacing = gap;
-
-            int rows = Mathf.CeilToInt((float)s.CardCount / bestCols);
-            float h = rows * bestCell + Mathf.Max(0, rows - 1) * gap.y;
-            if (le) le.preferredHeight = h;
-        }
-    }
-
     private void RebuildGrid()
     {
-        // safety
         if (!scrollRect || !scrollRect.viewport) { Debug.LogError("ScrollRect/Viewport missing"); return; }
-        var viewport = scrollRect.viewport;
 
-        // clear
+        // Ensure ScrollView/Content has VLG + CSF
+        var contentRt = content as RectTransform;
+        var vlg = contentRt.GetComponent<VerticalLayoutGroup>() ?? contentRt.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.spacing = 24;
+        vlg.childControlWidth = true;
+        vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true;
+        vlg.childForceExpandHeight = false;
+
+        var csf = contentRt.GetComponent<ContentSizeFitter>() ?? contentRt.gameObject.AddComponent<ContentSizeFitter>();
+        csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
         foreach (Transform c in content) Destroy(c.gameObject);
         cardById.Clear(); solved.Clear(); hinted.Clear();
 
-        // order, group, build sections
         var ordered = targetList.OrderBy(p => DexOrder.GetIndex(p)).ToList();
-        var groups = new Dictionary<string, SectionGroup>();
-        _builtSections.Clear();
 
+        // 1) Kalos group
+        var kalos = Instantiate(sectionGroupPrefab, content);
+        kalos.EnsureLayout();
+        kalos.SetTitle(Helpers.GetGenTitle(generation)); // "Kalos (Gen 6)"
+
+        // 2) Megas group
+        var megas = Instantiate(sectionGroupPrefab, content);
+        megas.EnsureLayout();
+        megas.SetTitle("Mega Evolutions");
+
+        // Fill
         foreach (var p in ordered)
         {
-            string title = DexOrder.GetSection(p, generation) ?? Helpers.GetGenTitle(generation);
-            if (!groups.TryGetValue(title, out var grp))
-            {
-                grp = Instantiate(sectionGroupPrefab, content);
-                grp.EnsureLayout(scrollRect ? scrollRect.viewport : null);
-                grp.SetTitle(title);
-                groups[title] = grp;
-                _builtSections.Add(grp);
-            }
-
+            var grp = (generation == 6 && Helpers.IsMega(p)) ? megas : kalos;
             var card = Instantiate(cardPrefab, grp.gridRoot);
             card.Bind(p);
             cardById[p.id] = card;
         }
 
-        // Order sections by your section order
-        var orderedSections = groups
-            .Select(kvp => new { name = kvp.Key, grp = kvp.Value, order = DexOrder.GetSectionOrder(kvp.Key, generation) })
-            .OrderBy(s => s.order).ToList();
-        for (int i = 0; i < orderedSections.Count; i++)
-            orderedSections[i].grp.transform.SetSiblingIndex(i);
+        // Fit each section independently
+        FitSection(kalos);
+        FitSection(megas);
 
         UpdateScore();
-
-        // fit once next frame
-        StartCoroutine(FitAfterFrame());
     }
 
-    private IEnumerator FitAfterFrame()
+    private void FitSection(SectionGroup grp)
     {
-        yield return null;                         // let layout settle so viewport/header rects are valid
-        var vp = scrollRect ? scrollRect.viewport : null;
-        if (vp && _builtSections.Count > 0)
-        {
-            FitAllSectionsOnePass(vp, _builtSections);
-            _lastVpSize = vp.rect.size;           // initialize resize watcher
-            Canvas.ForceUpdateCanvases();
-        }
+        var grid = grp.gridRoot.GetComponent<GridLayoutGroup>();
+        var fit = grp.gridRoot.GetComponent<GridAutoFit>() ?? grp.gridRoot.gameObject.AddComponent<GridAutoFit>();
+
+        // pleasant defaults
+        grid.spacing = new Vector2(16, 16);
+        grid.childAlignment = TextAnchor.UpperLeft;
+
+        fit.Viewport = scrollRect.viewport;
+        fit.Header = grp.headerRect;
+        fit.ItemCount = grp.CardCount;
+        fit.OuterMarginX = 16;
+        fit.OuterMarginY = 16;
+        fit.Spacing = 16;
+        fit.MinCols = 6;     // adjust to taste
+        fit.MaxCols = 30;
+
+        StartCoroutine(CoRecalc(fit));
     }
+
+    private static IEnumerator CoRecalc(GridAutoFit fit)
+    {
+        yield return null;                       // wait 1 frame so header sizes are valid
+        Canvas.ForceUpdateCanvases();
+        fit.Recalculate();
+    }
+
 
     private void RevealTypeHintForOne()
     {

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
@@ -8,84 +9,171 @@ public sealed class SpriteLibrary
     private static SpriteLibrary _instance;
     public static SpriteLibrary Instance => _instance ??= new SpriteLibrary();
 
-    private readonly Dictionary<string, Sprite> byKey = new();
-    private bool loaded;
-    private int countLoaded;
+    // Caches
+    private readonly Dictionary<int, Sprite> _byId = new();           // 001 -> Sprite
+    private readonly Dictionary<string, Sprite> _byKey = new();       // "bulbasaur" etc. (filled lazily)
 
-    // matches "_0", "-1", " 2", "(3)" at the end of a name
-    private static readonly Regex SuffixNumberRx = new(@"[\s_\-\(\)]\d+$", RegexOptions.Compiled);
+    // -------- Public API --------
 
-    public void Preload()
+    /// <summary>
+    /// Preload only the sprites you need (by numeric id). Call this with your targetList ids.
+    /// </summary>
+    public IEnumerator PreloadAsync(IEnumerable<int> ids)
     {
-        if (loaded) return;
+        if (ids == null) yield break;
 
-        var sprites = Resources.LoadAll<Sprite>("Sprites"); // Assets/Resources/Sprites/*
-        foreach (var s in sprites)
+        // Distinct to avoid duplicate loads
+        foreach (var id in ids.Distinct())
         {
-            // raw
-            var raw = s.name.ToLowerInvariant();
-            AddKey(raw, s);
+            if (_byId.ContainsKey(id)) continue;
 
-            // normalized (letters+digits, gender symbols -> f/m)
-            var norm = GuessNormalizer.Key(s.name);
-            if (!string.IsNullOrEmpty(norm)) AddKey(norm, s);
+            // Most projects store 3-digit zero-padded files; try both to be safe.
+            var req = Resources.LoadAsync<Sprite>($"Sprites/{id:000}");
+            yield return req;
 
-            // base name without common numeric suffixes (bulbasaur_0 -> bulbasaur)
-            var trimmed = SuffixNumberRx.Replace(raw, "");
-            if (!string.IsNullOrEmpty(trimmed)) AddKey(trimmed, s);
-            var trimmedNorm = GuessNormalizer.Key(trimmed);
-            if (!string.IsNullOrEmpty(trimmedNorm)) AddKey(trimmedNorm, s);
-
-            // letters-only key (drops digits entirely: "bulbasaur0" -> "bulbasaur")
-            var lettersOnly = new string(norm.Where(char.IsLetter).ToArray());
-            if (!string.IsNullOrEmpty(lettersOnly)) AddKey(lettersOnly, s);
-
-            // if the name itself is a number, also map zero-padded ID
-            if (int.TryParse(raw, out var num))
+            var sp = req.asset as Sprite;
+            if (!sp)
             {
-                var idKey = num.ToString("000");
-                AddKey(idKey, s);
+                // Fallback: non-padded
+                req = Resources.LoadAsync<Sprite>($"Sprites/{id}");
+                yield return req;
+                sp = req.asset as Sprite;
             }
+
+            if (sp) _byId[id] = sp;
         }
-        countLoaded = sprites?.Length ?? 0;
-        loaded = true;
     }
 
-    private void AddKey(string key, Sprite s)
+    private static Sprite LoadAny(string pathOrKey)
     {
-        if (!byKey.ContainsKey(key)) byKey[key] = s;
+        if (string.IsNullOrWhiteSpace(pathOrKey)) return null;
+
+        // 1) Try direct single-sprite load
+        var sp = Resources.Load<Sprite>(pathOrKey);
+        if (sp) return sp;
+
+        // 2) Try as a sliced sprite sheet
+        var all = Resources.LoadAll<Sprite>(pathOrKey);
+        if (all != null && all.Length > 0)
+        {
+            // choose the best slice: exact file-name match, normalized name match, or first
+            var file = System.IO.Path.GetFileName(pathOrKey);
+            var norm = GuessNormalizer.Key(file ?? "");
+            var pick = all.FirstOrDefault(s => s.name.Equals(file, System.StringComparison.OrdinalIgnoreCase))
+                    ?? all.FirstOrDefault(s => GuessNormalizer.Key(s.name) == norm)
+                    ?? all[0];
+            return pick;
+        }
+
+        // 3) Try relative under Sprites/
+        var rel = $"Sprites/{pathOrKey.TrimStart('/').Replace("Sprites/", "")}";
+        sp = Resources.Load<Sprite>(rel);
+        if (sp) return sp;
+
+        all = Resources.LoadAll<Sprite>(rel);
+        if (all != null && all.Length > 0) return all[0];
+
+        return null;
     }
 
+    /// <summary>
+    /// Get a sprite for a Pokémon. Uses cache if available, otherwise loads on demand.
+    /// </summary>
     public Sprite ByPokemon(Pokemon p)
     {
-        Preload();
+        // 1) id cache
+        if (_byId.TryGetValue(p.id, out var s)) return s;
 
-        // 1) ID
-        var idKey = p.id.ToString("000").ToLowerInvariant();
-        if (byKey.TryGetValue(idKey, out var sId)) return sId;
+        // 2) try id files
+        s = LoadAny($"Sprites/{p.id:000}") ?? LoadAny($"Sprites/{p.id}");
+        if (s) return Cache(p, s);
 
-        // 2) explicit path from JSON
-        if (!string.IsNullOrEmpty(p.sprite))
+        // 3) explicit path from JSON (now supports sheets)
+        if (!string.IsNullOrWhiteSpace(p.sprite))
         {
-            var sByPath = Resources.Load<Sprite>(p.sprite);
-            if (sByPath) return sByPath;
-
-            var trimmed = p.sprite.ToLowerInvariant().Replace("sprites/", "");
-            if (byKey.TryGetValue(trimmed, out var sTrim)) return sTrim;
-            var trimmedNorm = GuessNormalizer.Key(trimmed);
-            if (byKey.TryGetValue(trimmedNorm, out var sTrimNorm)) return sTrimNorm;
+            s = LoadAny(p.sprite);
+            if (s) return Cache(p, s);
         }
 
-        // 3) name variants
-        var nameNorm = GuessNormalizer.Key(p.name);               // e.g., "bulbasaur", "mrmime", "nidoranf"
-        if (byKey.TryGetValue(nameNorm, out var sName)) return sName;
+        // 4) name keys — works for files like "venusaur_mega" in a sheet
+        var norm = GuessNormalizer.Key(p.name);                  // "venusaurmega"
+        var lettersOnly = new string(norm.Where(char.IsLetter).ToArray()); // "venusaurmega" (same here)
 
-        var lettersOnly = new string(nameNorm.Where(char.IsLetter).ToArray()); // "bulbasaur"
-        if (byKey.TryGetValue(lettersOnly, out var sLetters)) return sLetters;
+        s = LoadAny($"Sprites/{norm}") ?? LoadAny($"Sprites/{lettersOnly}")
+          ?? LoadAny(norm) ?? LoadAny(lettersOnly);
 
-        Debug.LogWarning($"[SpriteLibrary] MISSING sprite for #{p.id} {p.name}. " +
-                         $"Tried keys: '{idKey}', '{p.sprite}', '{nameNorm}'. Loaded={countLoaded}. " +
-                         $"Ensure a matching file (e.g., 001.png, 'bulbasaur.png', or a sub-sprite like 'bulbasaur_0') exists in Assets/Resources/Sprites.");
+        if (s) return Cache(p, s);
+
+        if (Helpers.IsMega(p))
+        {
+            foreach (var cand in MegaCandidatesFor(p))
+            {
+                // try dictionary (preloaded keys) first
+                if (_byKey.TryGetValue(cand.ToLowerInvariant(), out var sMegaDict))
+                    return Cache(p, sMegaDict);
+
+                // then try loading from Resources (handles sliced sheets)
+                var sMega = LoadAny(cand);
+                if (sMega) return Cache(p, sMega);
+            }
+        }
+
+        Debug.LogWarning($"[SpriteLibrary] Missing sprite for #{p.id} {p.name}. Path hints tried with id, explicit path, and name keys.");
         return null;
+    }
+
+
+    private Sprite Cache(Pokemon p, Sprite s)
+    {
+        if (s == null) return null;
+        _byId[p.id] = s;
+
+        // also cache by normalized key for future lookups
+        var norm = GuessNormalizer.Key(p.name);
+        if (!string.IsNullOrEmpty(norm) && !_byKey.ContainsKey(norm))
+            _byKey[norm] = s;
+
+        return s;
+    }
+
+    private static readonly Regex ParensFormRx = new(@"\s*\(.*?\)\s*$", RegexOptions.Compiled);
+
+    private static IEnumerable<string> MegaCandidatesFor(Pokemon p)
+    {
+        // base name without the "(Mega …)" suffix
+        var baseName = ParensFormRx.Replace(p.name ?? "", "").Trim();
+        var baseKey = GuessNormalizer.Key(baseName);           // "venusaur"
+        var formNorm = GuessNormalizer.Key(p.name ?? "");       // maybe "charizardmegax" etc.
+
+        // common filename patterns seen in packs
+        //   <base>_mega
+        //   <base>_mega_x / _mega_y
+        //   <base>_megax / _megay
+        // (also allow paths under Sprites/mega/)
+        var list = new List<string>
+    {
+        $"{baseKey}_mega",
+        $"{baseKey}_mega_x",
+        $"{baseKey}_mega_y",
+        $"{baseKey}_megax",
+        $"{baseKey}_megay",
+        // with folder hints
+        $"Sprites/mega/{baseKey}_mega",
+        $"Sprites/mega/{baseKey}_mega_x",
+        $"Sprites/mega/{baseKey}_mega_y",
+        $"Sprites/mega/{baseKey}_megax",
+        $"Sprites/mega/{baseKey}_megay",
+    };
+
+        // If the normalized name already ends with "mega[x|y]" without underscore,
+        // also try inserting the underscore once.
+        if (formNorm.EndsWith("megax"))
+            list.Insert(0, $"{baseKey}_mega_x");
+        else if (formNorm.EndsWith("megay"))
+            list.Insert(0, $"{baseKey}_mega_y");
+        else if (formNorm.EndsWith("mega"))
+            list.Insert(0, $"{baseKey}_mega");
+
+        return list.Distinct();
     }
 }
