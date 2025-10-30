@@ -253,18 +253,35 @@ public class QuizManager : MonoBehaviour
         if (guess == null)
             return null;
 
-        // If exact entry exists in current quiz, use it.
+        // If the exact entry is present in THIS quiz, use it.
         if (cardById.ContainsKey(guess.id))
             return guess;
 
-        int baseId = BaseIdOf(guess);
+        int baseId = guess.baseId != 0 ? guess.baseId : guess.id;
 
-        // In Gen 6, prefer the one mega card we actually spawned for this base species
-        if (generation == 6 && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
-            return megaPick;
+        // Is a non-mega entry for this base species present in the quiz?
+        bool baseInMain = targetList.Any(p =>
+            !Helpers.IsMega(p) && (p.baseId != 0 ? p.baseId : p.id) == baseId
+        );
 
-        // Otherwise, any entry in this quiz with same base species (forms, etc.)
-        return targetList.FirstOrDefault(p => BaseIdOf(p) == baseId);
+        if (baseInMain)
+        {
+            // Prefer the non-mega (main section) entry
+            var baseEntry = targetList.FirstOrDefault(p =>
+                !Helpers.IsMega(p) && (p.baseId != 0 ? p.baseId : p.id) == baseId
+            );
+            if (baseEntry != null)
+                return baseEntry;
+        }
+        else
+        {
+            // No base in main section (e.g., Charizard/Mewtwo in Kalos) -> prefer the mega slot
+            if (megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
+                return megaPick;
+        }
+
+        // Fallback: anything with same base id
+        return targetList.FirstOrDefault(p => (p.baseId != 0 ? p.baseId : p.id) == baseId);
     }
 
     public void OnBackToMenuClicked()
@@ -547,7 +564,12 @@ public class QuizManager : MonoBehaviour
 
             if (generation == 6)
             {
-                extras = all.Where(Helpers.IsMega);
+                // keep ONE mega per base species in the targetList
+                var megasDistinctByBase = all.Where(Helpers.IsMega)
+                    .GroupBy(p => p.baseId != 0 ? p.baseId : p.id)
+                    .Select(g => g.First());
+
+                extras = megasDistinctByBase; // <-- use the deduped set
             }
             else if (generation == 8)
             {
@@ -575,10 +597,10 @@ public class QuizManager : MonoBehaviour
 
         DexOrder.LoadForGeneration(generation);
 
-        if (generation == 7 || generation == 8)
-            targetList = all.OrderBy(p => DexOrder.GetIndex(p)).ToList();
-        else
-            targetList = all.ToList();
+        targetList =
+            (generation == 7 || generation == 8)
+                ? all.OrderBy(p => DexOrder.GetIndex(p)).ToList()
+                : all.ToList();
     }
 
     private void ResetTimerOnly()
@@ -667,15 +689,46 @@ public class QuizManager : MonoBehaviour
                 && ids.Count > 0
             )
             {
-                // pick one of the megas for this base species
-                int pickId = ids[UnityEngine.Random.Range(0, ids.Count)];
-                var pick = PokemonDatabase.Instance.All().FirstOrDefault(p => p.id == pickId);
-                if (pick != null)
+                // Find the base species by name/alias
+                Pokemon baseSpecies = null;
+                foreach (var p in PokemonDatabase.Instance.All())
                 {
-                    // reveal immediately; no need to commit with space/enter
-                    HandleCandidate(pick, currentText, commit: true);
-                    return;
+                    bool isBase = p.baseId == 0 || p.baseId == p.id;
+                    if (!isBase)
+                        continue;
+
+                    if (
+                        GuessNormalizer.Key(p.name) == k
+                        || (p.aliases != null && p.aliases.Any(a => GuessNormalizer.Key(a) == k))
+                    )
+                    {
+                        baseSpecies = p;
+                        break;
+                    }
                 }
+
+                int baseId =
+                    baseSpecies != null
+                        ? (baseSpecies.baseId != 0 ? baseSpecies.baseId : baseSpecies.id)
+                        : 0;
+                bool baseInMain =
+                    baseId != 0
+                    && targetList.Any(p =>
+                        !Helpers.IsMega(p) && (p.baseId != 0 ? p.baseId : p.id) == baseId
+                    );
+
+                // Only auto-map to a mega if the base is NOT in the main section (Charizard/Mewtwo case)
+                if (!baseInMain)
+                {
+                    int pickId = ids[UnityEngine.Random.Range(0, ids.Count)];
+                    var pick = PokemonDatabase.Instance.All().FirstOrDefault(p => p.id == pickId);
+                    if (pick != null)
+                    {
+                        HandleCandidate(pick, currentText, commit: true);
+                        return;
+                    }
+                }
+                // else: let normal flow continue so the base card is revealed
             }
         }
 
@@ -886,6 +939,25 @@ public class QuizManager : MonoBehaviour
         solved.Add(target.id);
         if (cardById.TryGetValue(target.id, out var card))
             card.Reveal();
+
+        if (generation == 6)
+        {
+            int baseKey = target.baseId != 0 ? target.baseId : target.id;
+
+            bool baseExistsInMain = targetList.Any(p =>
+                !Helpers.IsMega(p) && (p.baseId != 0 ? p.baseId : p.id) == baseKey
+            );
+
+            if (baseExistsInMain && megaSlotPickByBase.TryGetValue(baseKey, out var megaPick))
+            {
+                if (!solved.Contains(megaPick.id))
+                {
+                    solved.Add(megaPick.id);
+                    if (megaCardByBase.TryGetValue(baseKey, out var megaCard) && megaCard != null)
+                        megaCard.Reveal();
+                }
+            }
+        }
         UpdateScore();
 
         guessInput?.SetTextWithoutNotify(string.Empty);
