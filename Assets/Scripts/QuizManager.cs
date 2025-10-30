@@ -98,6 +98,7 @@ public class QuizManager : MonoBehaviour
         var vlg = crt.GetOrAdd<VerticalLayoutGroup>();
         vlg.childAlignment = TextAnchor.UpperLeft;
         vlg.spacing = 16f;
+        vlg.padding = new RectOffset(vlg.padding.left, vlg.padding.right, 32, vlg.padding.bottom);
         vlg.childControlWidth = true;
         vlg.childControlHeight = false;
         vlg.childForceExpandWidth = true;

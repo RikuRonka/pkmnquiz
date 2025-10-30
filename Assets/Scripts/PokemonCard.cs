@@ -135,7 +135,6 @@ public class PokemonCard : MonoBehaviour
         if (revealed || data == null) return;
         revealed = true;
 
-        if (placeholderImage) placeholderImage.enabled = false;
         if (spriteImage) spriteImage.enabled = true;
 
         HideTypeIcons();
