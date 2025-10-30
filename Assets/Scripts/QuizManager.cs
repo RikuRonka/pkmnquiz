@@ -278,28 +278,35 @@ public class QuizManager : MonoBehaviour
 
         var ordered = targetList.OrderBy(p => DexOrder.GetIndex(p)).ToList();
 
-        // 1) Kalos group
-        var kalos = Instantiate(sectionGroupPrefab, content);
-        kalos.EnsureLayout();
-        kalos.SetTitle(Helpers.GetGenTitle(generation)); // "Kalos (Gen 6)"
+        var main = Instantiate(sectionGroupPrefab, content);
+        main.EnsureLayout();
+        main.SetTitle(Helpers.GetGenTitle(generation));
 
-        // 2) Megas group
-        var megas = Instantiate(sectionGroupPrefab, content);
-        megas.EnsureLayout();
-        megas.SetTitle("Mega Evolutions");
+        SectionGroup megas = null;
+        bool wantMegas = (generation == 6);
+        if (wantMegas)
+        {
+            megas = Instantiate(sectionGroupPrefab, content);
+            megas.EnsureLayout();
+            megas.SetTitle("Mega Evolutions");
+        }
 
-        // Fill
         foreach (var p in ordered)
         {
-            var grp = (generation == 6 && Helpers.IsMega(p)) ? megas : kalos;
-            var card = Instantiate(cardPrefab, grp.gridRoot);
+            var targetGroup = (wantMegas && Helpers.IsMega(p)) ? megas : main;
+            var card = Instantiate(cardPrefab, targetGroup.gridRoot);
             card.Bind(p);
             cardById[p.id] = card;
         }
 
-        // Fit each section independently
-        FitSection(kalos);
-        FitSection(megas);
+        if (megas && megas.gridRoot.childCount == 0)
+        {
+            Destroy(megas.gameObject);
+            megas = null;
+        }
+
+        FitSection(main);
+        if (megas) FitSection(megas);
 
         UpdateScore();
     }

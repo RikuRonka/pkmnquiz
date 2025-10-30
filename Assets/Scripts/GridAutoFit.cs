@@ -69,7 +69,15 @@ public class GridAutoFit : MonoBehaviour
         grid.startAxis = GridLayoutGroup.Axis.Horizontal;
         grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        grid.constraintCount = bestCols;
+        Debug.Log(bestCols);
+        if(bestCols == 11)
+        {
+            grid.constraintCount = 12;
+        } else
+        {
+            grid.constraintCount = bestCols;
+        }
+         
         grid.cellSize = new Vector2(bestCell, bestCell);
         grid.spacing = new Vector2(Spacing, Spacing);
 
