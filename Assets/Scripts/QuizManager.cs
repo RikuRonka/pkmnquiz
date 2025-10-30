@@ -57,6 +57,7 @@ public class QuizManager : MonoBehaviour
     private readonly Dictionary<int, List<Pokemon>> megaFormsByBase = new();
     private readonly Dictionary<int, Pokemon> megaSlotPickByBase = new();
     private readonly Dictionary<int, PokemonCard> megaCardByBase = new();
+    private readonly Dictionary<string, List<int>> megaByBaseName = new();
 
     private void Awake()
     {
@@ -443,6 +444,41 @@ public class QuizManager : MonoBehaviour
             }
         }
 
+        megaByBaseName.Clear();
+        if (generation == 6)
+        {
+            // We only care about the megas that are actually in *this* quiz
+            var megasHere = targetList.Where(Helpers.IsMega).ToList();
+
+            foreach (var m in megasHere)
+            {
+                int baseId = m.baseId != 0 ? m.baseId : m.id;
+                var baseMon = PokemonDatabase.Instance.All().FirstOrDefault(x => x.id == baseId);
+                if (baseMon == null)
+                    continue;
+
+                void AddName(string name)
+                {
+                    var k = GuessNormalizer.Key(name);
+                    if (string.IsNullOrEmpty(k))
+                        return;
+                    if (!megaByBaseName.TryGetValue(k, out var list))
+                    {
+                        list = new List<int>();
+                        megaByBaseName[k] = list;
+                    }
+                    if (!list.Contains(m.id))
+                        list.Add(m.id);
+                }
+
+                // base species name + its aliases map to these mega form ids
+                AddName(baseMon.name);
+                if (baseMon.aliases != null)
+                    foreach (var a in baseMon.aliases)
+                        AddName(a);
+            }
+        }
+
         // Minimal fitting (uses your existing FitSection)
         FitSection(main);
         if (generation == 6 && megas != null)
@@ -620,6 +656,27 @@ public class QuizManager : MonoBehaviour
             guessInput.ActivateInputField();
             guessInput.Select();
             return;
+        }
+
+        if (generation == 6)
+        {
+            var k = GuessNormalizer.Key(currentText.Trim());
+            if (
+                !string.IsNullOrEmpty(k)
+                && megaByBaseName.TryGetValue(k, out var ids)
+                && ids.Count > 0
+            )
+            {
+                // pick one of the megas for this base species
+                int pickId = ids[UnityEngine.Random.Range(0, ids.Count)];
+                var pick = PokemonDatabase.Instance.All().FirstOrDefault(p => p.id == pickId);
+                if (pick != null)
+                {
+                    // reveal immediately; no need to commit with space/enter
+                    HandleCandidate(pick, currentText, commit: true);
+                    return;
+                }
+            }
         }
 
         var keyOnly = GuessNormalizer.Key(currentText.Trim());
