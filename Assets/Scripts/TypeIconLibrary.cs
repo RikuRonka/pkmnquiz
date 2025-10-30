@@ -12,17 +12,20 @@ public sealed class TypeIconLibrary
 
     public void Preload()
     {
-        if (loaded) return;
+        if (loaded)
+            return;
 
-        var sprites = Resources.LoadAll<Sprite>("TypeIcons"); // Assets/Resources/TypeIcons/*
+        var sprites = Resources.LoadAll<Sprite>("TypeIcons");
         var sb = new StringBuilder();
         int n = sprites?.Length ?? 0;
         for (int i = 0; i < n; i++)
         {
             var s = sprites[i];
-            if (s == null) continue;
-            var key = s.name.Trim().ToLowerInvariant(); // e.g., "grass"
-            if (!map.ContainsKey(key)) map[key] = s;
+            if (s == null)
+                continue;
+            var key = s.name.Trim().ToLowerInvariant();
+            if (!map.ContainsKey(key))
+                map[key] = s;
             sb.Append(key).Append(i == n - 1 ? "" : ", ");
         }
 
@@ -31,15 +34,18 @@ public sealed class TypeIconLibrary
 
     public Sprite Get(string typeName)
     {
-        if (!loaded) Preload();
-        if (string.IsNullOrWhiteSpace(typeName)) return null;
+        if (!loaded)
+            Preload();
+        if (string.IsNullOrWhiteSpace(typeName))
+            return null;
 
-        var k = typeName.Trim().ToLowerInvariant(); // "Grass" → "grass"
+        var k = typeName.Trim().ToLowerInvariant();
         map.TryGetValue(k, out var s);
         if (!s)
         {
-            // one-time helpful log (comment out if too chatty)
-            Debug.LogWarning($"[TypeIconLibrary] No icon for type '{k}'. Add '{k}.png' under Resources/TypeIcons/");
+            Debug.LogWarning(
+                $"[TypeIconLibrary] No icon for type '{k}'. Add '{k}.png' under Resources/TypeIcons/"
+            );
         }
         return s;
     }

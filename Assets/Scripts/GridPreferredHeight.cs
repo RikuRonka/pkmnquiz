@@ -1,4 +1,3 @@
-// GridPreferredHeight.cs
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -17,24 +16,34 @@ public class GridPreferredHeight : MonoBehaviour
         rt = GetComponent<RectTransform>();
     }
 
-    void OnTransformChildrenChanged() { Recalc(); }
-    void OnRectTransformDimensionsChange() { Recalc(); }
+    void OnTransformChildrenChanged()
+    {
+        Recalc();
+    }
+
+    void OnRectTransformDimensionsChange()
+    {
+        Recalc();
+    }
 
     public void Recalc()
     {
-        if (!grid || !le) return;
+        if (!grid || !le)
+            return;
 
-        // Columns are fixed
         int cols = Mathf.Max(1, grid.constraintCount);
         int count = 0;
         for (int i = 0; i < transform.childCount; i++)
-            if (transform.GetChild(i).gameObject.activeSelf) count++;
+            if (transform.GetChild(i).gameObject.activeSelf)
+                count++;
 
         int rows = Mathf.CeilToInt((float)count / cols);
 
-        float h = grid.padding.top + grid.padding.bottom
-                  + rows * grid.cellSize.y
-                  + Mathf.Max(0, rows - 1) * grid.spacing.y;
+        float h =
+            grid.padding.top
+            + grid.padding.bottom
+            + rows * grid.cellSize.y
+            + Mathf.Max(0, rows - 1) * grid.spacing.y;
 
         le.preferredHeight = h;
     }

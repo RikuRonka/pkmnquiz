@@ -1,20 +1,18 @@
 using System;
 
-
 [Serializable]
 public class Pokemon
 {
-    public int id; // National Dex (1..)
-    public string name; // Display name
-    public string[] types; // e.g., ["Grass","Poison"]
-    public int generation; // 1..9
-    public string sprite; // Resources path (optional), e.g., "Sprites/001"
-    public string[] aliases; // accepted alternative guesses
-    public int baseId;          // optional
+    public int id;
+    public string name;
+    public string[] types;
+    public int generation;
+    public string sprite;
+    public string[] aliases;
+    public int baseId;
     public string formKey;
     public string dlcKey;
 }
-
 
 [Serializable]
 public class PokemonList

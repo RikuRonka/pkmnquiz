@@ -6,8 +6,8 @@ using UnityEngine.UI;
 public class GridAutoFit : MonoBehaviour
 {
     [Header("Wiring")]
-    public RectTransform Viewport;     // assign from QuizManager
-    public RectTransform Header;       // section header rect
+    public RectTransform Viewport;
+    public RectTransform Header;
 
     [Header("Layout")]
     public float OuterMarginX = 16f;
@@ -15,7 +15,9 @@ public class GridAutoFit : MonoBehaviour
     public float Spacing = 8f;
     public int MinCols = 12;
     public int MaxCols = 60;
-    [Range(32, 256)] public float MaxCell = 140f;
+
+    [Range(32, 256)]
+    public float MaxCell = 140f;
 
     [Header("Data")]
     public int ItemCount = 0;
@@ -31,14 +33,18 @@ public class GridAutoFit : MonoBehaviour
 
     public void Recalculate()
     {
-        if (!Viewport || ItemCount <= 0) return;
+        if (!Viewport || ItemCount <= 0)
+            return;
 
         var vp = Viewport.rect;
         float headH = Header ? Header.rect.height : 0f;
         var pad = grid.padding;
 
         float availW = Mathf.Max(1f, vp.width - OuterMarginX * 2f - (pad.left + pad.right));
-        float availH = Mathf.Max(1f, vp.height - OuterMarginY * 2f - headH - (pad.top + pad.bottom));
+        float availH = Mathf.Max(
+            1f,
+            vp.height - OuterMarginY * 2f - headH - (pad.top + pad.bottom)
+        );
 
         int bestCols = MinCols;
         float bestCell = 0f;
@@ -46,7 +52,8 @@ public class GridAutoFit : MonoBehaviour
         for (int cols = MinCols; cols <= MaxCols; cols++)
         {
             float cell = (availW - Spacing * (cols - 1)) / cols;
-            if (cell <= 1f) continue;
+            if (cell <= 1f)
+                continue;
 
             int rows = Mathf.CeilToInt((float)ItemCount / cols);
             float gridH = rows * cell + Mathf.Max(0, rows - 1) * Spacing;
@@ -70,14 +77,15 @@ public class GridAutoFit : MonoBehaviour
         grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 
-        if(bestCols == 11)
+        if (bestCols == 11)
         {
             grid.constraintCount = 12;
-        } else
+        }
+        else
         {
             grid.constraintCount = bestCols;
         }
-         
+
         grid.cellSize = new Vector2(bestCell, bestCell);
         grid.spacing = new Vector2(Spacing, Spacing);
 

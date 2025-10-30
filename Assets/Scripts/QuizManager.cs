@@ -13,7 +13,6 @@ using static UnityEngine.Rendering.CoreUtils;
 
 public class QuizManager : MonoBehaviour
 {
-
     [Header("UI")]
     public TMP_InputField guessInput;
     public TMP_Text scoreText;
@@ -43,37 +42,51 @@ public class QuizManager : MonoBehaviour
     private bool running;
     public ScrollRect scrollRect;
     private const string SecretRevealAll = "revealall";
+
     private bool IsDialogOpen() => confirmDialog && confirmDialog.IsShowing;
+
     public Toast toast;
     private const int MIN_TOAST_LEN = 4;
     public TMP_Text quizTitle;
     public SectionHeader sectionHeaderPrefab;
-    public SectionGroup sectionGroupPrefab;   // assign in Inspector
-    public Transform content;                 // ScrollView/Viewport/Content
+    public SectionGroup sectionGroupPrefab;
+    public Transform content;
     private List<SectionGroup> _builtSections = new();
     private Vector2 _lastVpSize;
+
+    private readonly Dictionary<int, List<Pokemon>> megaFormsByBase = new();
+    private readonly Dictionary<int, Pokemon> megaSlotPickByBase = new();
+    private readonly Dictionary<int, PokemonCard> megaCardByBase = new();
+
     private void Awake()
     {
         PokemonDatabase.Instance.LoadIfNeeded();
-        var dupes = PokemonDatabase.Instance.All()
-        .GroupBy(p => p.id)
-        .Where(g => g.Count() > 1)
-        .Select(g => new { id = g.Key, names = string.Join(", ", g.Select(p => p.name)) })
-        .ToList();
+        var dupes = PokemonDatabase
+            .Instance.All()
+            .GroupBy(p => p.id)
+            .Where(g => g.Count() > 1)
+            .Select(g => new { id = g.Key, names = string.Join(", ", g.Select(p => p.name)) })
+            .ToList();
 
         if (dupes.Count > 0)
         {
-            Debug.LogError("[PokemonDB] Duplicate IDs detected:\n" +
-                           string.Join("\n", dupes.Select(d => $"{d.id}: {d.names}")));
+            Debug.LogError(
+                "[PokemonDB] Duplicate IDs detected:\n"
+                    + string.Join("\n", dupes.Select(d => $"{d.id}: {d.names}"))
+            );
         }
         StartCoroutine(SpriteLibrary.Instance.PreloadAsync(targetList.Select(t => t.id)));
         TypeIconLibrary.Instance.Preload();
-        if (hintTypeBtn) hintTypeBtn.onClick.AddListener(RevealTypeHintForOne);
+        if (hintTypeBtn)
+            hintTypeBtn.onClick.AddListener(RevealTypeHintForOne);
 
-        if (guessInput) guessInput.onValueChanged.AddListener(OnGuessChanged);
+        if (guessInput)
+            guessInput.onValueChanged.AddListener(OnGuessChanged);
 
-        if (noTimerToggle) noTimerToggle.onValueChanged.AddListener(_ => ResetTimerOnly());
-        if (dexOrderToggle) dexOrderToggle.onValueChanged.AddListener(_ => RebuildGrid());
+        if (noTimerToggle)
+            noTimerToggle.onValueChanged.AddListener(_ => ResetTimerOnly());
+        if (dexOrderToggle)
+            dexOrderToggle.onValueChanged.AddListener(_ => RebuildGrid());
 
         if (backToMenuBtn)
         {
@@ -88,11 +101,14 @@ public class QuizManager : MonoBehaviour
         EnsureUIContracts();
     }
 
+    private static int BaseIdOf(Pokemon p) => p.baseId != 0 ? p.baseId : p.id;
+
     private void EnsureUIContracts()
     {
-        // Content must have VLG + CSF for sections to stack and size
-        if (!content) content = scrollRect ? scrollRect.content : null;
-        if (!content) return;
+        if (!content)
+            content = scrollRect ? scrollRect.content : null;
+        if (!content)
+            return;
 
         var crt = content as RectTransform;
         var vlg = crt.GetOrAdd<VerticalLayoutGroup>();
@@ -111,21 +127,24 @@ public class QuizManager : MonoBehaviour
 
     private void Start()
     {
-
         if (GameSettings.Generation.HasValue)
             generation = GameSettings.Generation.Value;
 
-        if (noTimerToggle) noTimerToggle.isOn = GameSettings.Minutes <= 0;
-        if (minutesInput) minutesInput.text = GameSettings.Minutes > 0 ? GameSettings.Minutes.ToString() : "35";
-        if (dexOrderToggle) dexOrderToggle.isOn = GameSettings.DexOrder;
-        if (quizTitle) quizTitle.text = Helpers.GetGenTitle(generation);
+        if (noTimerToggle)
+            noTimerToggle.isOn = GameSettings.Minutes <= 0;
+        if (minutesInput)
+            minutesInput.text = GameSettings.Minutes > 0 ? GameSettings.Minutes.ToString() : "35";
+        if (dexOrderToggle)
+            dexOrderToggle.isOn = GameSettings.DexOrder;
+        if (quizTitle)
+            quizTitle.text = Helpers.GetGenTitle(generation);
         BuildTargetList();
         RebuildGrid();
         ResetTimerOnly();
         running = true;
-        if (guessInput) guessInput.ActivateInputField();
+        if (guessInput)
+            guessInput.ActivateInputField();
     }
-
 
     private void DefocusUI()
     {
@@ -137,20 +156,21 @@ public class QuizManager : MonoBehaviour
 
     private void Update()
     {
-        if (!running) return;
+        if (!running)
+            return;
 
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
         var kb = Keyboard.current;
         if (kb != null && kb.escapeKey.wasPressedThisFrame)
             OnBackToMenuClicked();
 #else
-    if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
-        OnBackToMenuClicked();
+        if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+            OnBackToMenuClicked();
 #endif
 
-        if (!IsDialogOpen())              // don't count while confirm dialog is open
+        if (!IsDialogOpen())
         {
-            elapsed += Time.deltaTime;    // count up
+            elapsed += Time.deltaTime;
             if (timerText)
                 timerText.text = TimeSpan.FromSeconds(elapsed).ToString(@"hh\:mm\:ss");
         }
@@ -161,9 +181,11 @@ public class QuizManager : MonoBehaviour
         bool any = false;
         foreach (var baseId in baseIds)
         {
-            // find the card that exists in THIS quiz for this base species (works with forms too)
-            var target = targetList.FirstOrDefault(p => (p.baseId != 0 ? p.baseId : p.id) == baseId);
-            if (target == null) continue;
+            var target = targetList.FirstOrDefault(p =>
+                (p.baseId != 0 ? p.baseId : p.id) == baseId
+            );
+            if (target == null)
+                continue;
 
             if (solved.Contains(target.id))
             {
@@ -175,24 +197,26 @@ public class QuizManager : MonoBehaviour
             }
 
             solved.Add(target.id);
-            if (cardById.TryGetValue(target.id, out var card)) card.Reveal();
+            if (cardById.TryGetValue(target.id, out var card))
+                card.Reveal();
             any = true;
         }
 
-        if (any) UpdateScore();
+        if (any)
+            UpdateScore();
 
-        // clear input & refocus
         guessInput?.SetTextWithoutNotify(string.Empty);
         guessInput?.ActivateInputField();
         guessInput?.Select();
 
-        // check completion
         if (solved.Count >= targetList.Count)
         {
             running = false;
-            if (guessInput) guessInput.interactable = false;
+            if (guessInput)
+                guessInput.interactable = false;
         }
     }
+
     private void ShowNotInQuiz(string name)
     {
         toast?.Show($"{name} is not part of this quiz", 2f);
@@ -208,7 +232,11 @@ public class QuizManager : MonoBehaviour
     public void OnResetClicked()
     {
         DefocusUI();
-        if (!confirmDialog) { ResetGame(); return; }
+        if (!confirmDialog)
+        {
+            ResetGame();
+            return;
+        }
 
         confirmDialog.Show(
             title: "Reset quiz?",
@@ -219,30 +247,33 @@ public class QuizManager : MonoBehaviour
         );
     }
 
-    // Map a guessed Pokémon to whatever version of that species exists in the current targetList.
-    // e.g. guess = Kanto Raticate (id 20) while playing Gen7 -> returns Alolan Raticate.
     private Pokemon MapToTargetSpecies(Pokemon guess)
     {
-        if (guess == null) return null;
+        if (guess == null)
+            return null;
 
-        // If this exact entry is in the quiz, use it.
-        if (cardById.ContainsKey(guess.id)) return guess;
+        // If exact entry exists in current quiz, use it.
+        if (cardById.ContainsKey(guess.id))
+            return guess;
 
-        // Find by base species id (for forms) or by own id for base species.
-        int baseId = guess.baseId != 0 ? guess.baseId : guess.id;
+        int baseId = BaseIdOf(guess);
 
-        // Any Pokémon in the current target list with same base species?
-        // (covers Alola/Galar/Hisui etc. if you add them later)
-        var mapped = targetList.FirstOrDefault(p =>
-            (p.baseId != 0 ? p.baseId : p.id) == baseId);
+        // In Gen 6, prefer the one mega card we actually spawned for this base species
+        if (generation == 6 && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
+            return megaPick;
 
-        return mapped; // null if none found
+        // Otherwise, any entry in this quiz with same base species (forms, etc.)
+        return targetList.FirstOrDefault(p => BaseIdOf(p) == baseId);
     }
 
     public void OnBackToMenuClicked()
     {
         DefocusUI();
-        if (!confirmDialog) { SceneManager.LoadScene("MainMenu"); return; }
+        if (!confirmDialog)
+        {
+            SceneManager.LoadScene("MainMenu");
+            return;
+        }
 
         confirmDialog.Show(
             title: "Leave quiz?",
@@ -256,57 +287,166 @@ public class QuizManager : MonoBehaviour
         );
     }
 
+    private bool TryAcceptMegaByBaseName(string text, bool commit)
+    {
+        if (generation != 6)
+            return false; // only relevant in Gen 6
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var norm = GuessNormalizer.Key(text); // "charizard" -> "charizard"
+
+        // Find the *base* species in the full database by normalized name
+        Pokemon baseSpecies = null;
+        foreach (var p in PokemonDatabase.Instance.All())
+        {
+            // We want the base species entry: either p.baseId == 0 or p.id == p.baseId
+            var isBase = p.baseId == 0 || p.baseId == p.id;
+            if (!isBase)
+                continue;
+
+            if (GuessNormalizer.Key(p.name) == norm)
+            {
+                baseSpecies = p;
+                break;
+            }
+
+            // allow aliases on the base species too
+            if (p.aliases != null)
+            {
+                foreach (var a in p.aliases)
+                {
+                    if (GuessNormalizer.Key(a) == norm)
+                    {
+                        baseSpecies = p;
+                        break;
+                    }
+                }
+                if (baseSpecies != null)
+                    break;
+            }
+        }
+
+        if (baseSpecies == null)
+            return false;
+
+        // If we created a mega slot for this base species, map to it
+        int baseId = baseSpecies.baseId != 0 ? baseSpecies.baseId : baseSpecies.id;
+        if (!megaSlotPickByBase.TryGetValue(baseId, out var pickedMega))
+            return false; // no mega slot in this quiz, bail
+
+        // Route through the normal handler so scoring / highlight stays consistent
+        HandleCandidate(
+            baseSpecies,
+            text,
+            commit /* doesn't matter; handler maps to mega */
+        );
+        return true;
+    }
+
     private void RebuildGrid()
     {
-        if (!scrollRect || !scrollRect.viewport) { Debug.LogError("ScrollRect/Viewport missing"); return; }
+        if (!scrollRect || !scrollRect.viewport)
+        {
+            Debug.LogError("ScrollRect/Viewport missing");
+            return;
+        }
+        if (!sectionGroupPrefab || !cardPrefab || !content)
+        {
+            Debug.LogError("Missing prefabs/refs");
+            return;
+        }
 
-        // Ensure ScrollView/Content has VLG + CSF
-        var contentRt = content as RectTransform;
-        var vlg = contentRt.GetComponent<VerticalLayoutGroup>() ?? contentRt.gameObject.AddComponent<VerticalLayoutGroup>();
+        // Content layout (simple and proven)
+        var contentRt = (RectTransform)content;
+        var vlg =
+            contentRt.GetComponent<VerticalLayoutGroup>()
+            ?? contentRt.gameObject.AddComponent<VerticalLayoutGroup>();
         vlg.spacing = 24;
         vlg.childControlWidth = true;
-        vlg.childControlHeight = true;
+        vlg.childControlHeight = false;
         vlg.childForceExpandWidth = true;
         vlg.childForceExpandHeight = false;
 
-        var csf = contentRt.GetComponent<ContentSizeFitter>() ?? contentRt.gameObject.AddComponent<ContentSizeFitter>();
+        var csf =
+            contentRt.GetComponent<ContentSizeFitter>()
+            ?? contentRt.gameObject.AddComponent<ContentSizeFitter>();
         csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
         csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        foreach (Transform c in content) Destroy(c.gameObject);
-        cardById.Clear(); solved.Clear(); hinted.Clear();
+        // Clear UI/state
+        foreach (Transform c in content)
+            Destroy(c.gameObject);
+        cardById.Clear();
+        solved.Clear();
+        hinted.Clear();
+        megaFormsByBase.Clear();
+        megaSlotPickByBase.Clear();
+        megaCardByBase.Clear();
 
+        // Order targets
         var ordered = targetList.OrderBy(p => DexOrder.GetIndex(p)).ToList();
 
+        // Main section (always)
         var main = Instantiate(sectionGroupPrefab, content);
         main.EnsureLayout();
         main.SetTitle(Helpers.GetGenTitle(generation));
 
         SectionGroup megas = null;
-        bool wantMegas = (generation == 6);
-        if (wantMegas)
+
+        // If Gen 6, create a Mega section
+        if (generation == 6)
         {
             megas = Instantiate(sectionGroupPrefab, content);
             megas.EnsureLayout();
             megas.SetTitle("Mega Evolutions");
         }
 
+        // First pass: non-megas to main; collect megas by base
         foreach (var p in ordered)
         {
-            var targetGroup = (wantMegas && Helpers.IsMega(p)) ? megas : main;
-            var card = Instantiate(cardPrefab, targetGroup.gridRoot);
+            if (generation == 6 && Helpers.IsMega(p))
+            {
+                // collect by base id
+                int baseKey = BaseIdOf(p);
+                if (!megaFormsByBase.TryGetValue(baseKey, out var list))
+                {
+                    list = new List<Pokemon>();
+                    megaFormsByBase[baseKey] = list;
+                }
+                list.Add(p);
+                continue;
+            }
+
+            // normal (non-mega) card
+            var card = Instantiate(cardPrefab, main.gridRoot);
             card.Bind(p);
             cardById[p.id] = card;
         }
 
-        if (megas && megas.gridRoot.childCount == 0)
+        // Second pass: build ONE card per base for megas (Gen 6 only)
+        if (generation == 6 && megas != null)
         {
-            Destroy(megas.gameObject);
-            megas = null;
+            var rng = new System.Random();
+            foreach (var kv in megaFormsByBase)
+            {
+                var forms = kv.Value;
+                var pick = forms[rng.Next(forms.Count)]; // X or Y (or single form)
+
+                var card = Instantiate(cardPrefab, megas.gridRoot);
+                card.Bind(pick);
+
+                megaSlotPickByBase[kv.Key] = pick;
+                megaCardByBase[kv.Key] = card;
+
+                cardById[pick.id] = card; // optional: still index by id
+            }
         }
 
+        // Minimal fitting (uses your existing FitSection)
         FitSection(main);
-        if (megas) FitSection(megas);
+        if (generation == 6 && megas != null)
+            FitSection(megas);
 
         UpdateScore();
     }
@@ -314,9 +454,10 @@ public class QuizManager : MonoBehaviour
     private void FitSection(SectionGroup grp)
     {
         var grid = grp.gridRoot.GetComponent<GridLayoutGroup>();
-        var fit = grp.gridRoot.GetComponent<GridAutoFit>() ?? grp.gridRoot.gameObject.AddComponent<GridAutoFit>();
+        var fit =
+            grp.gridRoot.GetComponent<GridAutoFit>()
+            ?? grp.gridRoot.gameObject.AddComponent<GridAutoFit>();
 
-        // pleasant defaults
         grid.spacing = new Vector2(16, 16);
         grid.childAlignment = TextAnchor.UpperLeft;
 
@@ -326,7 +467,7 @@ public class QuizManager : MonoBehaviour
         fit.OuterMarginX = 16;
         fit.OuterMarginY = 16;
         fit.Spacing = 16;
-        fit.MinCols = 6;     // adjust to taste
+        fit.MinCols = 6;
         fit.MaxCols = 30;
 
         StartCoroutine(CoRecalc(fit));
@@ -334,18 +475,17 @@ public class QuizManager : MonoBehaviour
 
     private static IEnumerator CoRecalc(GridAutoFit fit)
     {
-        yield return null;                       // wait 1 frame so header sizes are valid
+        yield return null;
         Canvas.ForceUpdateCanvases();
         fit.Recalculate();
     }
 
-
     private void RevealTypeHintForOne()
     {
-
         var pool = targetList.Where(p => !solved.Contains(p.id) && !hinted.Contains(p.id)).ToList();
 
-        if (pool.Count == 0) return;
+        if (pool.Count == 0)
+            return;
 
         var pick = pool[0];
         hinted.Add(pick.id);
@@ -365,42 +505,40 @@ public class QuizManager : MonoBehaviour
 
         if (generation > 0)
         {
-            // Base set for the generation
             var genSet = all.Where(p => p.generation == generation);
 
-            // Extras by generation
             IEnumerable<Pokemon> extras = Enumerable.Empty<Pokemon>();
 
             if (generation == 6)
             {
-                // Include Mega evolutions (introduced in Gen 6 no matter the base species' gen)
                 extras = all.Where(Helpers.IsMega);
             }
             else if (generation == 8)
             {
-                // Include Gigantamax + Hisui forms in Galar quiz
                 extras = all.Where(p => Helpers.IsGmax(p) || Helpers.IsHisui(p));
             }
             else if (generation == 9)
             {
-                // If you have DLC/expedition subsets marked via formKey/tags, add them here.
-                // Example: formKey: "kitakami" / "blueberry"
-                extras = all.Where(p => Helpers.HasForm(p, "kitakami") || Helpers.HasForm(p, "blueberry"));
+                extras = all.Where(p =>
+                    Helpers.HasForm(p, "kitakami") || Helpers.HasForm(p, "blueberry")
+                );
             }
 
             all = genSet.Concat(extras).Distinct();
         }
 
-        // Optional type filter
         if (GameSettings.TypeFilter != null && GameSettings.TypeFilter.Length > 0)
         {
-            var allowed = new HashSet<string>(GameSettings.TypeFilter.Select(t => t.Trim().ToLowerInvariant()));
-            all = all.Where(p => p.types != null && p.types.Any(t => allowed.Contains(t.ToLowerInvariant())));
+            var allowed = new HashSet<string>(
+                GameSettings.TypeFilter.Select(t => t.Trim().ToLowerInvariant())
+            );
+            all = all.Where(p =>
+                p.types != null && p.types.Any(t => allowed.Contains(t.ToLowerInvariant()))
+            );
         }
 
         DexOrder.LoadForGeneration(generation);
 
-        // Use dex order for gens where we have a file
         if (generation == 7 || generation == 8)
             targetList = all.OrderBy(p => DexOrder.GetIndex(p)).ToList();
         else
@@ -410,39 +548,42 @@ public class QuizManager : MonoBehaviour
     private void ResetTimerOnly()
     {
         elapsed = 0f;
-        if (timerText) timerText.text = "00:00:00";
+        if (timerText)
+            timerText.text = "00:00:00";
     }
 
     private bool HasInQuizContinuation(string text)
     {
         var typed = KeyKeepDigits(text);
-        if (string.IsNullOrEmpty(typed)) return false;
+        if (string.IsNullOrEmpty(typed))
+            return false;
 
         foreach (var p in PokemonDatabase.Instance.All())
         {
-            // name
             var nk = KeyKeepDigits(p.name);
             if (nk.Length > typed.Length && nk.StartsWith(typed) && MapToTargetSpecies(p) != null)
             {
-                    return true;
+                return true;
             }
-            // aliases
+
             if (p.aliases != null)
             {
                 foreach (var a in p.aliases)
                 {
                     var ak = KeyKeepDigits(a);
-                    if (ak.Length > typed.Length && ak.StartsWith(typed) && MapToTargetSpecies(p) != null)
+                    if (
+                        ak.Length > typed.Length
+                        && ak.StartsWith(typed)
+                        && MapToTargetSpecies(p) != null
+                    )
                     {
-                       
-                            return true;
+                        return true;
                     }
                 }
             }
         }
         return false;
     }
-
 
     private void ResetGame()
     {
@@ -459,20 +600,22 @@ public class QuizManager : MonoBehaviour
 
     private void UpdateScore()
     {
-        if (scoreText) scoreText.text = $"{solved.Count} / {targetList.Count}";
+        if (scoreText)
+            scoreText.text = $"{solved.Count} / {targetList.Count}";
     }
-
 
     private void OnGuessChanged(string currentText)
     {
-        if (!running || IsDialogOpen()) return;
-        if (string.IsNullOrWhiteSpace(currentText)) return;
+        if (!running || IsDialogOpen())
+            return;
+        if (string.IsNullOrWhiteSpace(currentText))
+            return;
 
         var trimmed = currentText.Trim().ToLowerInvariant();
         if (trimmed == SecretRevealAll)
         {
             RevealAll();
-            // clear input & keep focus
+
             guessInput.SetTextWithoutNotify(string.Empty);
             guessInput.ActivateInputField();
             guessInput.Select();
@@ -482,7 +625,6 @@ public class QuizManager : MonoBehaviour
         var keyOnly = GuessNormalizer.Key(currentText.Trim());
         if (keyOnly == "nidoran")
         {
-            // reveal both (♀ = 29, ♂ = 32)
             RevealByBaseIds(29, 32);
             return;
         }
@@ -493,29 +635,31 @@ public class QuizManager : MonoBehaviour
         TryAcceptWithDisambiguation(raw, commit);
     }
 
-    // Lowercase, strip spaces/quotes/dashes/accents — BUT KEEP DIGITS.
     private static string KeyKeepDigits(string s)
     {
-        if (string.IsNullOrWhiteSpace(s)) return string.Empty;
+        if (string.IsNullOrWhiteSpace(s))
+            return string.Empty;
         s = s.Trim().ToLowerInvariant();
 
-        // basic ascii deaccent (add more if you like)
         s = s.Replace("é", "e");
 
         System.Text.StringBuilder sb = new();
         foreach (var ch in s)
         {
-            if (char.IsLetterOrDigit(ch)) { sb.Append(ch); continue; }
-            // allow nothing else (remove spaces, dashes, punctuation)
+            if (char.IsLetterOrDigit(ch))
+            {
+                sb.Append(ch);
+                continue;
+            }
         }
         return sb.ToString();
     }
 
-    // Strong exact match (name or alias) that PRESERVES digits (porygon2 stays porygon2)
     private static Pokemon FindByExactPreserveDigits(string text)
     {
         var k = KeyKeepDigits(text);
-        if (string.IsNullOrEmpty(k)) return null;
+        if (string.IsNullOrEmpty(k))
+            return null;
 
         Pokemon best = null;
         int bestLen = -1;
@@ -523,13 +667,21 @@ public class QuizManager : MonoBehaviour
         foreach (var p in PokemonDatabase.Instance.All())
         {
             var pk = KeyKeepDigits(p.name);
-            if (pk == k && pk.Length > bestLen) { best = p; bestLen = pk.Length; }
+            if (pk == k && pk.Length > bestLen)
+            {
+                best = p;
+                bestLen = pk.Length;
+            }
 
             if (p.aliases != null)
                 foreach (var a in p.aliases)
                 {
                     var ak = KeyKeepDigits(a);
-                    if (ak == k && ak.Length > bestLen) { best = p; bestLen = ak.Length; }
+                    if (ak == k && ak.Length > bestLen)
+                    {
+                        best = p;
+                        bestLen = ak.Length;
+                    }
                 }
         }
         return best;
@@ -537,61 +689,62 @@ public class QuizManager : MonoBehaviour
 
     private void TryAcceptWithDisambiguation(string text, bool commit)
     {
-        if (string.IsNullOrWhiteSpace(text)) return;
+        if (string.IsNullOrWhiteSpace(text))
+            return;
 
-        // 1) EXACT (digit-preserving) first
+        // 1) EXACT (digit-preserving)
         var exact = FindByExactPreserveDigits(text);
-
         if (exact != null)
         {
-            var targetIfExact = MapToTargetSpecies(exact);
+            var mappedFromExact = MapToTargetSpecies(exact);
+            if (mappedFromExact != null && !cardById.ContainsKey(exact.id))
+            {
+                HandleCandidate(mappedFromExact, text, commit);
+                return;
+            }
 
+            var targetIfExact = MapToTargetSpecies(exact);
             if (targetIfExact != null)
             {
-                // Exact name is in this quiz -> handle immediately
                 HandleCandidate(exact, text, commit);
                 return;
             }
 
-            // Exact name is NOT in this quiz.
             if (!commit)
             {
-                // If this token is a prefix of a longer name that *is* in this quiz (e.g. porygon -> porygon2),
-                // hold off the toast and let the player continue typing.
                 if (HasInQuizContinuation(text))
                     return;
-
-                // Otherwise, show the toast immediately (force commit=true so HandleCandidate toasts now)
                 HandleCandidate(exact, text, true);
                 return;
             }
 
-            // User committed (space/enter): toast via the usual path
             HandleCandidate(exact, text, true);
             return;
         }
 
-        // 2) No exact match
-        if (!commit) return; // don't fuzzy-match mid-typing
+        // --- NEW: while typing (no commit), accept base names that map to a mega slot (charizard/mewtwo) ---
+        if (!commit && TryAcceptMegaByBaseName(text, commit: false))
+            return;
+        // --- end NEW ---
 
-        // 3) Committed: fuzzy fallback
+        // 2) No exact match and not committed: wait for more typing
+        if (!commit)
+            return;
+
+        // 3) Committed: fuzzy
         var fuzzy = PokemonDatabase.Instance.FindByGuess(text);
-        if (fuzzy == null) return;
+        if (fuzzy == null)
+            return;
 
         HandleCandidate(fuzzy, text, commit);
     }
 
     private void HandleCandidate(Pokemon guess, string originalText, bool commit)
     {
-        // Map base name to a form that exists in THIS quiz
         var target = MapToTargetSpecies(guess);
 
-
-        // Not in this quiz -> toast only when it's clearly intentional
         if (target == null)
         {
-            // Only toast if the typed token is an exact name/alias (by your existing rules)
-            // AND (the user committed OR token length is reasonably long).
             var key = GuessNormalizer.Key(originalText);
             bool exactTyped = IsExactNameOrAlias(originalText, guess);
             if ((commit && exactTyped) || (exactTyped && key.Length >= MIN_TOAST_LEN))
@@ -599,15 +752,11 @@ public class QuizManager : MonoBehaviour
             return;
         }
 
-        // Already solved?
         if (solved.Contains(target.id))
         {
-            // If what's typed could lead to a longer, valid name in this quiz (e.g., "klink" -> "klinklang"),
-            // do NOTHING so the user can continue typing.
             if (!commit && HasInQuizContinuation(originalText))
                 return;
 
-            // FAMILY FALLBACK (e.g., second "porygon2" -> try "porygon")
             var keyNorm = GuessNormalizer.Key(originalText);
             var baseKey = StripDigits(keyNorm);
             if (!string.IsNullOrEmpty(baseKey) && baseKey != keyNorm)
@@ -627,7 +776,8 @@ public class QuizManager : MonoBehaviour
                     if (!solved.Contains(altTarget.id))
                     {
                         solved.Add(altTarget.id);
-                        if (cardById.TryGetValue(altTarget.id, out var altCard)) altCard.Reveal();
+                        if (cardById.TryGetValue(altTarget.id, out var altCard))
+                            altCard.Reveal();
                         UpdateScore();
                         guessInput?.SetTextWithoutNotify(string.Empty);
                         guessInput?.ActivateInputField();
@@ -635,12 +785,16 @@ public class QuizManager : MonoBehaviour
                         if (solved.Count >= targetList.Count)
                         {
                             running = false;
-                            if (guessInput) guessInput.interactable = false;
-                            toast?.Show($"Finished in {TimeSpan.FromSeconds(elapsed):hh\\:mm\\:ss}", 2.5f);
+                            if (guessInput)
+                                guessInput.interactable = false;
+                            toast?.Show(
+                                $"Finished in {TimeSpan.FromSeconds(elapsed):hh\\:mm\\:ss}",
+                                2.5f
+                            );
                         }
                         return;
                     }
-                    // alt already solved -> just highlight it
+
                     if (cardById.TryGetValue(altTarget.id, out var altAlready))
                     {
                         altAlready.FlashHighlight();
@@ -652,7 +806,6 @@ public class QuizManager : MonoBehaviour
                 }
             }
 
-            // Default: highlight the already-solved target and clear
             if (cardById.TryGetValue(target.id, out var already))
             {
                 already.FlashHighlight();
@@ -663,19 +816,19 @@ public class QuizManager : MonoBehaviour
             return;
         }
 
-        // If it's an exact name/alias for the target, accept immediately (don't block on ambiguity).
         bool isExactForTarget = IsExactNameOrAlias(originalText, target);
 
         if (!isExactForTarget)
         {
             var ambKey = GuessNormalizer.Key(originalText);
             bool ambiguous = IsAmbiguousPrefix(ambKey, target);
-            if (ambiguous && !commit) return;
+            if (ambiguous && !commit)
+                return;
         }
 
-        // Accept + reveal TARGET
         solved.Add(target.id);
-        if (cardById.TryGetValue(target.id, out var card)) card.Reveal();
+        if (cardById.TryGetValue(target.id, out var card))
+            card.Reveal();
         UpdateScore();
 
         guessInput?.SetTextWithoutNotify(string.Empty);
@@ -685,29 +838,33 @@ public class QuizManager : MonoBehaviour
         if (solved.Count >= targetList.Count)
         {
             running = false;
-            if (guessInput) guessInput.interactable = false;
+            if (guessInput)
+                guessInput.interactable = false;
             toast?.Show($"Finished in {TimeSpan.FromSeconds(elapsed):hh\\:mm\\:ss}", 2.5f);
         }
     }
 
-    // remove all digits from a normalized key: "porygon2" -> "porygon"
     private static string StripDigits(string key)
     {
-        if (string.IsNullOrEmpty(key)) return key;
+        if (string.IsNullOrEmpty(key))
+            return key;
         System.Text.StringBuilder sb = new();
-        foreach (var ch in key) if (!char.IsDigit(ch)) sb.Append(ch);
+        foreach (var ch in key)
+            if (!char.IsDigit(ch))
+                sb.Append(ch);
         return sb.ToString();
     }
 
-    // Find a Pokémon whose NAME or any ALIAS matches exactly the given normalized key.
     private static Pokemon FindByExactKey(string normalizedKey)
     {
         foreach (var p in PokemonDatabase.Instance.All())
         {
-            if (GuessNormalizer.Key(p.name) == normalizedKey) return p;
+            if (GuessNormalizer.Key(p.name) == normalizedKey)
+                return p;
             if (p.aliases != null)
                 foreach (var a in p.aliases)
-                    if (GuessNormalizer.Key(a) == normalizedKey) return p;
+                    if (GuessNormalizer.Key(a) == normalizedKey)
+                        return p;
         }
         return null;
     }
@@ -715,12 +872,15 @@ public class QuizManager : MonoBehaviour
     private static bool IsExactNameOrAlias(string text, Pokemon p)
     {
         var k = GuessNormalizer.Key(text);
-        if (string.IsNullOrEmpty(k) || p == null) return false;
+        if (string.IsNullOrEmpty(k) || p == null)
+            return false;
 
-        if (GuessNormalizer.Key(p.name) == k) return true;
+        if (GuessNormalizer.Key(p.name) == k)
+            return true;
         if (p.aliases != null)
             foreach (var a in p.aliases)
-                if (GuessNormalizer.Key(a) == k) return true;
+                if (GuessNormalizer.Key(a) == k)
+                    return true;
 
         return false;
     }
@@ -729,33 +889,35 @@ public class QuizManager : MonoBehaviour
     {
         foreach (var p in targetList)
         {
-            if (p.id == exact.id || solved.Contains(p.id)) continue;
+            if (p.id == exact.id || solved.Contains(p.id))
+                continue;
 
-            // main name
-            if (GuessNormalizer.Key(p.name).StartsWith(key)) return true;
+            if (GuessNormalizer.Key(p.name).StartsWith(key))
+                return true;
 
-            // aliases
             if (p.aliases != null)
                 foreach (var a in p.aliases)
-                    if (GuessNormalizer.Key(a).StartsWith(key)) return true;
+                    if (GuessNormalizer.Key(a).StartsWith(key))
+                        return true;
         }
         return false;
     }
-
 
     private void RevealAll()
     {
         foreach (var p in targetList)
         {
-            if (!solved.Contains(p.id)) solved.Add(p.id);
-            if (cardById.TryGetValue(p.id, out var card)) card.Reveal();
+            if (!solved.Contains(p.id))
+                solved.Add(p.id);
+            if (cardById.TryGetValue(p.id, out var card))
+                card.Reveal();
         }
 
         UpdateScore();
 
         running = false;
-        if (guessInput) guessInput.interactable = false;
+        if (guessInput)
+            guessInput.interactable = false;
         toast?.Show($"Finished in {TimeSpan.FromSeconds(elapsed):hh\\:mm\\:ss}", 2.5f);
     }
-
 }

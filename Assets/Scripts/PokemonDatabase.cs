@@ -2,24 +2,21 @@
 using System.Linq;
 using UnityEngine;
 
-
 public sealed class PokemonDatabase
 {
     private static PokemonDatabase _instance;
     public static PokemonDatabase Instance => _instance ??= new PokemonDatabase();
 
-
     private readonly Dictionary<int, Pokemon> byId = new();
     private readonly Dictionary<string, Pokemon> byKey = new();
     private List<Pokemon> all = new();
 
-
     private bool loaded;
-
 
     public void LoadIfNeeded()
     {
-        if (loaded) return;
+        if (loaded)
+            return;
         var json = Resources.Load<TextAsset>("Data/pokemon");
         if (json == null)
         {
@@ -29,10 +26,8 @@ public sealed class PokemonDatabase
         var list = JsonUtility.FromJson<PokemonList>(json.text);
         all = list.pokemon.ToList();
 
-
         byId.Clear();
         byKey.Clear();
-
 
         foreach (var p in all)
         {
@@ -42,27 +37,29 @@ public sealed class PokemonDatabase
                 foreach (var a in p.aliases)
                     keys.Add(GuessNormalizer.Key(a));
 
-
-            // Special-case common variants
-            if (p.name.StartsWith("nidoran ", System.StringComparison.InvariantCultureIgnoreCase) || p.name.StartsWith("Nidoran"))
+            if (
+                p.name.StartsWith("nidoran ", System.StringComparison.InvariantCultureIgnoreCase)
+                || p.name.StartsWith("Nidoran")
+            )
             {
-                // Accept female/male text variants
                 keys.Add(GuessNormalizer.Key(p.name.Replace("♀", "f")));
                 keys.Add(GuessNormalizer.Key(p.name.Replace("♂", "m")));
             }
 
-
             foreach (var k in keys)
             {
-                if (!byKey.ContainsKey(k)) byKey[k] = p;
+                if (!byKey.ContainsKey(k))
+                    byKey[k] = p;
             }
         }
         loaded = true;
     }
 
-
-    public IReadOnlyList<Pokemon> All() { LoadIfNeeded(); return all; }
-
+    public IReadOnlyList<Pokemon> All()
+    {
+        LoadIfNeeded();
+        return all;
+    }
 
     public Pokemon FindByGuess(string guess)
     {
