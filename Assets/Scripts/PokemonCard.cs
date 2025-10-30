@@ -171,36 +171,6 @@ public class PokemonCard : MonoBehaviour
         hintVisible = false;
     }
 
-    private void LayoutHintIcons()
-    {
-        var rt = (RectTransform)transform;
-        if (rt.rect.width <= 0 || rt.rect.height <= 0) return;
-        float side = Mathf.Min(rt.rect.width, rt.rect.height);
-
-        static void Place(Image img, float size, Vector2 pos)
-        {
-            if (!img) return;
-            var irt = img.rectTransform;
-            irt.anchorMin = irt.anchorMax = new Vector2(0.5f, 0.5f);
-            irt.sizeDelta = new Vector2(size, size);
-            irt.anchoredPosition = pos;
-            img.preserveAspect = true;
-        }
-
-        bool dual = typeIconR && typeIconR.enabled;
-        if (dual)
-        {
-            float size = side * 0.48f, gap = size * 0.15f;
-            Place(typeIconL, size, new Vector2(-size * 0.5f - gap * 0.5f, 0f));
-            Place(typeIconR, size, new Vector2(size * 0.5f + gap * 0.5f, 0f));
-        }
-        else
-        {
-            float size = side * 0.9f;
-            Place(typeIconL, size, Vector2.zero);
-        }
-    }
-
     private void OnRectTransformDimensionsChange()
     {
         // keep type-hint layout behavior
@@ -321,5 +291,70 @@ public class PokemonCard : MonoBehaviour
 
         Size(spriteImage);
         Size(placeholderImage);
+    }
+
+    private float GetInnerSide()
+    {
+        var cell = (RectTransform)transform;
+        float cellSide = Mathf.Min(cell.rect.width, cell.rect.height);
+
+        // subtract the padding you use for the art
+        float inner = Mathf.Max(0f, cellSide - spritePadding * 2f);
+
+        // if sprite/placeholder rects are valid, clamp to them as well
+        if (spriteImage)
+        {
+            var r = spriteImage.rectTransform.rect;
+            if (r.width > 0f && r.height > 0f) inner = Mathf.Min(inner, Mathf.Min(r.width, r.height));
+        }
+        if (placeholderImage && !revealed)
+        {
+            var r = placeholderImage.rectTransform.rect;
+            if (r.width > 0f && r.height > 0f) inner = Mathf.Min(inner, Mathf.Min(r.width, r.height));
+        }
+        return inner;
+    }
+
+    // Place the type hint icons so they always fit inside the white card
+    private void LayoutHintIcons()
+    {
+        float inner = GetInnerSide();
+        if (inner <= 0f) return;
+
+        // ensure they render above the art
+        if (typeIconL) typeIconL.transform.SetAsLastSibling();
+        if (typeIconR) typeIconR.transform.SetAsLastSibling();
+        if (highlight) highlight.transform.SetAsLastSibling();
+
+        static void Place(Image img, float size, Vector2 pos)
+        {
+            if (!img) return;
+            var rt = img.rectTransform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = new Vector2(size, size);
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            img.enabled = true;
+        }
+
+        bool dual = typeIconR && typeIconR.enabled;
+
+        if (dual)
+        {
+            // two icons: a bit smaller, with a small gap, all within the inner square
+            float size = inner * 0.45f;                 // each icon is 45% of inner square
+            float gap = Mathf.Min(size * 0.18f, inner * 0.12f);
+            float half = size * 0.5f + gap * 0.5f;
+            Place(typeIconL, size, new Vector2(-half, 0f));
+            Place(typeIconR, size, new Vector2(+half, 0f));
+        }
+        else
+        {
+            // single icon: almost full-size
+            float size = inner * 0.90f;
+            Place(typeIconL, size, Vector2.zero);
+        }
     }
 }
