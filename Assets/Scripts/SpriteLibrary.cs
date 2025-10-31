@@ -11,6 +11,14 @@ public sealed class SpriteLibrary
 
     private readonly Dictionary<int, Sprite> _byId = new();
     private readonly Dictionary<string, Sprite> _byKey = new();
+    private static readonly Dictionary<int, string> ExplicitPathById = new()
+    {
+        // place files with these names under: Resources/Sprites/Pokemon/
+        { 12804, "Sprites/tauros_paldea_combat" },
+        { 12814, "Sprites/tauros_paldea_blaze" },
+        { 12824, "Sprites/tauros_paldea_aqua" },
+        { 90104, "Sprites/ursaluna_bloodmoon" },
+    };
 
     public IEnumerator PreloadAsync(IEnumerable<int> ids)
     {
@@ -73,21 +81,98 @@ public sealed class SpriteLibrary
         return null;
     }
 
+    private static string San(string s)
+    {
+        if (string.IsNullOrEmpty(s))
+            return "";
+        s = s.ToLowerInvariant();
+        s = s.Replace("é", "e");
+        // remove punctuation and collapse spaces/dashes
+        var chars = s.Where(c => char.IsLetterOrDigit(c) || c == ' ' || c == '_').ToArray();
+        s = new string(chars).Replace("  ", " ").Trim();
+        return s.Replace(' ', '_').Replace("__", "_");
+    }
+
+    private static IEnumerable<string> Candidates(Pokemon p)
+    {
+        // by id
+        yield return $"Sprites/{p.id}";
+        // by name
+        yield return $"Sprites/{San(p.name)}";
+
+        // aliases
+        if (p.aliases != null)
+            foreach (var a in p.aliases)
+                yield return $"Sprites/{San(a)}";
+
+        // base + form key patterns
+        if (p.baseId != 0)
+        {
+            var baseMon = PokemonDatabase.Instance.All().FirstOrDefault(x => x.id == p.baseId);
+            var baseName = baseMon != null ? San(baseMon.name) : null;
+            var fk = San(p.formKey);
+
+            if (!string.IsNullOrEmpty(fk))
+            {
+                yield return $"Sprites/{p.baseId}_{fk}";
+                if (baseName != null)
+                {
+                    yield return $"Sprites/{baseName}_{fk}";
+                    yield return $"Sprites/{baseName}_({fk})";
+                }
+            }
+        }
+    }
+
+    public Sprite TryLoad(Pokemon p)
+    {
+        // explicit overrides first
+        if (ExplicitPathById.TryGetValue(p.id, out var path))
+        {
+            var s = Resources.Load<Sprite>(path);
+            if (s != null)
+                return s;
+        }
+
+        foreach (var c in Candidates(p))
+        {
+            var s = Resources.Load<Sprite>(c);
+            if (s != null)
+                return s;
+        }
+
+        WarnOnce(
+            p.id,
+            $"[SpriteLibrary] Missing sprite for #{p.id} {p.name}. Searched: "
+                + string.Join(", ", Candidates(p))
+        );
+        return null;
+    }
+
+    private readonly HashSet<int> warned = new();
+
+    private void WarnOnce(int id, string msg)
+    {
+        if (warned.Add(id))
+            Debug.LogWarning(msg);
+    }
+
     public Sprite ByPokemon(Pokemon p)
     {
         if (_byId.TryGetValue(p.id, out var s))
             return s;
 
-        s = LoadAny($"Sprites/{p.id:000}") ?? LoadAny($"Sprites/{p.id}");
-        if (s)
-            return Cache(p, s);
-
-        if (!string.IsNullOrWhiteSpace(p.sprite))
+        // NEW: honor explicit overrides first
+        if (ExplicitPathById.TryGetValue(p.id, out var explicitPath))
         {
-            s = LoadAny(p.sprite);
+            s = LoadAny(explicitPath);
             if (s)
                 return Cache(p, s);
         }
+
+        s = LoadAny($"Sprites/{p.id:000}") ?? LoadAny($"Sprites/{p.id}");
+        if (s)
+            return Cache(p, s);
 
         var norm = GuessNormalizer.Key(p.name);
         var lettersOnly = new string(norm.Where(char.IsLetter).ToArray());

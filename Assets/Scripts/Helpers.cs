@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 public static class Helpers
 {
@@ -26,6 +28,71 @@ public static class Helpers
 
     public static bool IsGalarForm(Pokemon p) =>
         HasForm(p, "galar") || NameHas(p, "(Galar") || NameHas(p, "Galarian");
+
+    public static bool IsPaldeaTauros(Pokemon p) => p.formKey == "paldea" && p.baseId == 128; // 128 = Tauros base
+
+    public static int IdOrBase(Pokemon p) => p.baseId != 0 ? p.baseId : p.id;
+
+    public static bool IsPaldeaExpedition(Pokemon p)
+    {
+        if (p == null || p.generation != 9)
+            return false;
+
+        int baseId = p.baseId != 0 ? p.baseId : p.id;
+        if (PaldeaExpeditionBaseIds.Contains(baseId))
+            return true;
+
+        // Fallback by normalized name (handles datasets with slightly different ids)
+        string k = GuessNormalizer.Key(p.name);
+        return PaldeaExpeditionNames.Contains(k);
+    }
+
+    private static readonly HashSet<int> PaldeaExpeditionBaseIds = new()
+    {
+        1009,
+        1010, // Walking Wake, Iron Leaves
+        1011,
+        1012,
+        1013, // Dipplin, Poltchageist, Sinistcha
+        1014,
+        1015,
+        1016,
+        1017, // Okidogi, Munkidori, Fezandipiti, Ogerpon
+        1018,
+        1019, // Archaludon, Hydrapple
+        1020,
+        1021, // Gouging Fire, Raging Bolt
+        1022,
+        1023, // Iron Boulder, Iron Crown
+        1024,
+        1025, // Terapagos, Pecharunt
+        901, // Ursaluna (base id; BM is a form of this)
+    };
+
+    private static readonly HashSet<string> PaldeaExpeditionNames = new()
+    {
+        "walkingwake",
+        "ironleaves",
+        "dipplin",
+        "poltchageist",
+        "sinistcha",
+        "okidogi",
+        "munkidori",
+        "fezandipiti",
+        "ogerpon",
+        "archaludon",
+        "hydrapple",
+        "gougingfire",
+        "ragingbolt",
+        "ironboulder",
+        "ironcrown",
+        "terapagos",
+        "pecharunt",
+        // Bloodmoon aliases in case the entry’s name differs
+        "ursaluna",
+        "ursalunabloodmoon",
+        "ursalunabm",
+    };
 
     public static string GetGenTitle(int gen) =>
         gen switch

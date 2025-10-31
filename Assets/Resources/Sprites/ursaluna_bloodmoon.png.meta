@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 90ba35b88c30143489083418bde56469
+guid: 0bc115b86110fe040948426b88898a96
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -5748501225388065773
-    second: taurospaldea_0
+      213: -7620202333391272236
+    second: ursaluna_bloodmoon_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -109,30 +109,17 @@ TextureImporter:
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
-  - serializedVersion: 4
-    buildTarget: WindowsStoreApps
-    maxTextureSize: 2048
-    resizeAlgorithm: 0
-    textureFormat: -1
-    textureCompression: 1
-    compressionQuality: 50
-    crunchedCompression: 0
-    allowsAlphaSplitting: 0
-    overridden: 0
-    ignorePlatformSupport: 0
-    androidETC2FallbackOverride: 0
-    forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: taurospaldea_0
+      name: ursaluna_bloodmoon_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 68
-        width: 534
-        height: 397
+        x: 78
+        y: 0
+        width: 1125
+        height: 1280
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -141,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 31cb8d5a7983930b0800000000000000
-      internalID: -5748501225388065773
+      spriteID: 4d64c91f95a9f3690800000000000000
+      internalID: -7620202333391272236
       vertices: []
       indices: 
       edges: []
@@ -161,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      taurospaldea_0: -5748501225388065773
+      ursaluna_bloodmoon_0: -7620202333391272236
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

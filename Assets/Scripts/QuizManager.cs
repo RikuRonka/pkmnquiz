@@ -3,13 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using static UnityEngine.Rendering.CoreUtils;
 
 public class QuizManager : MonoBehaviour
 {
@@ -51,13 +49,19 @@ public class QuizManager : MonoBehaviour
     public SectionHeader sectionHeaderPrefab;
     public SectionGroup sectionGroupPrefab;
     public Transform content;
-    private List<SectionGroup> _builtSections = new();
-    private Vector2 _lastVpSize;
 
     private readonly Dictionary<int, List<Pokemon>> megaFormsByBase = new();
     private readonly Dictionary<int, Pokemon> megaSlotPickByBase = new();
     private readonly Dictionary<int, PokemonCard> megaCardByBase = new();
     private readonly Dictionary<string, List<int>> megaByBaseName = new();
+
+    // Gen9 Tauros (Paldea): one-slot random form
+    private readonly Dictionary<int, Pokemon> taurosPickByBase = new(); // baseId -> picked form
+    private readonly Dictionary<int, PokemonCard> taurosCardByBase = new(); // baseId -> card
+
+    // Gen9 Expeditions (for mapping base name -> expedition slot, e.g. Ursaluna -> Bloodmoon)
+    private readonly Dictionary<int, Pokemon> expeditionPickByBase = new(); // baseId -> expedition mon
+    private readonly Dictionary<int, PokemonCard> expeditionCardByBase = new(); // baseId -> card
 
     private void Awake()
     {
@@ -403,29 +407,34 @@ public class QuizManager : MonoBehaviour
         megaCardByBase.Clear();
 
         // Order targets
-        var ordered = targetList.OrderBy(p => DexOrder.GetIndex(p)).ToList();
+        var ordered = targetList;
 
-        // Main section (always)
+        // Build sections
         var main = Instantiate(sectionGroupPrefab, content);
         main.EnsureLayout();
         main.SetTitle(Helpers.GetGenTitle(generation));
 
         SectionGroup megas = null;
+        SectionGroup paldeaExpeditions = null;
 
-        // If Gen 6, create a Mega section
         if (generation == 6)
         {
             megas = Instantiate(sectionGroupPrefab, content);
             megas.EnsureLayout();
             megas.SetTitle("Mega Evolutions");
         }
+        if (generation == 9)
+        {
+            paldeaExpeditions = Instantiate(sectionGroupPrefab, content);
+            paldeaExpeditions.EnsureLayout();
+            paldeaExpeditions.SetTitle("Paldea Expeditions");
+        }
 
-        // First pass: non-megas to main; collect megas by base
         foreach (var p in ordered)
         {
+            // Gen 6: collect megas by base, don't place yet
             if (generation == 6 && Helpers.IsMega(p))
             {
-                // collect by base id
                 int baseKey = BaseIdOf(p);
                 if (!megaFormsByBase.TryGetValue(baseKey, out var list))
                 {
@@ -436,72 +445,58 @@ public class QuizManager : MonoBehaviour
                 continue;
             }
 
-            // normal (non-mega) card
-            var card = Instantiate(cardPrefab, main.gridRoot);
-            card.Bind(p);
-            cardById[p.id] = card;
+            // Gen 9: Paldea Expeditions go to their own section
+            if (generation == 9 && paldeaExpeditions != null && Helpers.IsPaldeaExpedition(p))
+            {
+                var card = Instantiate(cardPrefab, paldeaExpeditions.gridRoot);
+                card.Bind(p);
+                cardById[p.id] = card;
+                continue;
+            }
+
+            // Otherwise: goes to the main section
+            {
+                var card = Instantiate(cardPrefab, main.gridRoot);
+                card.Bind(p);
+                cardById[p.id] = card;
+            }
         }
 
-        // Second pass: build ONE card per base for megas (Gen 6 only)
+        // Build ONE mega card per base (Gen 6)
         if (generation == 6 && megas != null)
         {
             var rng = new System.Random();
             foreach (var kv in megaFormsByBase)
             {
-                var forms = kv.Value;
-                var pick = forms[rng.Next(forms.Count)]; // X or Y (or single form)
-
+                var pick = kv.Value[rng.Next(kv.Value.Count)];
                 var card = Instantiate(cardPrefab, megas.gridRoot);
                 card.Bind(pick);
 
                 megaSlotPickByBase[kv.Key] = pick;
                 megaCardByBase[kv.Key] = card;
-
-                cardById[pick.id] = card; // optional: still index by id
+                cardById[pick.id] = card;
             }
         }
 
-        megaByBaseName.Clear();
-        if (generation == 6)
-        {
-            // We only care about the megas that are actually in *this* quiz
-            var megasHere = targetList.Where(Helpers.IsMega).ToList();
+        main.SetCardCount(main.gridRoot.childCount);
+        megas?.SetCardCount(megas.gridRoot.childCount);
+        paldeaExpeditions?.SetCardCount(paldeaExpeditions.gridRoot.childCount);
 
-            foreach (var m in megasHere)
-            {
-                int baseId = m.baseId != 0 ? m.baseId : m.id;
-                var baseMon = PokemonDatabase.Instance.All().FirstOrDefault(x => x.id == baseId);
-                if (baseMon == null)
-                    continue;
-
-                void AddName(string name)
-                {
-                    var k = GuessNormalizer.Key(name);
-                    if (string.IsNullOrEmpty(k))
-                        return;
-                    if (!megaByBaseName.TryGetValue(k, out var list))
-                    {
-                        list = new List<int>();
-                        megaByBaseName[k] = list;
-                    }
-                    if (!list.Contains(m.id))
-                        list.Add(m.id);
-                }
-
-                // base species name + its aliases map to these mega form ids
-                AddName(baseMon.name);
-                if (baseMon.aliases != null)
-                    foreach (var a in baseMon.aliases)
-                        AddName(a);
-            }
-        }
-
-        // Minimal fitting (uses your existing FitSection)
+        // Fit
         FitSection(main);
-        if (generation == 6 && megas != null)
+        if (megas != null)
             FitSection(megas);
+        if (paldeaExpeditions != null)
+            FitSection(paldeaExpeditions);
 
         UpdateScore();
+    }
+
+    private static bool IsPaldeanRegional(Pokemon p)
+    {
+        // The Paldean “regional” forms that appear in the main Paldea dex:
+        // Wooper (baseId 194, formKey "paldea") and Tauros three breeds (baseId 128, formKey "paldea")
+        return p.formKey == "paldea" && (p.baseId == 194 || p.baseId == 128);
     }
 
     private void FitSection(SectionGroup grp)
@@ -522,6 +517,13 @@ public class QuizManager : MonoBehaviour
         fit.Spacing = 16;
         fit.MinCols = 6;
         fit.MaxCols = 30;
+
+        if (grp.headerLabel && grp.headerLabel.text == "Paldea Expeditions")
+        {
+            fit.MinCols = grp.CardCount;
+            fit.MaxCols = grp.CardCount;
+            fit.MaxCell = 140f;
+        }
 
         StartCoroutine(CoRecalc(fit));
     }
@@ -564,12 +566,11 @@ public class QuizManager : MonoBehaviour
 
             if (generation == 6)
             {
-                // keep ONE mega per base species in the targetList
                 var megasDistinctByBase = all.Where(Helpers.IsMega)
                     .GroupBy(p => p.baseId != 0 ? p.baseId : p.id)
                     .Select(g => g.First());
 
-                extras = megasDistinctByBase; // <-- use the deduped set
+                extras = megasDistinctByBase;
             }
             else if (generation == 8)
             {
@@ -577,9 +578,7 @@ public class QuizManager : MonoBehaviour
             }
             else if (generation == 9)
             {
-                extras = all.Where(p =>
-                    Helpers.HasForm(p, "kitakami") || Helpers.HasForm(p, "blueberry")
-                );
+                extras = all.Where(p => Helpers.IsPaldeaExpedition(p));
             }
 
             all = genSet.Concat(extras).Distinct();
@@ -596,11 +595,32 @@ public class QuizManager : MonoBehaviour
         }
 
         DexOrder.LoadForGeneration(generation);
+        var ordered = all.OrderBy(p => DexOrder.GetIndex(p));
 
-        targetList =
-            (generation == 7 || generation == 8)
-                ? all.OrderBy(p => DexOrder.GetIndex(p)).ToList()
-                : all.ToList();
+        // GEN 9: keep ONLY ONE Tauros (Paldea) in the quiz target list
+        if (generation == 9)
+        {
+            // Everything that's NOT Tauros (Paldea)
+            var others = ordered.Where(p => !Helpers.IsPaldeaTauros(p));
+
+            // For Tauros (Paldea), keep exactly one (first by dex order)
+            var oneTauros = ordered
+                .Where(Helpers.IsPaldeaTauros)
+                .GroupBy(p => p.baseId)
+                .Select(g => g.First());
+
+            ordered = others.Concat(oneTauros).OrderBy(p => DexOrder.GetIndex(p));
+        }
+
+        // Paldean regionals to the end if you still want that behavior:
+        targetList = ordered.ToList();
+
+        if (generation == 9)
+        {
+            var core = targetList.Where(p => !IsPaldeanRegional(p));
+            var regionals = targetList.Where(IsPaldeanRegional);
+            targetList = core.Concat(regionals).ToList();
+        }
     }
 
     private void ResetTimerOnly()

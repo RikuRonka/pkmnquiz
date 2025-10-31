@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 34a695e22f49b4f4ca3092c82681f9f5
+guid: c15a74be7cab1724cbf9046dab76d4ef
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -7692486876070149903
-    second: meganium_0
+      213: 3741259717164493696
+    second: ursaluna_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -109,30 +109,17 @@ TextureImporter:
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
-  - serializedVersion: 4
-    buildTarget: WindowsStoreApps
-    maxTextureSize: 2048
-    resizeAlgorithm: 0
-    textureFormat: -1
-    textureCompression: 1
-    compressionQuality: 50
-    crunchedCompression: 0
-    allowsAlphaSplitting: 0
-    overridden: 0
-    ignorePlatformSupport: 0
-    androidETC2FallbackOverride: 0
-    forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: meganium_0
+      name: ursaluna_0
       rect:
         serializedVersion: 2
         x: 0
-        y: 0
-        width: 559
-        height: 1000
+        y: 60
+        width: 520
+        height: 400
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -141,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 1f00c7851fbce3590800000000000000
-      internalID: -7692486876070149903
+      spriteID: 08b611604ef9be330800000000000000
+      internalID: 3741259717164493696
       vertices: []
       indices: 
       edges: []
@@ -161,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      meganium_0: -7692486876070149903
+      ursaluna_0: 3741259717164493696
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

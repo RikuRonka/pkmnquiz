@@ -9,7 +9,12 @@ public class SectionGroup : MonoBehaviour
     public TMP_Text headerLabel;
     public RectTransform gridRoot;
 
-    public int CardCount => gridRoot ? gridRoot.childCount : 0;
+    public int CardCount { get; private set; }
+
+    public void SetCardCount(int n)
+    {
+        CardCount = Mathf.Max(0, n);
+    }
 
     public void EnsureLayout()
     {
