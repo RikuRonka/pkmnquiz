@@ -36,63 +36,51 @@ public class GridAutoFit : MonoBehaviour
         if (!Viewport || ItemCount <= 0)
             return;
 
+        if (!grid)
+            grid = GetComponent<GridLayoutGroup>();
+        if (!layoutElem)
+            layoutElem = GetComponent<LayoutElement>();
+
         var vp = Viewport.rect;
         float headH = Header ? Header.rect.height : 0f;
         var pad = grid.padding;
 
-        float availW = Mathf.Max(1f, vp.width - OuterMarginX * 2f - (pad.left + pad.right));
+        // Width available for the grid rows
+        float availW = Mathf.Max(1f, vp.width - 2f * OuterMarginX - (pad.left + pad.right));
         float availH = Mathf.Max(
             1f,
-            vp.height - OuterMarginY * 2f - headH - (pad.top + pad.bottom)
+            vp.height - 2f * OuterMarginY - headH - (pad.top + pad.bottom)
         );
 
-        int bestCols = MinCols;
-        float bestCell = 0f;
+        // Choose columns by WIDTH only.
+        // Max columns such that cell <= MaxCell, then clamp to [MinCols, MaxCols]
+        int colsByMaxCell = Mathf.FloorToInt((availW + Spacing) / (MaxCell + Spacing));
+        int bestCols = Mathf.Clamp(colsByMaxCell, MinCols, MaxCols);
+        if (ItemCount < bestCols)
+            bestCols = Mathf.Max(MinCols, ItemCount); // don't overshoot tiny sections
+        if (bestCols <= 0)
+            bestCols = Mathf.Clamp(MinCols, 1, MaxCols);
 
-        for (int cols = MinCols; cols <= MaxCols; cols++)
-        {
-            float cell = (availW - Spacing * (cols - 1)) / cols;
-            if (cell <= 1f)
-                continue;
+        // Compute cell from chosen columns; cap at MaxCell for safety
+        float cell = (availW - Spacing * (bestCols - 1)) / Mathf.Max(1, bestCols);
+        cell = Mathf.Min(cell, MaxCell);
 
-            int rows = Mathf.CeilToInt((float)ItemCount / cols);
-            float gridH = rows * cell + Mathf.Max(0, rows - 1) * Spacing;
-
-            if (gridH <= availH && cell > bestCell)
-            {
-                bestCell = cell;
-                bestCols = cols;
-            }
-        }
-
-        if (bestCell <= 0f)
-        {
-            bestCols = MaxCols;
-            bestCell = (availW - Spacing * (bestCols - 1)) / bestCols;
-        }
-
-        bestCell = Mathf.Min(bestCell, MaxCell);
-
+        // Apply to grid
         grid.startAxis = GridLayoutGroup.Axis.Horizontal;
         grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-
-        if (bestCols == 11)
-        {
-            grid.constraintCount = 12;
-        }
-        else
-        {
-            grid.constraintCount = bestCols;
-        }
-
-        grid.cellSize = new Vector2(bestCell, bestCell);
+        grid.constraintCount = bestCols;
+        grid.cellSize = new Vector2(cell, cell);
         grid.spacing = new Vector2(Spacing, Spacing);
 
-        int rowsFinal = Mathf.CeilToInt((float)ItemCount / bestCols);
-        float finalGrid = rowsFinal * bestCell + Mathf.Max(0, rowsFinal - 1) * Spacing;
+        // Calculate resulting height and publish to LayoutElement so parent layouts size correctly
+        int rows = Mathf.CeilToInt((float)ItemCount / Mathf.Max(1, bestCols));
+        float gridHeight = rows * cell + Mathf.Max(0, rows - 1) * Spacing;
 
-        layoutElem.preferredHeight = finalGrid;
+        layoutElem.preferredHeight = gridHeight;
+        // optional: ensure no shrink
+        // layoutElem.minHeight = gridHeight;
+
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
     }
 }

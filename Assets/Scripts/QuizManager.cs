@@ -455,6 +455,19 @@ public class QuizManager : MonoBehaviour
         return true;
     }
 
+    private static readonly Dictionary<int, string> GenTitles = new()
+    {
+        { 1, "Kanto (Gen 1)" },
+        { 2, "Johto (Gen 2)" },
+        { 3, "Hoenn (Gen 3)" },
+        { 4, "Sinnoh (Gen 4)" },
+        { 5, "Unova (Gen 5)" },
+        { 6, "Kalos (Gen 6)" },
+        { 7, "Alola (Gen 7)" },
+        { 8, "Galar (Gen 8)" },
+        { 9, "Paldea (Gen 9)" },
+    };
+
     private void RebuildGrid()
     {
         if (!scrollRect || !scrollRect.viewport)
@@ -507,6 +520,149 @@ public class QuizManager : MonoBehaviour
 
         SectionGroup megas = null;
         SectionGroup paldeaExpeditions = null;
+        if (generation == 0)
+        {
+            // create sections for gens we actually have in the list (1..9)
+            var mainByGen = new Dictionary<int, SectionGroup>();
+            SectionGroup gen6Megas = null;
+            SectionGroup gen9Expeditions = null;
+
+            foreach (var g in ordered.Select(p => p.generation).Distinct().OrderBy(x => x))
+            {
+                if (!GenTitles.TryGetValue(g, out var title))
+                    title = $"Gen {g}";
+                var sec = Instantiate(sectionGroupPrefab, content);
+                sec.EnsureLayout();
+                sec.SetTitle(title);
+                mainByGen[g] = sec;
+
+                if (g == 6)
+                {
+                    gen6Megas = Instantiate(sectionGroupPrefab, content);
+                    gen6Megas.EnsureLayout();
+                    gen6Megas.SetTitle("Mega Evolutions (Gen 6)");
+                }
+                if (g == 9)
+                {
+                    gen9Expeditions = Instantiate(sectionGroupPrefab, content);
+                    gen9Expeditions.EnsureLayout();
+                    gen9Expeditions.SetTitle("Paldea Expeditions");
+                }
+            }
+
+            // 1) Place MAIN entries (ordered already excludes Megas/Expeditions)
+            foreach (var p in ordered)
+            {
+                var sec = mainByGen[p.generation];
+                var card = Instantiate(cardPrefab, sec.gridRoot);
+                card.Bind(p);
+                cardById[p.id] = card;
+            }
+
+            // 2) Build MEGA pool from the full DB (NOT from 'ordered')
+            var allDb = PokemonDatabase.Instance.All();
+            megaFormsByBase.Clear();
+            foreach (var m in allDb.Where(Helpers.IsMega))
+            {
+                int baseKey = BaseIdOf(m);
+                if (!megaFormsByBase.TryGetValue(baseKey, out var list))
+                    megaFormsByBase[baseKey] = list = new List<Pokemon>();
+                list.Add(m);
+            }
+
+            if (gen6Megas != null && megaFormsByBase.Count > 0)
+            {
+                var rng = new System.Random();
+                foreach (var kv in megaFormsByBase)
+                {
+                    var pick = kv.Value[rng.Next(kv.Value.Count)];
+                    var card = Instantiate(cardPrefab, gen6Megas.gridRoot);
+                    card.Bind(pick);
+                    megaSlotPickByBase[kv.Key] = pick;
+                    megaCardByBase[kv.Key] = card;
+                    cardById[pick.id] = card;
+                }
+            }
+
+            // 3) Build EXPEDITION pool from the full DB (NOT from 'ordered')
+            if (gen9Expeditions != null)
+            {
+                var g9ExpPool = allDb.Where(Helpers.IsPaldeaExpedition).ToList();
+                var expOrdered = g9ExpPool.OrderBy(p => DexOrder.GetIndex(p)).ToList();
+
+                // Bloodmoon directly after Sinistcha
+                int iBlood = expOrdered.FindIndex(x => x.id == 1015);
+                int iSini = expOrdered.FindIndex(x => x.id == 1014);
+                if (iBlood >= 0 && iSini >= 0 && iBlood < iSini)
+                {
+                    var item = expOrdered[iBlood];
+                    expOrdered.RemoveAt(iBlood);
+                    iSini = expOrdered.FindIndex(x => x.id == 1014);
+                    expOrdered.Insert(Math.Min(expOrdered.Count, iSini + 1), item);
+                }
+
+                expeditionByBaseName.Clear();
+                expeditionPickByBase.Clear();
+                expeditionCardByBase.Clear();
+
+                foreach (var p in expOrdered)
+                {
+                    var card = Instantiate(cardPrefab, gen9Expeditions.gridRoot);
+                    card.Bind(p);
+                    cardById[p.id] = card;
+
+                    int baseKey = p.baseId != 0 ? p.baseId : p.id;
+                    expeditionPickByBase[baseKey] = p;
+                    expeditionCardByBase[baseKey] = card;
+
+                    // Build keys so typing "Ursaluna" reveals Bloodmoon
+                    void AddKey(string s)
+                    {
+                        var k = GuessNormalizer.Key(s);
+                        if (!string.IsNullOrEmpty(k))
+                            expeditionByBaseName[k] = baseKey;
+                    }
+
+                    AddKey(p.name); // "Ursaluna (Bloodmoon)"
+                    if (p.aliases != null)
+                        foreach (var a in p.aliases)
+                            AddKey(a); // "Ursaluna Bloodmoon", etc.
+
+                    var idx = p.name.IndexOf('('); // base name without parentheses: "Ursaluna"
+                    if (idx > 0)
+                        AddKey(p.name[..idx].Trim());
+
+                    var baseMon = allDb.FirstOrDefault(x => x.id == baseKey);
+                    if (baseMon != null)
+                    {
+                        AddKey(baseMon.name);
+                        if (baseMon.aliases != null)
+                            foreach (var a in baseMon.aliases)
+                                AddKey(a);
+                    }
+                }
+            }
+
+            // Fit & counts
+            foreach (var sec in mainByGen.Values)
+            {
+                sec.SetCardCount(sec.gridRoot.childCount);
+                FitSection(sec);
+            }
+            if (gen6Megas != null)
+            {
+                gen6Megas.SetCardCount(gen6Megas.gridRoot.childCount);
+                FitSection(gen6Megas);
+            }
+            if (gen9Expeditions != null)
+            {
+                gen9Expeditions.SetCardCount(gen9Expeditions.gridRoot.childCount);
+                FitSection(gen9Expeditions);
+            }
+
+            UpdateScore();
+            return;
+        }
 
         if (generation == 6)
         {
@@ -697,7 +853,22 @@ public class QuizManager : MonoBehaviour
     {
         var all = PokemonDatabase.Instance.All().AsEnumerable();
 
-        if (generation > 0)
+        if (generation == 0)
+        {
+            // FULL (Gen 1–9): main species only
+            all = all.Where(p =>
+                p.generation >= 1
+                && p.generation <= 9
+                && !Helpers.IsMega(p)
+                && !Helpers.IsGmax(p)
+                && !Helpers.IsHisui(p)
+                && !Helpers.IsPaldeaExpedition(p)
+            );
+
+            // Optional: if you want to hide regional variants outside their gen’s main dex, also filter here.
+            // Otherwise they’ll appear if they’re marked as main entries.
+        }
+        else if (generation > 0)
         {
             var genSet = all.Where(p => p.generation == generation);
             IEnumerable<Pokemon> extras = Enumerable.Empty<Pokemon>();
