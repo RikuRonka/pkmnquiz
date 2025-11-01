@@ -10511,6 +10511,68 @@
         "Mega Rayquaza",
         "Rayquaza Mega"
       ]
-    }
+    },
+    { "id":200006, "name":"Charizard (Gmax)","generation":8,"types":["Fire","Flying"],"baseId":6,"formKey":"gmax","aliases":["Charizard Gigantamax","Charizard Gmax","G-Max Charizard"],"sprite":"Sprites/gmax/charizard_gmax" },
+  { "id":200012, "name":"Butterfree (Gmax)","generation":8,"types":["Bug","Flying"],"baseId":12,"formKey":"gmax","aliases":["Butterfree Gigantamax","Butterfree Gmax"],"sprite":"Sprites/gmax/butterfree_gmax" },
+  { "id":200025, "name":"Pikachu (Gmax)","generation":8,"types":["Electric"],"baseId":25,"formKey":"gmax","aliases":["Pikachu Gigantamax","Pikachu Gmax"],"sprite":"Sprites/gmax/pikachu_gmax" },
+  { "id":200052, "name":"Meowth (Gmax)","generation":8,"types":["Normal"],"baseId":52,"formKey":"gmax","aliases":["Meowth Gigantamax","Meowth Gmax"],"sprite":"Sprites/gmax/meowth_gmax" },
+  { "id":200099, "name":"Kingler (Gmax)","generation":8,"types":["Water"],"baseId":99,"formKey":"gmax","aliases":["Kingler Gigantamax","Kingler Gmax"],"sprite":"Sprites/gmax/kingler_gmax" },
+  { "id":200131, "name":"Lapras (Gmax)","generation":8,"types":["Water","Ice"],"baseId":131,"formKey":"gmax","aliases":["Lapras Gigantamax","Lapras Gmax"],"sprite":"Sprites/gmax/lapras_gmax" },
+  { "id":200094, "name":"Gengar (Gmax)","generation":8,"types":["Ghost","Poison"],"baseId":94,"formKey":"gmax","aliases":["Gengar Gigantamax","Gengar Gmax"],"sprite":"Sprites/gmax/gengar_gmax" },
+  { "id":200143, "name":"Snorlax (Gmax)","generation":8,"types":["Normal"],"baseId":143,"formKey":"gmax","aliases":["Snorlax Gigantamax","Snorlax Gmax"],"sprite":"Sprites/gmax/snorlax_gmax" },
+
+  { "id":200569, "name":"Garbodor (Gmax)","generation":8,"types":["Poison"],"baseId":569,"formKey":"gmax","aliases":["Garbodor Gigantamax","Garbodor Gmax"],"sprite":"Sprites/gmax/garbodor_gmax" },
+  { "id":200823, "name":"Corviknight (Gmax)","generation":8,"types":["Flying","Steel"],"baseId":823,"formKey":"gmax","aliases":["Corviknight Gigantamax","Corviknight Gmax"],"sprite":"Sprites/gmax/corviknight_gmax" },
+  { "id":200826, "name":"Orbeetle (Gmax)","generation":8,"types":["Bug","Psychic"],"baseId":826,"formKey":"gmax","aliases":["Orbeetle Gigantamax","Orbeetle Gmax"],"sprite":"Sprites/gmax/orbeetle_gmax" },
+  { "id":200834, "name":"Drednaw (Gmax)","generation":8,"types":["Water","Rock"],"baseId":834,"formKey":"gmax","aliases":["Drednaw Gigantamax","Drednaw Gmax"],"sprite":"Sprites/gmax/drednaw_gmax" },
+  { "id":200839, "name":"Coalossal (Gmax)","generation":8,"types":["Rock","Fire"],"baseId":839,"formKey":"gmax","aliases":["Coalossal Gigantamax","Coalossal Gmax"],"sprite":"Sprites/gmax/coalossal_gmax" },
+  { "id":200841, "name":"Flapple (Gmax)","generation":8,"types":["Grass","Dragon"],"baseId":841,"formKey":"gmax","aliases":["Flapple Gigantamax","Flapple Gmax"],"sprite":"Sprites/gmax/flapple_gmax" },
+  { "id":200842, "name":"Appletun (Gmax)","generation":8,"types":["Grass","Dragon"],"baseId":842,"formKey":"gmax","aliases":["Appletun Gigantamax","Appletun Gmax"],"sprite":"Sprites/gmax/appletun_gmax" },
+  { "id":200844, "name":"Sandaconda (Gmax)","generation":8,"types":["Ground"],"baseId":844,"formKey":"gmax","aliases":["Sandaconda Gigantamax","Sandaconda Gmax"],"sprite":"Sprites/gmax/sandaconda_gmax" },
+  { "id":200849, "name":"Toxtricity (Gmax)","generation":8,"types":["Electric","Poison"],"baseId":849,"formKey":"gmax","aliases":["Toxtricity Gigantamax","Toxtricity Gmax"],"sprite":"Sprites/gmax/toxtricity_gmax" },
+  { "id":200851, "name":"Centiskorch (Gmax)","generation":8,"types":["Fire","Bug"],"baseId":851,"formKey":"gmax","aliases":["Centiskorch Gigantamax","Centiskorch Gmax"],"sprite":"Sprites/gmax/centiskorch_gmax" },
+  { "id":200858, "name":"Hatterene (Gmax)","generation":8,"types":["Psychic","Fairy"],"baseId":858,"formKey":"gmax","aliases":["Hatterene Gigantamax","Hatterene Gmax"],"sprite":"Sprites/gmax/hatterene_gmax" },
+  { "id":200861, "name":"Grimmsnarl (Gmax)","generation":8,"types":["Dark","Fairy"],"baseId":861,"formKey":"gmax","aliases":["Grimmsnarl Gigantamax","Grimmsnarl Gmax"],"sprite":"Sprites/gmax/grimmsnarl_gmax" },
+  { "id":200869, "name":"Alcremie (Gmax)","generation":8,"types":["Fairy"],"baseId":869,"formKey":"gmax","aliases":["Alcremie Gigantamax","Alcremie Gmax"],"sprite":"Sprites/gmax/alcremie_gmax" },
+  { "id":200879, "name":"Copperajah (Gmax)","generation":8,"types":["Steel"],"baseId":879,"formKey":"gmax","aliases":["Copperajah Gigantamax","Copperajah Gmax"],"sprite":"Sprites/gmax/copperajah_gmax" },
+  { "id":200884, "name":"Duraludon (Gmax)","generation":8,"types":["Steel","Dragon"],"baseId":884,"formKey":"gmax","aliases":["Duraludon Gigantamax","Duraludon Gmax"],"sprite":"Sprites/gmax/duraludon_gmax" },
+  { "id":200812, "name":"Rillaboom (Gmax)","generation":8,"types":["Grass"],"baseId":812,"formKey":"gmax","aliases":["Rillaboom Gigantamax","Rillaboom Gmax"],"sprite":"Sprites/gmax/rillaboom_gmax" },
+  { "id":200815, "name":"Cinderace (Gmax)","generation":8,"types":["Fire"],"baseId":815,"formKey":"gmax","aliases":["Cinderace Gigantamax","Cinderace Gmax"],"sprite":"Sprites/gmax/cinderace_gmax" },
+  { "id":200818, "name":"Inteleon (Gmax)","generation":8,"types":["Water"],"baseId":818,"formKey":"gmax","aliases":["Inteleon Gigantamax","Inteleon Gmax"],"sprite":"Sprites/gmax/inteleon_gmax" },
+
+  { "id":200068, "name":"Machamp (Gmax)","generation":8,"types":["Fighting"],"baseId":68,"formKey":"gmax","aliases":["Machamp Gigantamax","Machamp Gmax"],"sprite":"Sprites/gmax/machamp_gmax" },
+  { "id":200133, "name":"Eevee (Gmax)","generation":8,"types":["Normal"],"baseId":133,"formKey":"gmax","aliases":["Eevee Gigantamax","Eevee Gmax"],"sprite":"Sprites/gmax/eevee_gmax" },
+  { "id":200809, "name":"Melmetal (Gmax)","generation":8,"types":["Steel"],"baseId":809,"formKey":"gmax","aliases":["Melmetal Gigantamax","Melmetal Gmax"],"sprite":"Sprites/gmax/melmetal_gmax" },
+  { "id":200003, "name":"Venusaur (Gmax)","generation":8,"types":["Grass","Poison"],"baseId":3,"formKey":"gmax","aliases":["Venusaur Gigantamax","Venusaur Gmax"],"sprite":"Sprites/gmax/venusaur_gmax" },
+  { "id":200009, "name":"Blastoise (Gmax)","generation":8,"types":["Water"],"baseId":9,"formKey":"gmax","aliases":["Blastoise Gigantamax","Blastoise Gmax"],"sprite":"Sprites/gmax/gmax_blastoise" },
+
+  { "id":200890, "name":"Eternatus (Eternamax)","generation":8,"types":["Poison","Dragon"],"baseId":890,"formKey":"eternamax","aliases":["Eternamax Eternatus"],"sprite":"Sprites/gmax/eternatus_gmax" },
+  { "id":210059,"name":"Arcanine (Hisui)","generation":8,"types":["Fire","Rock"],"baseId":59,"formKey":"hisui","aliases":["Hisuian Arcanine","Arcanine Hisui"],"sprite":"Sprites/hisui/arcanine_hisui" },
+  { "id":210058,"name":"Growlithe (Hisui)","generation":8,"types":["Fire","Rock"],"baseId":58,"formKey":"hisui","aliases":["Hisuian Growlithe","Growlithe Hisui"],"sprite":"Sprites/hisui/growlithe_hisui" },
+
+  { "id":210100,"name":"Voltorb (Hisui)","generation":8,"types":["Electric","Grass"],"baseId":100,"formKey":"hisui","aliases":["Hisuian Voltorb","Voltorb Hisui"],"sprite":"Sprites/hisui/voltorb_hisui" },
+  { "id":210101,"name":"Electrode (Hisui)","generation":8,"types":["Electric","Grass"],"baseId":101,"formKey":"hisui","aliases":["Hisuian Electrode","Electrode Hisui"],"sprite":"Sprites/hisui/electrode_hisui" },
+
+  { "id":210211,"name":"Qwilfish (Hisui)","generation":8,"types":["Dark","Poison"],"baseId":211,"formKey":"hisui","aliases":["Hisuian Qwilfish","Qwilfish Hisui"],"sprite":"Sprites/hisui/qwilfish_hisui" },
+
+  { "id":210215,"name":"Sneasel (Hisui)","generation":8,"types":["Fighting","Poison"],"baseId":215,"formKey":"hisui","aliases":["Hisuian Sneasel","Sneasel Hisui"],"sprite":"Sprites/hisui/sneasel_hisui" },
+
+  { "id":210570,"name":"Zorua (Hisui)","generation":8,"types":["Normal","Ghost"],"baseId":570,"formKey":"hisui","aliases":["Hisuian Zorua","Zorua Hisui"],"sprite":"Sprites/hisui/zorua_hisui" },
+  { "id":210571,"name":"Zoroark (Hisui)","generation":8,"types":["Normal","Ghost"],"baseId":571,"formKey":"hisui","aliases":["Hisuian Zoroark","Zoroark Hisui"],"sprite":"Sprites/hisui/zoroark_hisui" },
+
+  { "id":210549,"name":"Lilligant (Hisui)","generation":8,"types":["Grass","Fighting"],"baseId":549,"formKey":"hisui","aliases":["Hisuian Lilligant","Lilligant Hisui"],"sprite":"Sprites/hisui/lilligant_hisui" },
+  { "id":210628,"name":"Braviary (Hisui)","generation":8,"types":["Psychic","Flying"],"baseId":628,"formKey":"hisui","aliases":["Hisuian Braviary","Braviary Hisui"],"sprite":"Sprites/hisui/braviary_hisui" },
+
+  { "id":210705,"name":"Sliggoo (Hisui)","generation":8,"types":["Steel","Dragon"],"baseId":705,"formKey":"hisui","aliases":["Hisuian Sliggoo","Sliggoo Hisui"],"sprite":"Sprites/hisui/sliggoo_hisui" },
+  { "id":210706,"name":"Goodra (Hisui)","generation":8,"types":["Steel","Dragon"],"baseId":706,"formKey":"hisui","aliases":["Hisuian Goodra","Goodra Hisui"],"sprite":"Sprites/hisui/goodra_hisui" },
+
+  { "id":210713,"name":"Avalugg (Hisui)","generation":8,"types":["Ice","Rock"],"baseId":713,"formKey":"hisui","aliases":["Hisuian Avalugg","Avalugg Hisui"],"sprite":"Sprites/hisui/avalugg_hisui" },
+
+  { "id":210724,"name":"Decidueye (Hisui)","generation":8,"types":["Grass","Fighting"],"baseId":724,"formKey":"hisui","aliases":["Hisuian Decidueye","Decidueye Hisui"],"sprite":"Sprites/hisui/decidueye_hisui" },
+  { "id":210157,"name":"Typhlosion (Hisui)","generation":8,"types":["Fire","Ghost"],"baseId":157,"formKey":"hisui","aliases":["Hisuian Typhlosion","Typhlosion Hisui"],"sprite":"Sprites/hisui/typhlosion_hisui" },
+  { "id":210503,"name":"Samurott (Hisui)","generation":8,"types":["Water","Dark"],"baseId":503,"formKey":"hisui","aliases":["Hisuian Samurott","Samurott Hisui"],"sprite":"Sprites/hisui/samurott_hisui" },
+
+  { "id":210483,"name":"Dialga (Origin Forme)","generation":8,"types":["Steel","Dragon"],"baseId":483,"formKey":"origin","aliases":["Dialga Origin"],"sprite":"Sprites/hisui/dialga_origin" },
+  { "id":210484,"name":"Palkia (Origin Forme)","generation":8,"types":["Water","Dragon"],"baseId":484,"formKey":"origin","aliases":["Palkia Origin"],"sprite":"Sprites/hisui/palkia_origin" }
   ]
 }

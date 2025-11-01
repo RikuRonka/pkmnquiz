@@ -15,9 +15,6 @@ public class QuizManager : MonoBehaviour
     public TMP_InputField guessInput;
     public TMP_Text scoreText;
     public TMP_Text timerText;
-    public Toggle dexOrderToggle;
-    public Toggle noTimerToggle;
-    public TMP_InputField minutesInput;
 
     [Header("Grid")]
     public PokemonCard cardPrefab;
@@ -45,7 +42,7 @@ public class QuizManager : MonoBehaviour
 
     public Toast toast;
     private const int MIN_TOAST_LEN = 4;
-    public TMP_Text quizTitle;
+
     public SectionHeader sectionHeaderPrefab;
     public SectionGroup sectionGroupPrefab;
     public Transform content;
@@ -58,6 +55,20 @@ public class QuizManager : MonoBehaviour
     private readonly Dictionary<string, int> expeditionByBaseName = new();
     private readonly Dictionary<int, Pokemon> expeditionPickByBase = new();
     private readonly Dictionary<int, PokemonCard> expeditionCardByBase = new();
+    private readonly Dictionary<int, Pokemon> pokemonById = new();
+    private readonly Dictionary<int, Pokemon> gmaxPickByBase = new();
+
+    // GEN 8 – Gigantamax
+    private readonly Dictionary<string, int> gmaxByBaseName = new(); // "charizard gmax" -> baseId
+    private readonly Dictionary<int, PokemonCard> gmaxCardByBase = new();
+
+    // GEN 8 – Hisui
+    private readonly Dictionary<int, Pokemon> hisuiPickByBase = new();
+    private readonly Dictionary<int, PokemonCard> hisuiCardByBase = new();
+    private readonly Dictionary<string, int> hisuiByBaseName = new(); // "hisuian growlithe" -> baseId
+
+    [SerializeField]
+    bool debugScroll = true;
 
     private void Awake()
     {
@@ -76,18 +87,12 @@ public class QuizManager : MonoBehaviour
                     + string.Join("\n", dupes.Select(d => $"{d.id}: {d.names}"))
             );
         }
-        StartCoroutine(SpriteLibrary.Instance.PreloadAsync(targetList.Select(t => t.id)));
         TypeIconLibrary.Instance.Preload();
         if (hintTypeBtn)
             hintTypeBtn.onClick.AddListener(RevealTypeHintForOne);
 
         if (guessInput)
             guessInput.onValueChanged.AddListener(OnGuessChanged);
-
-        if (noTimerToggle)
-            noTimerToggle.onValueChanged.AddListener(_ => ResetTimerOnly());
-        if (dexOrderToggle)
-            dexOrderToggle.onValueChanged.AddListener(_ => RebuildGrid());
 
         if (backToMenuBtn)
         {
@@ -131,14 +136,6 @@ public class QuizManager : MonoBehaviour
         if (GameSettings.Generation.HasValue)
             generation = GameSettings.Generation.Value;
 
-        if (noTimerToggle)
-            noTimerToggle.isOn = GameSettings.Minutes <= 0;
-        if (minutesInput)
-            minutesInput.text = GameSettings.Minutes > 0 ? GameSettings.Minutes.ToString() : "35";
-        if (dexOrderToggle)
-            dexOrderToggle.isOn = GameSettings.DexOrder;
-        if (quizTitle)
-            quizTitle.text = Helpers.GetGenTitle(generation);
         BuildTargetList();
         RebuildGrid();
         ResetTimerOnly();
@@ -153,6 +150,94 @@ public class QuizManager : MonoBehaviour
             guessInput.DeactivateInputField();
 
         EventSystem.current?.SetSelectedGameObject(null);
+    }
+
+    private IEnumerator CoScrollToCard_Debug(RectTransform target, float duration)
+    {
+        if (!scrollRect || !scrollRect.content || !scrollRect.viewport)
+        {
+            Debug.LogWarning("[ScrollDbg] Missing ScrollRect/Content/Viewport refs");
+            yield break;
+        }
+        if (!target)
+        {
+            Debug.LogWarning("[ScrollDbg] Target RT is null");
+            yield break;
+        }
+
+        // 0) Validate target is under content
+        if (!target.IsChildOf(scrollRect.content))
+            Debug.LogWarning("[ScrollDbg] Target is NOT a child of scrollRect.content.");
+
+        // 1) Let layout settle
+        yield return null;
+        Canvas.ForceUpdateCanvases();
+        yield return null;
+        Canvas.ForceUpdateCanvases();
+
+        var content = scrollRect.content;
+        var viewport = scrollRect.viewport;
+
+        // 2) Bounds-based sizes (robust against anchors/pivots)
+        var contentBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+            viewport,
+            content
+        );
+        var targetBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+            viewport,
+            target
+        );
+
+        float contentH = contentBounds.size.y;
+        float viewH = viewport.rect.height;
+
+        // 3) Compute desired normalized position
+        // In viewport local space: +Y is up. ‘fromTopPx’ = distance from content top to target top.
+        float contentTopY = contentBounds.center.y + contentBounds.extents.y;
+        float targetTopY = targetBounds.center.y + targetBounds.extents.y;
+        float fromTopPx = contentTopY - targetTopY;
+
+        float scrollable = Mathf.Max(1f, contentH - viewH);
+        float targetNorm = 1f - Mathf.Clamp01(fromTopPx / scrollable);
+
+        // Optional padding so the card isn’t glued to the top
+        float pad = 0.12f * (viewH / scrollable);
+        targetNorm = Mathf.Clamp01(targetNorm + pad);
+
+        // 4) Visual highlight (1 second)
+        var hi = AddTempOutline(target, Color.yellow);
+        Destroy(hi, 1.0f);
+
+        // 5) Smooth scroll
+        float start = scrollRect.verticalNormalizedPosition;
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.unscaledDeltaTime / Mathf.Max(0.001f, duration);
+            scrollRect.verticalNormalizedPosition = Mathf.Lerp(
+                start,
+                targetNorm,
+                Mathf.SmoothStep(0, 1, t)
+            );
+            yield return null;
+        }
+        scrollRect.verticalNormalizedPosition = targetNorm;
+    }
+
+    private Graphic AddTempOutline(RectTransform rt, Color c)
+    {
+        // adds a temporary Image behind the card so you can see where we scrolled
+        var go = new GameObject("ScrollDbgHi", typeof(Image));
+        go.transform.SetParent(rt, false);
+        var img = go.GetComponent<Image>();
+        img.color = new Color(c.r, c.g, c.b, 0.25f);
+        var r = go.GetComponent<RectTransform>();
+        r.anchorMin = Vector2.zero;
+        r.anchorMax = Vector2.one;
+        r.offsetMin = new Vector2(-4, -4);
+        r.offsetMax = new Vector2(4, 4);
+        go.transform.SetAsFirstSibling();
+        return img;
     }
 
     private void Update()
@@ -239,7 +324,11 @@ public class QuizManager : MonoBehaviour
 
             solved.Add(target.id);
             if (cardById.TryGetValue(target.id, out var card))
+            {
                 card.Reveal();
+                ScrollToCard_FullQuiz(target);
+            }
+
             any = true;
         }
 
@@ -341,16 +430,16 @@ public class QuizManager : MonoBehaviour
         }
         else
         {
-            // No base in main section (e.g., Charizard/Mewtwo in Kalos) -> prefer the mega slot
+            // Gen 6: Megas
             if (megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
                 return megaPick;
         }
         if (
             generation == 9
             && !baseInMain
-            && expeditionPickByBase.TryGetValue(baseId, out var expPick)
+            && expeditionPickByBase.TryGetValue(baseId, out var expPick2)
         )
-            return expPick;
+            return expPick2;
         // Fallback: anything with same base id
         return targetList.FirstOrDefault(p => (p.baseId != 0 ? p.baseId : p.id) == baseId);
     }
@@ -378,16 +467,13 @@ public class QuizManager : MonoBehaviour
 
     private bool TryAcceptExpeditionByBaseName(string text, bool commit)
     {
-        if (generation != 9)
+        if (generation != 9 && generation != 0) // allow in Full Quiz too
             return false;
         if (string.IsNullOrWhiteSpace(text))
             return false;
 
         var k = GuessNormalizer.Key(text);
         var hit = expeditionByBaseName.TryGetValue(k, out var baseId);
-        Debug.Log(
-            $"[Expeditions] TryAccept key='{k}' hit={hit} baseId={(hit ? baseId.ToString() : "-")}"
-        );
 
         if (!hit)
             return false;
@@ -502,6 +588,7 @@ public class QuizManager : MonoBehaviour
         foreach (Transform c in content)
             Destroy(c.gameObject);
         cardById.Clear();
+        pokemonById.Clear();
         solved.Clear();
         hinted.Clear();
         megaFormsByBase.Clear();
@@ -510,6 +597,12 @@ public class QuizManager : MonoBehaviour
         expeditionByBaseName.Clear();
         expeditionPickByBase.Clear();
         expeditionCardByBase.Clear();
+        gmaxPickByBase.Clear();
+        gmaxCardByBase.Clear();
+        gmaxByBaseName.Clear();
+        hisuiPickByBase.Clear();
+        hisuiCardByBase.Clear();
+        hisuiByBaseName.Clear();
         // IMPORTANT: keep the order you built in BuildTargetList (so Paldean Wooper stays before Clodsire)
         var ordered = targetList;
 
@@ -517,9 +610,13 @@ public class QuizManager : MonoBehaviour
         var main = Instantiate(sectionGroupPrefab, content);
         main.EnsureLayout();
         main.SetTitle(Helpers.GetGenTitle(generation));
-
+        SectionGroup gmaxSec = null;
+        SectionGroup hisuiSec = null;
         SectionGroup megas = null;
         SectionGroup paldeaExpeditions = null;
+        var allDb = PokemonDatabase.Instance.All();
+        List<Pokemon> gmaxPool = new List<Pokemon>(); // was from allDb
+        List<Pokemon> hisuiPool = new List<Pokemon>(); // was from allDb
         if (generation == 0)
         {
             // create sections for gens we actually have in the list (1..9)
@@ -557,10 +654,13 @@ public class QuizManager : MonoBehaviour
                 var card = Instantiate(cardPrefab, sec.gridRoot);
                 card.Bind(p);
                 cardById[p.id] = card;
+                pokemonById[p.id] = p;
             }
 
             // 2) Build MEGA pool from the full DB (NOT from 'ordered')
-            var allDb = PokemonDatabase.Instance.All();
+
+            // Debug help
+            Debug.Log($"[Gen8] Gmax count={gmaxPool.Count}, Hisui count={hisuiPool.Count}");
             megaFormsByBase.Clear();
             foreach (var m in allDb.Where(Helpers.IsMega))
             {
@@ -581,6 +681,7 @@ public class QuizManager : MonoBehaviour
                     megaSlotPickByBase[kv.Key] = pick;
                     megaCardByBase[kv.Key] = card;
                     cardById[pick.id] = card;
+                    pokemonById[pick.id] = pick;
                 }
             }
 
@@ -610,6 +711,7 @@ public class QuizManager : MonoBehaviour
                     var card = Instantiate(cardPrefab, gen9Expeditions.gridRoot);
                     card.Bind(p);
                     cardById[p.id] = card;
+                    pokemonById[p.id] = p;
 
                     int baseKey = p.baseId != 0 ? p.baseId : p.id;
                     expeditionPickByBase[baseKey] = p;
@@ -670,6 +772,16 @@ public class QuizManager : MonoBehaviour
             megas.EnsureLayout();
             megas.SetTitle("Mega Evolutions");
         }
+        if (generation == 8)
+        {
+            gmaxSec = Instantiate(sectionGroupPrefab, content);
+            gmaxSec.EnsureLayout();
+            gmaxSec.SetTitle("Gigantamax (Gen 8)");
+
+            hisuiSec = Instantiate(sectionGroupPrefab, content);
+            hisuiSec.EnsureLayout();
+            hisuiSec.SetTitle("Hisui (Gen 8)");
+        }
         if (generation == 9)
         {
             paldeaExpeditions = Instantiate(sectionGroupPrefab, content);
@@ -691,6 +803,16 @@ public class QuizManager : MonoBehaviour
                 list.Add(p);
                 continue;
             }
+            if (generation == 8 && Helpers.IsGmax(p))
+            {
+                gmaxPool.Add(p);
+                continue;
+            }
+            if (generation == 8 && Helpers.IsHisui(p))
+            {
+                hisuiPool.Add(p);
+                continue;
+            }
 
             // Gen 9: collect expeditions; place later
             if (generation == 9 && Helpers.IsPaldeaExpedition(p))
@@ -703,6 +825,7 @@ public class QuizManager : MonoBehaviour
             var card = Instantiate(cardPrefab, main.gridRoot);
             card.Bind(p);
             cardById[p.id] = card;
+            pokemonById[p.id] = p;
         }
 
         if (generation == 6 && megas != null)
@@ -717,6 +840,7 @@ public class QuizManager : MonoBehaviour
                 megaSlotPickByBase[kv.Key] = pick;
                 megaCardByBase[kv.Key] = card;
                 cardById[pick.id] = card;
+                pokemonById[pick.id] = pick;
             }
         }
 
@@ -740,6 +864,7 @@ public class QuizManager : MonoBehaviour
                 var card = Instantiate(cardPrefab, paldeaExpeditions.gridRoot);
                 card.Bind(p);
                 cardById[p.id] = card;
+                pokemonById[p.id] = p;
 
                 int baseKey = p.baseId != 0 ? p.baseId : p.id;
                 expeditionPickByBase[baseKey] = p;
@@ -779,19 +904,190 @@ public class QuizManager : MonoBehaviour
             }
         }
 
+        if (generation == 8 && gmaxSec)
+        {
+            var gOrdered = gmaxPool.OrderBy(p => DexOrder.GetIndex(p)).ToList();
+            foreach (var p in gOrdered)
+            {
+                var card = Instantiate(cardPrefab, gmaxSec.gridRoot);
+                card.Bind(p);
+                cardById[p.id] = card;
+                pokemonById[p.id] = p;
+
+                int baseId = p.baseId != 0 ? p.baseId : p.id;
+                gmaxPickByBase[baseId] = p;
+                gmaxCardByBase[baseId] = card;
+
+                // Build keys
+                var baseMon = PokemonDatabase.Instance.All().FirstOrDefault(x => x.id == baseId);
+                var baseName = baseMon?.name ?? BaseNameFrom(p.name);
+
+                AddKey(gmaxByBaseName, p.name, baseId);
+                if (p.aliases != null)
+                    foreach (var a in p.aliases)
+                        AddKey(gmaxByBaseName, a, baseId);
+
+                // synonyms: "charizard gmax", "gmax charizard", "charizard gigantamax", "gigantamax charizard"
+                if (!string.IsNullOrEmpty(baseName))
+                {
+                    AddKey(gmaxByBaseName, $"{baseName} gmax", baseId);
+                    AddKey(gmaxByBaseName, $"gmax {baseName}", baseId);
+                    AddKey(gmaxByBaseName, $"{baseName} gigantamax", baseId);
+                    AddKey(gmaxByBaseName, $"gigantamax {baseName}", baseId);
+                }
+
+                if (baseMon != null && baseMon.aliases != null)
+                    foreach (var a in baseMon.aliases)
+                    {
+                        AddKey(gmaxByBaseName, $"{a} gmax", baseId);
+                        AddKey(gmaxByBaseName, $"gmax {a}", baseId);
+                        AddKey(gmaxByBaseName, $"{a} gigantamax", baseId);
+                        AddKey(gmaxByBaseName, $"gigantamax {a}", baseId);
+                    }
+            }
+        }
+
+        /* ---- HISUI ---- */
+        if (generation == 8 && hisuiSec)
+        {
+            var hOrdered = hisuiPool.OrderBy(p => DexOrder.GetIndex(p)).ToList();
+            foreach (var p in hOrdered)
+            {
+                var card = Instantiate(cardPrefab, hisuiSec.gridRoot);
+                card.Bind(p);
+                cardById[p.id] = card;
+                pokemonById[p.id] = p;
+
+                int baseId = p.baseId != 0 ? p.baseId : p.id;
+                hisuiPickByBase[baseId] = p;
+                hisuiCardByBase[baseId] = card;
+
+                // Build keys
+                var baseMon = PokemonDatabase.Instance.All().FirstOrDefault(x => x.id == baseId);
+                var baseName = baseMon?.name ?? BaseNameFrom(p.name);
+
+                AddKey(hisuiByBaseName, p.name, baseId);
+                if (p.aliases != null)
+                    foreach (var a in p.aliases)
+                        AddKey(hisuiByBaseName, a, baseId);
+
+                // synonyms: "hisuian growlithe", "growlithe hisui", "hisui growlithe"
+                if (!string.IsNullOrEmpty(baseName))
+                {
+                    AddKey(hisuiByBaseName, $"hisuian {baseName}", baseId);
+                    AddKey(hisuiByBaseName, $"{baseName} hisui", baseId);
+                    AddKey(hisuiByBaseName, $"hisui {baseName}", baseId);
+                }
+
+                if (baseMon != null && baseMon.aliases != null)
+                    foreach (var a in baseMon.aliases)
+                    {
+                        AddKey(hisuiByBaseName, $"hisuian {a}", baseId);
+                        AddKey(hisuiByBaseName, $"{a} hisui", baseId);
+                        AddKey(hisuiByBaseName, $"hisui {a}", baseId);
+                    }
+            }
+        }
+
         // Let the fitter know how many cards per section
         main.SetCardCount(main.gridRoot.childCount);
         megas?.SetCardCount(megas.gridRoot.childCount);
         paldeaExpeditions?.SetCardCount(paldeaExpeditions.gridRoot.childCount);
-
+        gmaxSec?.SetCardCount(gmaxSec.gridRoot.childCount);
+        hisuiSec?.SetCardCount(hisuiSec.gridRoot.childCount);
         // Fit
         FitSection(main);
         if (megas != null)
             FitSection(megas);
         if (paldeaExpeditions != null)
             FitSection(paldeaExpeditions);
+        if (gmaxSec != null)
+            FitSection(gmaxSec);
+        if (hisuiSec != null)
+            FitSection(hisuiSec);
 
         UpdateScore();
+    }
+
+    static void AddKey(Dictionary<string, int> map, string s, int baseId)
+    {
+        var k = GuessNormalizer.Key(s);
+        if (!string.IsNullOrEmpty(k))
+            map[k] = baseId;
+    }
+
+    // Derive “base” name from "Xxx (Something)"
+    static string BaseNameFrom(string name)
+    {
+        var i = name.IndexOf('(');
+        return i > 0 ? name[..i].Trim() : name.Trim();
+    }
+
+    private bool TryAcceptGmaxByBaseName(string text, bool commit)
+    {
+        if (generation != 8 || string.IsNullOrWhiteSpace(text))
+            return false;
+        var k = GuessNormalizer.Key(text);
+        if (!gmaxByBaseName.TryGetValue(k, out var baseId))
+            return false;
+        if (!gmaxPickByBase.TryGetValue(baseId, out var pick))
+            return false;
+        HandleCandidate(pick, text, commit);
+        return true;
+    }
+
+    private bool TryAcceptHisuiByBaseName(string text, bool commit)
+    {
+        if (generation != 8 || string.IsNullOrWhiteSpace(text))
+            return false;
+        var k = GuessNormalizer.Key(text);
+        if (!hisuiByBaseName.TryGetValue(k, out var baseId))
+            return false;
+        if (!hisuiPickByBase.TryGetValue(baseId, out var pick))
+            return false;
+        HandleCandidate(pick, text, commit);
+        return true;
+    }
+
+    private void RevealAllVariantsForBase(int baseKey)
+    {
+        // 1) Any placed card sharing this base
+        foreach (var kv in cardById)
+        {
+            if (!pokemonById.TryGetValue(kv.Key, out var poke))
+                continue;
+            int pokeBase = poke.baseId != 0 ? poke.baseId : poke.id;
+            if (pokeBase != baseKey)
+                continue;
+
+            if (!solved.Contains(kv.Key))
+            {
+                solved.Add(kv.Key);
+                kv.Value.Reveal();
+            }
+        }
+
+        // 2) Mega pick (if present)
+        if (
+            megaSlotPickByBase.TryGetValue(baseKey, out var megaPick)
+            && cardById.TryGetValue(megaPick.id, out var megaCard)
+            && !solved.Contains(megaPick.id)
+        )
+        {
+            solved.Add(megaPick.id);
+            megaCard.Reveal();
+        }
+
+        // 3) Expedition pick (if present)
+        if (
+            expeditionPickByBase.TryGetValue(baseKey, out var expPick)
+            && cardById.TryGetValue(expPick.id, out var expCard)
+            && !solved.Contains(expPick.id)
+        )
+        {
+            solved.Add(expPick.id);
+            expCard.Reveal();
+        }
     }
 
     private void FitSection(SectionGroup grp)
@@ -1007,6 +1303,13 @@ public class QuizManager : MonoBehaviour
 
     private void OnGuessChanged(string currentText)
     {
+        if (generation == 8)
+        {
+            if (TryAcceptGmaxByBaseName(currentText.Trim(), commit: true))
+                return;
+            if (TryAcceptHisuiByBaseName(currentText.Trim(), commit: true))
+                return;
+        }
         if (!running || IsDialogOpen())
             return;
         if (string.IsNullOrWhiteSpace(currentText))
@@ -1284,26 +1587,21 @@ public class QuizManager : MonoBehaviour
 
         solved.Add(target.id);
         if (cardById.TryGetValue(target.id, out var card))
+        {
             card.Reveal();
+        }
 
-        if (generation == 6)
+        if (generation == 0)
         {
             int baseKey = target.baseId != 0 ? target.baseId : target.id;
-
-            bool baseExistsInMain = targetList.Any(p =>
-                !Helpers.IsMega(p) && (p.baseId != 0 ? p.baseId : p.id) == baseKey
-            );
-
-            if (baseExistsInMain && megaSlotPickByBase.TryGetValue(baseKey, out var megaPick))
-            {
-                if (!solved.Contains(megaPick.id))
-                {
-                    solved.Add(megaPick.id);
-                    if (megaCardByBase.TryGetValue(baseKey, out var megaCard) && megaCard != null)
-                        megaCard.Reveal();
-                }
-            }
+            RevealAllVariantsForBase(baseKey);
         }
+        if (generation == 0 && cardById.TryGetValue(target.id, out var _))
+            StartCoroutine(
+                CoScrollToCard_Debug(cardById[target.id].GetComponent<RectTransform>(), 0.25f)
+            );
+        int beiskey = target.baseId != 0 ? target.baseId : target.id;
+        RevealAllVariantsForBase(beiskey);
         UpdateScore();
 
         guessInput?.SetTextWithoutNotify(string.Empty);
@@ -1317,6 +1615,73 @@ public class QuizManager : MonoBehaviour
                 guessInput.interactable = false;
             toast?.Show($"Finished in {TimeSpan.FromSeconds(elapsed):hh\\:mm\\:ss}", 2.5f);
         }
+    }
+
+    private void ScrollToCard_FullQuiz(Pokemon p, float duration = 0.25f)
+    {
+        if (!scrollRect || !scrollRect.content || !scrollRect.viewport)
+            return;
+        if (!cardById.TryGetValue(p.id, out var card) || !card)
+            return;
+
+        var rt = card.GetComponent<RectTransform>();
+        if (!rt)
+            return;
+
+        StartCoroutine(CoScrollToCard_FullQuiz(rt, duration));
+    }
+
+    private System.Collections.IEnumerator CoScrollToCard_FullQuiz(
+        RectTransform target,
+        float duration
+    )
+    {
+        // Let layout settle (important when a card just revealed / sections resize)
+        yield return null;
+        Canvas.ForceUpdateCanvases();
+        yield return null;
+        Canvas.ForceUpdateCanvases();
+
+        var content = scrollRect.content;
+        var viewport = scrollRect.viewport;
+
+        // If content isn't taller than viewport, nothing to scroll
+        float contentH = content.rect.height;
+        float viewH = viewport.rect.height;
+        if (contentH <= viewH)
+            yield break;
+
+        // Compute target top distance from content top using world corners (pivot/anchors agnostic)
+        Vector3[] targetCorners = new Vector3[4];
+        Vector3[] contentCorners = new Vector3[4];
+        target.GetWorldCorners(targetCorners);
+        content.GetWorldCorners(contentCorners);
+
+        float targetTopY = targetCorners[1].y; // top-left of target
+        float contentTopY = contentCorners[1].y; // top-left of content
+
+        // How far the target's top is below the content's top (in pixels)
+        float fromTopPx = contentTopY - targetTopY;
+
+        // Convert to verticalNormalizedPosition (1 = top, 0 = bottom)
+        float scrollable = Mathf.Max(1f, contentH - viewH);
+        float targetNorm = 1f - Mathf.Clamp01(fromTopPx / scrollable);
+
+        // Optional: pad so item isn't glued to the top edge
+        float pad = 0.15f * (viewH / scrollable); // ~15% of viewport height
+        targetNorm = Mathf.Clamp01(targetNorm + pad);
+
+        // Smooth scroll
+        float start = scrollRect.verticalNormalizedPosition;
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.unscaledDeltaTime / Mathf.Max(0.001f, duration);
+            float k = Mathf.SmoothStep(0f, 1f, t);
+            scrollRect.verticalNormalizedPosition = Mathf.Lerp(start, targetNorm, k);
+            yield return null;
+        }
+        scrollRect.verticalNormalizedPosition = targetNorm;
     }
 
     private static string StripDigits(string key)

@@ -2,13 +2,13 @@
 - Project name: pkmnquiz
 - Unity version: Unity 6000.2.7f2
 - Active scene:
-  - Name: SectionHeader
+  - Name: Quiz
   - Tags:
     - Untagged, Respawn, Finish, EditorOnly, MainCamera, Player, GameController
   - Layers:
     - Default, TransparentFX, Ignore Raycast, Water, UI
 - Active game object:
-  - Name: Text (TMP)
+  - Name: GameManager
   - Tag: Untagged
-  - Layer: UI
+  - Layer: Default
 <!-- UNITY CODE ASSIST INSTRUCTIONS END -->
