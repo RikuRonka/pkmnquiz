@@ -17,7 +17,7 @@ public sealed class SpriteLibrary
         { 12804, "Sprites/tauros_paldea_combat" },
         { 12814, "Sprites/tauros_paldea_blaze" },
         { 12824, "Sprites/tauros_paldea_aqua" },
-        { 90104, "Sprites/ursaluna_bloodmoon" },
+        { 1015, "Sprites/ursaluna_bloodmoon" },
     };
 
     public IEnumerator PreloadAsync(IEnumerable<int> ids)
@@ -159,20 +159,28 @@ public sealed class SpriteLibrary
 
     public Sprite ByPokemon(Pokemon p)
     {
+        // --- NEW: honor explicit overrides here too ---
+        if (ExplicitPathById.TryGetValue(p.id, out var ex))
+        {
+            var sEx = LoadAny(ex); // or Resources.Load<Sprite>(ex)
+            if (sEx)
+                return Cache(p, sEx);
+        }
+        // ---------------------------------------------
+
         if (_byId.TryGetValue(p.id, out var s))
             return s;
-
-        // NEW: honor explicit overrides first
-        if (ExplicitPathById.TryGetValue(p.id, out var explicitPath))
-        {
-            s = LoadAny(explicitPath);
-            if (s)
-                return Cache(p, s);
-        }
 
         s = LoadAny($"Sprites/{p.id:000}") ?? LoadAny($"Sprites/{p.id}");
         if (s)
             return Cache(p, s);
+
+        if (!string.IsNullOrWhiteSpace(p.sprite))
+        {
+            s = LoadAny(p.sprite);
+            if (s)
+                return Cache(p, s);
+        }
 
         var norm = GuessNormalizer.Key(p.name);
         var lettersOnly = new string(norm.Where(char.IsLetter).ToArray());
@@ -183,6 +191,13 @@ public sealed class SpriteLibrary
             ?? LoadAny(norm)
             ?? LoadAny(lettersOnly);
 
+        if (!s)
+        {
+            // optional: try a sanitized version that keeps underscores
+            var san = San(p.name);
+            s = LoadAny($"Sprites/{san}") ?? LoadAny(san);
+        }
+
         if (s)
             return Cache(p, s);
 
@@ -190,9 +205,8 @@ public sealed class SpriteLibrary
         {
             foreach (var cand in MegaCandidatesFor(p))
             {
-                if (_byKey.TryGetValue(cand.ToLowerInvariant(), out var sMegaDict))
-                    return Cache(p, sMegaDict);
-
+                if (_byKey.TryGetValue(cand.ToLowerInvariant(), out var sDict))
+                    return Cache(p, sDict);
                 var sMega = LoadAny(cand);
                 if (sMega)
                     return Cache(p, sMega);

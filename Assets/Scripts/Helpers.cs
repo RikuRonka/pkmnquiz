@@ -94,9 +94,11 @@ public static class Helpers
         "ursalunabm",
     };
 
-    public static string GetGenTitle(int gen) =>
-        gen switch
+    public static string GetGenTitle(int generation)
+    {
+        return generation switch
         {
+            0 => "Full Quiz (Gen 1–9)",
             1 => "Kanto (Gen 1)",
             2 => "Johto (Gen 2)",
             3 => "Hoenn (Gen 3)",
@@ -106,6 +108,7 @@ public static class Helpers
             7 => "Alola (Gen 7)",
             8 => "Galar (Gen 8)",
             9 => "Paldea (Gen 9)",
-            _ => $"Gen {gen}",
+            _ => $"Generation {generation}",
         };
+    }
 }

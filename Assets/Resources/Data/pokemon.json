@@ -9678,7 +9678,9 @@
         "Ursaluna Bloodmoon",
         "Ursaluna BM",
         "Bloodmoon Ursaluna"
-      ]
+      ],
+      "formKey": "bloodmoon",
+      "sprite": "Sprites/ursaluna_bloodmoon"
     },
     {
       "id": 1016,

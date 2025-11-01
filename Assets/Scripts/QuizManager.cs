@@ -55,13 +55,9 @@ public class QuizManager : MonoBehaviour
     private readonly Dictionary<int, PokemonCard> megaCardByBase = new();
     private readonly Dictionary<string, List<int>> megaByBaseName = new();
 
-    // Gen9 Tauros (Paldea): one-slot random form
-    private readonly Dictionary<int, Pokemon> taurosPickByBase = new(); // baseId -> picked form
-    private readonly Dictionary<int, PokemonCard> taurosCardByBase = new(); // baseId -> card
-
-    // Gen9 Expeditions (for mapping base name -> expedition slot, e.g. Ursaluna -> Bloodmoon)
-    private readonly Dictionary<int, Pokemon> expeditionPickByBase = new(); // baseId -> expedition mon
-    private readonly Dictionary<int, PokemonCard> expeditionCardByBase = new(); // baseId -> card
+    private readonly Dictionary<string, int> expeditionByBaseName = new();
+    private readonly Dictionary<int, Pokemon> expeditionPickByBase = new();
+    private readonly Dictionary<int, PokemonCard> expeditionCardByBase = new();
 
     private void Awake()
     {
@@ -349,7 +345,12 @@ public class QuizManager : MonoBehaviour
             if (megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
                 return megaPick;
         }
-
+        if (
+            generation == 9
+            && !baseInMain
+            && expeditionPickByBase.TryGetValue(baseId, out var expPick)
+        )
+            return expPick;
         // Fallback: anything with same base id
         return targetList.FirstOrDefault(p => (p.baseId != 0 ? p.baseId : p.id) == baseId);
     }
@@ -373,6 +374,28 @@ public class QuizManager : MonoBehaviour
                 SceneManager.LoadScene("MainMenu");
             }
         );
+    }
+
+    private bool TryAcceptExpeditionByBaseName(string text, bool commit)
+    {
+        if (generation != 9)
+            return false;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var k = GuessNormalizer.Key(text);
+        var hit = expeditionByBaseName.TryGetValue(k, out var baseId);
+        Debug.Log(
+            $"[Expeditions] TryAccept key='{k}' hit={hit} baseId={(hit ? baseId.ToString() : "-")}"
+        );
+
+        if (!hit)
+            return false;
+        if (!expeditionPickByBase.TryGetValue(baseId, out var pick))
+            return false;
+
+        HandleCandidate(pick, text, commit);
+        return true;
     }
 
     private bool TryAcceptMegaByBaseName(string text, bool commit)
@@ -471,8 +494,9 @@ public class QuizManager : MonoBehaviour
         megaFormsByBase.Clear();
         megaSlotPickByBase.Clear();
         megaCardByBase.Clear();
-        DumpOrder("RebuildGrid sees targetList (first 12)", targetList, 12);
-
+        expeditionByBaseName.Clear();
+        expeditionPickByBase.Clear();
+        expeditionCardByBase.Clear();
         // IMPORTANT: keep the order you built in BuildTargetList (so Paldean Wooper stays before Clodsire)
         var ordered = targetList;
 
@@ -525,7 +549,6 @@ public class QuizManager : MonoBehaviour
             cardById[p.id] = card;
         }
 
-        // Build ONE mega card per base (Gen 6)
         if (generation == 6 && megas != null)
         {
             var rng = new System.Random();
@@ -541,20 +564,18 @@ public class QuizManager : MonoBehaviour
             }
         }
 
-        // NOW place Paldea Expeditions once, in the order you want
         if (generation == 9 && paldeaExpeditions != null)
         {
-            // start from dex order to look consistent
             var expOrdered = expeditionPool.OrderBy(p => DexOrder.GetIndex(p)).ToList();
 
-            // Force: Bloodmoon Ursaluna (90104) immediately after Sinistcha (1013)
-            int iBlood = expOrdered.FindIndex(x => x.id == 90104);
-            int iSini = expOrdered.FindIndex(x => x.id == 1013);
+            // Ensure Bloodmoon comes right after Sinistcha
+            int iBlood = expOrdered.FindIndex(x => x.id == 1015);
+            int iSini = expOrdered.FindIndex(x => x.id == 1014);
             if (iBlood >= 0 && iSini >= 0 && iBlood < iSini)
             {
                 var item = expOrdered[iBlood];
                 expOrdered.RemoveAt(iBlood);
-                iSini = expOrdered.FindIndex(x => x.id == 1013); // recompute
+                iSini = expOrdered.FindIndex(x => x.id == 1014);
                 expOrdered.Insert(Math.Min(expOrdered.Count, iSini + 1), item);
             }
 
@@ -563,6 +584,42 @@ public class QuizManager : MonoBehaviour
                 var card = Instantiate(cardPrefab, paldeaExpeditions.gridRoot);
                 card.Bind(p);
                 cardById[p.id] = card;
+
+                int baseKey = p.baseId != 0 ? p.baseId : p.id;
+                expeditionPickByBase[baseKey] = p;
+                expeditionCardByBase[baseKey] = card;
+
+                // ---- build name keys WITHOUT requiring the base species to exist ----
+                void AddKey(string s)
+                {
+                    var k = GuessNormalizer.Key(s);
+                    if (!string.IsNullOrEmpty(k))
+                        expeditionByBaseName[k] = baseKey;
+                }
+
+                // 1) Full form name (e.g., "Ursaluna (Bloodmoon)")
+                AddKey(p.name);
+
+                // 2) Aliases on the form itself (includes things like "Ursaluna Bloodmoon")
+                if (p.aliases != null)
+                    foreach (var a in p.aliases)
+                        AddKey(a);
+
+                // 3) Base name stripped from parentheses (e.g., "Ursaluna")
+                var idx = p.name.IndexOf('(');
+                if (idx > 0)
+                    AddKey(p.name.Substring(0, idx).Trim());
+
+                // 4) If you *do* have the base mon in DB, this adds extra keys,
+                // but it’s optional and safe to keep:
+                var baseMon = PokemonDatabase.Instance.All().FirstOrDefault(x => x.id == baseKey);
+                if (baseMon != null)
+                {
+                    AddKey(baseMon.name);
+                    if (baseMon.aliases != null)
+                        foreach (var a in baseMon.aliases)
+                            AddKey(a);
+                }
             }
         }
 
@@ -681,8 +738,6 @@ public class QuizManager : MonoBehaviour
 
         if (generation == 9)
         {
-            DumpOrder("GEN9 BEFORE FIXUP", ordered, 15);
-
             // ---- collapse Paldean Tauros to EXACTLY ONE entry ----
             var taurosForms = ordered.Where(Helpers.IsPaldeaTauros).ToList();
             var taurosOne = taurosForms.FirstOrDefault(); // keep the first by dex order
@@ -696,25 +751,16 @@ public class QuizManager : MonoBehaviour
             int iWoo = ordered.FindIndex(p => p.id == 980); // Wooper (Paldea)
             int iClod = ordered.FindIndex(p => GuessNormalizer.Key(p.name) == "clodsire");
 
-            LogIndex(ordered, "Wooper (Paldea)", p => p.id == 19404);
-            LogIndex(ordered, "Clodsire", p => GuessNormalizer.Key(p.name) == "clodsire");
-
             if (iWoo >= 0 && iClod >= 0 && iWoo != iClod - 1)
             {
                 var w = ordered[iWoo];
                 ordered.RemoveAt(iWoo);
-                // Re-find Clodsire because indices shifted after Remove
                 iClod = ordered.FindIndex(p => GuessNormalizer.Key(p.name) == "clodsire");
                 ordered.Insert(Math.Max(0, iClod), w);
-                Debug.Log("[Order] Moved Wooper (Paldea) to just before Clodsire.");
             }
 
-            // ---- Tauros (Paldea) immediately AFTER Grafaiai ----
             int iTau = ordered.FindIndex(p => p.baseId == 128 && p.formKey == "paldea"); // the one we kept
             int iGra = ordered.FindIndex(p => GuessNormalizer.Key(p.name) == "grafaiai");
-
-            LogIndex(ordered, "Tauros (Paldea)*", p => p.baseId == 128 && p.formKey == "paldea");
-            LogIndex(ordered, "Grafaiai", p => GuessNormalizer.Key(p.name) == "grafaiai");
 
             if (iTau >= 0 && iGra >= 0 && iTau != iGra + 1)
             {
@@ -722,29 +768,11 @@ public class QuizManager : MonoBehaviour
                 ordered.RemoveAt(iTau);
                 iGra = ordered.FindIndex(p => GuessNormalizer.Key(p.name) == "grafaiai");
                 ordered.Insert(Math.Min(ordered.Count, iGra + 1), t);
-                Debug.Log("[Order] Moved Tauros (Paldea) to just after Grafaiai.");
             }
-
-            DumpOrder("GEN9 AFTER  FIXUP", ordered, 20);
         }
 
         // Finalize
         targetList = ordered.ToList();
-        DumpOrder("FINAL targetList (first 20)", targetList, 20);
-    }
-
-    private static string PStr(Pokemon p) => p == null ? "null" : $"#{p.id} {p.name}";
-
-    private void DumpOrder(string label, IList<Pokemon> list, int take = 20)
-    {
-        var head = list.Take(take).Select((p, i) => $"{i, 2}: {PStr(p)}");
-        Debug.Log($"[Order] {label}\n" + string.Join("\n", head));
-    }
-
-    private void LogIndex(IList<Pokemon> list, string what, Predicate<Pokemon> pred)
-    {
-        int idx = list.ToList().FindIndex(p => pred(p));
-        Debug.Log($"[Order] Index of {what}: {idx}");
     }
 
     private void ResetTimerOnly()
@@ -811,6 +839,9 @@ public class QuizManager : MonoBehaviour
         if (!running || IsDialogOpen())
             return;
         if (string.IsNullOrWhiteSpace(currentText))
+            return;
+
+        if (generation == 9 && TryAcceptExpeditionByBaseName(currentText.Trim(), commit: true))
             return;
 
         var trimmed = currentText.Trim().ToLowerInvariant();
