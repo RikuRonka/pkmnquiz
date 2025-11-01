@@ -109,11 +109,24 @@ TextureImporter:
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WindowsStoreApps
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: ursaluna_bloodmoon_0
+      name: ursaluna_paldea_bloodmoon_0
       rect:
         serializedVersion: 2
         x: 78
@@ -121,7 +134,7 @@ TextureImporter:
         width: 1125
         height: 1280
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -138,7 +151,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 5b3e78a50fef610469c96e84d691eee9
     internalID: 0
     vertices: []
     indices: 
@@ -148,7 +161,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      ursaluna_bloodmoon_0: -7620202333391272236
+      ursaluna_paldea_bloodmoon_0: -7620202333391272236
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
