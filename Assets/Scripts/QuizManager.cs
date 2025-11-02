@@ -1836,6 +1836,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     if (cardById.TryGetValue(altTarget.id, out var altAlready))
                     {
                         altAlready.FlashHighlight();
+                        guessInput.text = "";
                     }
                     guessInput?.SetTextWithoutNotify(string.Empty);
                     guessInput?.ActivateInputField();

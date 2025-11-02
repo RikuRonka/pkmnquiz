@@ -54,7 +54,7 @@ public class SectionGroup : MonoBehaviour
             lrt.pivot = new Vector2(0, 0.5f);
             lrt.anchoredPosition = new Vector2(16, 0);
             headerLabel = lblGO.GetComponent<TextMeshProUGUI>();
-            headerLabel.alignment = TextAlignmentOptions.MidlineLeft;
+            headerLabel.alignment = TextAlignmentOptions.TopLeft;
             headerLabel.fontSize = 36;
             headerLabel.enableAutoSizing = true;
             headerLabel.fontSizeMin = 18;
