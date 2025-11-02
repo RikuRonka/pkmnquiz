@@ -1,9 +1,9 @@
 ﻿using System.Collections;
-using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class PokemonCard : MonoBehaviour
+public partial class PokemonCard : MonoBehaviour
 {
     [Header("Refs")]
     [SerializeField]
@@ -25,6 +25,7 @@ public class PokemonCard : MonoBehaviour
     [SerializeField]
     private float spritePadding = 6f;
 
+    public Pokemon Pokemon => data;
     private Pokemon data;
     private Sprite loadedSprite;
     private bool revealed,
@@ -48,9 +49,13 @@ public class PokemonCard : MonoBehaviour
     private RectTransform rt;
     private Vector2 baseAnchoredPos;
     private Quaternion baseRotation;
+    public Pokemon Bound; // already present in your card
+    public bool IsRevealed { get; private set; } // set in Reveal()
 
     void Awake()
     {
+        if (!TryGetComponent<PokemonCardHover>(out _))
+            gameObject.AddComponent<PokemonCardHover>();
         if (!spriteImage)
             spriteImage = transform.Find("Sprite")?.GetComponent<Image>();
         if (!placeholderImage)
@@ -88,7 +93,18 @@ public class PokemonCard : MonoBehaviour
             Destroy(f1);
         if (f2)
             Destroy(f2);
-
+        // Ensure there is a Graphic on THIS GO so IPointer* works
+        var anyGraphic = GetComponent<Graphic>();
+        if (!anyGraphic)
+        {
+            var bg = gameObject.AddComponent<Image>();
+            bg.color = new Color(0, 0, 0, 0); // fully transparent
+            bg.raycastTarget = true; // receives pointer
+        }
+        else
+        {
+            anyGraphic.raycastTarget = true;
+        }
         ResizeArtToCell();
     }
 
@@ -119,6 +135,8 @@ public class PokemonCard : MonoBehaviour
 
     public void Bind(Pokemon p)
     {
+        Bound = p;
+        IsRevealed = false;
         data = p;
         revealed = false;
         hintVisible = false;
@@ -166,13 +184,14 @@ public class PokemonCard : MonoBehaviour
 
     public void Reveal()
     {
-        if (revealed || data == null)
+        if (IsRevealed || Bound == null)
             return;
-        revealed = true;
+        IsRevealed = true;
 
         if (spriteImage)
             spriteImage.enabled = true;
-
+        if (placeholderImage)
+            placeholderImage.enabled = false; // ← you were not hiding it
         HideTypeIcons();
     }
 
