@@ -540,9 +540,17 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     public void OnBackToMenuClicked()
     {
         DefocusUI();
+
+        void LeaveNow()
+        {
+            // Make sure the loader isn't left in "loading" state
+            LoadingManager.Instance?.CancelLoad(); // hides overlay + clears flags
+            SceneManager.LoadScene("MainMenu");
+        }
+
         if (!confirmDialog)
         {
-            SceneManager.LoadScene("MainMenu");
+            LeaveNow();
             return;
         }
 
@@ -551,10 +559,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             message: "Your progress will be lost. Go back to the main menu?",
             confirmLabel: "Yes, leave",
             cancelLabel: "Stay",
-            confirmAction: () =>
-            {
-                SceneManager.LoadScene("MainMenu");
-            }
+            confirmAction: LeaveNow
         );
     }
 
@@ -2067,25 +2072,29 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     public IEnumerator BuildWithExternalProgress(Action<float> report, float from, float to)
     {
-        float span = Mathf.Max(0.0001f, to - from);
-        float Map(float k) => from + k * span;
+        Debug.Log(
+            $"[Quiz] BuildWithExternalProgress START (type='{selectedType ?? "none"}', gen={generation})"
+        );
 
-        // 1) Data
+        float span = Mathf.Max(0.0001f, to - from);
+        void Step(float k) => report(from + k * span);
+
         BuildTargetList();
-        report(Map(0.10f));
+        Step(0.25f);
+        Debug.Log($"[Quiz] After BuildTargetList: targetCount={targetList?.Count ?? -1}");
         yield return null;
 
-        // 2) Prewarm sprites with progress (0.10..0.35)
-        yield return StartCoroutine(PrewarmSprites(0.10f, 0.35f));
-        report(Map(0.35f));
+        Step(0.40f);
+        yield return null;
 
-        // 3) Build UI in chunks with progress (0.35..0.98)
-        yield return StartCoroutine(RebuildGridAsync(0.35f, 0.98f));
-        report(Map(0.98f));
+        RebuildGrid();
+        Step(0.90f);
+        Debug.Log("[Quiz] After RebuildGrid");
+        yield return null;
 
-        // 4) Final touches
         UpdateScore();
-        report(Map(1.00f));
+        Step(1.00f);
+        Debug.Log("[Quiz] BuildWithExternalProgress END");
         yield return null;
     }
 }

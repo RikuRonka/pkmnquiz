@@ -27,8 +27,6 @@ public class TypeFilterButton : MonoBehaviour
         Apply(typeName);
         if (button == null)
             button = GetComponent<Button>();
-        if (button != null)
-            button.onClick.AddListener(() => MenuRouter.PlayTypeQuiz(typeName));
     }
 
 #if UNITY_EDITOR

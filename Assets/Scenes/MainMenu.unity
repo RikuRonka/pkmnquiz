@@ -282,9 +282,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1946010042}
-        m_TargetAssemblyTypeName: MainMenuController, Assembly-CSharp
-        m_MethodName: PlayGen
+      - m_Target: {fileID: 746572272}
+        m_TargetAssemblyTypeName: MenuRouter, Assembly-CSharp
+        m_MethodName: PlayGenQuiz
         m_Mode: 3
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1363,9 +1363,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1946010042}
-        m_TargetAssemblyTypeName: MainMenuController, Assembly-CSharp
-        m_MethodName: PlayGen
+      - m_Target: {fileID: 746572272}
+        m_TargetAssemblyTypeName: MenuRouter, Assembly-CSharp
+        m_MethodName: PlayGenQuiz
         m_Mode: 3
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1722,9 +1722,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1946010042}
-        m_TargetAssemblyTypeName: MainMenuController, Assembly-CSharp
-        m_MethodName: PlayGen
+      - m_Target: {fileID: 746572272}
+        m_TargetAssemblyTypeName: MenuRouter, Assembly-CSharp
+        m_MethodName: PlayGenQuiz
         m_Mode: 3
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -2962,6 +2962,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 32850b94a7843464a9d2bb77be8c37df, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuRouter
+  loadingPrefab: {fileID: 5879984476580737991, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
 --- !u!1001 &758055442
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3543,26 +3544,14 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1946010042}
-        m_TargetAssemblyTypeName: MainMenuController, Assembly-CSharp
-        m_MethodName: PlayGen
+      - m_Target: {fileID: 746572272}
+        m_TargetAssemblyTypeName: MenuRouter, Assembly-CSharp
+        m_MethodName: PlayGenQuiz
         m_Mode: 3
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 1
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
-      - m_Target: {fileID: 3542540382156818252, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-        m_TargetAssemblyTypeName: MainMenuController, Assembly-CSharp
-        m_MethodName: 
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: 
-          m_IntArgument: 0
           m_FloatArgument: 0
           m_StringArgument: 
           m_BoolArgument: 0
@@ -4187,9 +4176,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1946010042}
-        m_TargetAssemblyTypeName: MainMenuController, Assembly-CSharp
-        m_MethodName: PlayGen
+      - m_Target: {fileID: 746572272}
+        m_TargetAssemblyTypeName: MenuRouter, Assembly-CSharp
+        m_MethodName: PlayGenQuiz
         m_Mode: 3
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -4320,9 +4309,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1946010042}
-        m_TargetAssemblyTypeName: MainMenuController, Assembly-CSharp
-        m_MethodName: PlayGen
+      - m_Target: {fileID: 746572272}
+        m_TargetAssemblyTypeName: MenuRouter, Assembly-CSharp
+        m_MethodName: PlayGenQuiz
         m_Mode: 3
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -5022,9 +5011,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1946010042}
-        m_TargetAssemblyTypeName: MainMenuController, Assembly-CSharp
-        m_MethodName: PlayGen
+      - m_Target: {fileID: 746572272}
+        m_TargetAssemblyTypeName: MenuRouter, Assembly-CSharp
+        m_MethodName: PlayGenQuiz
         m_Mode: 3
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -6195,9 +6184,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1946010042}
-        m_TargetAssemblyTypeName: MainMenuController, Assembly-CSharp
-        m_MethodName: PlayGen
+      - m_Target: {fileID: 746572272}
+        m_TargetAssemblyTypeName: MenuRouter, Assembly-CSharp
+        m_MethodName: PlayGenQuiz
         m_Mode: 3
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -6471,147 +6460,6 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 7065960304717384023, guid: ddf8ac7ba111ecd47a71a8b3f890615f, type: 3}
   m_PrefabInstance: {fileID: 1662135015}
   m_PrefabAsset: {fileID: 0}
---- !u!1001 &1671686933
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1720566340350294604, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_UiScaleMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 1720566340350294604, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_PresetInfoIsWorld
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3542540382156818252, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_Name
-      value: LoadingOverlay
-      objectReference: {fileID: 0}
-    - target: {fileID: 3740537900884605745, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_Alpha
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5857674619765682845, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_RenderMode
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_Pivot.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_Pivot.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_AnchorMax.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_AnchorMax.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_AnchorMin.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_AnchorMin.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_SizeDelta.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_SizeDelta.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_AnchoredPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_AnchoredPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7001748830076091197, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7935262396514138937, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_SizeDelta.x
-      value: 800
-      objectReference: {fileID: 0}
-    - target: {fileID: 7935262396514138937, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_SizeDelta.y
-      value: 450
-      objectReference: {fileID: 0}
-    - target: {fileID: 7935262396514138937, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_AnchoredPosition.x
-      value: 0.000030518
-      objectReference: {fileID: 0}
-    - target: {fileID: 7935262396514138937, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
-      propertyPath: m_AnchoredPosition.y
-      value: -0.000030518
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
 --- !u!1001 &1675008875
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -7280,9 +7128,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1946010042}
-        m_TargetAssemblyTypeName: MainMenuController, Assembly-CSharp
-        m_MethodName: PlayGen
+      - m_Target: {fileID: 746572272}
+        m_TargetAssemblyTypeName: MenuRouter, Assembly-CSharp
+        m_MethodName: PlayGenQuiz
         m_Mode: 3
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -8018,4 +7866,3 @@ SceneRoots:
   - {fileID: 192214802}
   - {fileID: 1946010041}
   - {fileID: 746572271}
-  - {fileID: 1671686933}

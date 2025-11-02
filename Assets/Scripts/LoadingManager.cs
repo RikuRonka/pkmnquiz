@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(CanvasGroup))]
 public class LoadingManager : MonoBehaviour
 {
     public static LoadingManager Instance { get; private set; }
@@ -19,13 +20,16 @@ public class LoadingManager : MonoBehaviour
 
     [SerializeField]
     TMP_Text percentLabel;
-
+    bool _isLoading = false;
     public int PendingGen { get; private set; } = 0;
     public string PendingType { get; private set; } = null;
     string _title = "Building…";
+    Coroutine _fadeCo;
+    Coroutine _loadCo;
 
     void Awake()
     {
+        _isLoading = false;
         if (Instance && Instance != this)
         {
             Destroy(gameObject);
@@ -45,17 +49,31 @@ public class LoadingManager : MonoBehaviour
 
     void SetVisible(bool on, bool immediate = false)
     {
+        gameObject.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+        gameObject.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler
+            .ScaleMode
+            .ScaleWithScreenSize;
         if (!cg)
             return;
-        StopAllCoroutines();
+
+        // stop only the fade, not all coroutines
+        if (_fadeCo != null)
+        {
+            StopCoroutine(_fadeCo);
+            _fadeCo = null;
+        }
+
         if (immediate)
         {
             cg.alpha = on ? 1f : 0f;
             cg.blocksRaycasts = on;
+            cg.interactable = on;
             return;
         }
-        StartCoroutine(Fade(on ? 1f : 0f, 0.15f));
+
+        _fadeCo = StartCoroutine(Fade(on ? 1f : 0f, 0.15f));
         cg.blocksRaycasts = on;
+        cg.interactable = on;
     }
 
     public void Show(string title, bool immediate = false)
@@ -93,8 +111,12 @@ public class LoadingManager : MonoBehaviour
     {
         if (!cg)
             cg = GetComponent<CanvasGroup>();
-        StopAllCoroutines();
-        StartCoroutine(Fade(0f));
+        if (_fadeCo != null)
+        {
+            StopCoroutine(_fadeCo);
+            _fadeCo = null;
+        }
+        _fadeCo = StartCoroutine(Fade(0f));
     }
 
     IEnumerator Fade(float target, float d = 0.15f)
@@ -112,90 +134,118 @@ public class LoadingManager : MonoBehaviour
         cg.alpha = target;
         if (Mathf.Approximately(target, 0f))
             gameObject.SetActive(false);
+        _fadeCo = null; // finished
     }
 
     // Call this from menu buttons
     public void LoadQuiz(int gen, string typeKey)
     {
-        PendingGen = gen; // 0 = full quiz
-        PendingType = typeKey; // null for non-type quiz
-
-        // ---- Title formatting ----
-        string title;
-        if (!string.IsNullOrEmpty(typeKey))
+        if (_loadCo != null) // <-- the guard
         {
-            // Type quiz
-            var ti = System.Globalization.CultureInfo.CurrentCulture.TextInfo;
-            title = $"Loading {ti.ToTitleCase(typeKey)} type quiz…";
-        }
-        else if (gen == 0)
-        {
-            // Full quiz (Gen 1–9)
-            title = "Loading Full Quiz…";
-        }
-        else
-        {
-            // Gen quiz -> "Loading Gen X – Region quiz…"
-            // lightweight region map to avoid cross-class deps
-            string[] regions =
-            {
-                "",
-                "Kanto",
-                "Johto",
-                "Hoenn",
-                "Sinnoh",
-                "Unova",
-                "Kalos",
-                "Alola",
-                "Galar",
-                "Paldea",
-            };
-            string region = (gen >= 1 && gen < regions.Length) ? regions[gen] : $"Gen {gen}";
-            title = $"Loading Gen {gen} – {region} quiz…";
+            Debug.LogWarning("[Loader] Ignored duplicate LoadQuiz; already loading.");
+            return;
         }
 
-        Show(title, immediate: true); // ensure overlay shows the title now
-        StartCoroutine(CoLoadQuiz());
+        PendingGen = gen;
+        PendingType = typeKey;
+
+        var ti = System.Globalization.CultureInfo.CurrentCulture.TextInfo;
+        string title = !string.IsNullOrEmpty(typeKey)
+            ? $"Loading {ti.ToTitleCase(typeKey)} type quiz…"
+            : (gen == 0 ? "Loading Full Quiz…" : $"Loading Gen {gen} quiz…");
+
+        Show(title, immediate: true);
+        SetProgress(0f);
+
+        _loadCo = StartCoroutine(CoLoadQuiz()); // <-- store handle
+    }
+
+    public void CancelLoad()
+    {
+        if (_loadCo != null)
+        {
+            StopCoroutine(_loadCo);
+            _loadCo = null;
+        }
+        _isLoading = false;
+        SetVisible(false, immediate: true);
+        SetProgress(0f);
     }
 
     IEnumerator CoLoadQuiz()
     {
-        SetProgress(0f);
-        SetVisible(true, immediate: false);
-
-        // Phase 1: load the scene
-        var op = SceneManager.LoadSceneAsync("Quiz", LoadSceneMode.Single);
-        op.allowSceneActivation = true; // we’ll let it activate asap
-        while (!op.isDone)
+        try
         {
-            // Unity reports up to 0.9 while loading; map that to 0..0.7
-            SetProgress(Mathf.Clamp01(op.progress / 0.9f) * 0.7f);
+            SetProgress(0f);
+            SetVisible(true);
+
+            var op = SceneManager.LoadSceneAsync("Quiz", LoadSceneMode.Single);
+            op.allowSceneActivation = true;
+
+            while (!op.isDone)
+            {
+                float mapped = Mathf.Clamp01(op.progress / 0.9f) * 0.7f;
+                SetProgress(mapped);
+                yield return null;
+            }
+
             yield return null;
-        }
 
-        // Phase 2: wait a frame so Quiz scene is fully awake
-        yield return null;
+            var qm = FindFirstObjectByType<QuizManager>();
+            if (qm != null)
+            {
+                if (!string.IsNullOrEmpty(PendingType))
+                    qm.StartTypeQuiz(PendingType);
+                else
+                    qm.StartGenQuiz(PendingGen);
 
-        // Find the new QuizManager and let it do its heavy lifting with progress
-        var qm = FindFirstObjectByType<QuizManager>();
-        if (qm != null)
-        {
-            if (!string.IsNullOrEmpty(PendingType))
-                qm.StartTypeQuiz(PendingType);
+                if (qm.TryGetComponent<IQuizProgress>(out var progressApi))
+                    yield return StartCoroutine(
+                        progressApi.BuildWithExternalProgress(SetProgress, 0.7f, 1f)
+                    );
+                else
+                {
+                    float t = 0.7f;
+                    while (t < 1f)
+                    {
+                        t += Time.unscaledDeltaTime * 0.6f;
+                        SetProgress(t);
+                        yield return null;
+                    }
+                }
+            }
             else
-                qm.StartGenQuiz(PendingGen);
+            {
+                SetProgress(1f);
+            }
 
-            // call directly – QuizManager implements IQuizProgress
-            yield return StartCoroutine(qm.BuildWithExternalProgress(SetProgress, 0.7f, 1f));
+            yield return StartCoroutine(Fade(0f, 0.15f));
+            cg.blocksRaycasts = false;
         }
-        else
+        finally
         {
-            SetProgress(1f);
+            // ALWAYS clear state so the next click works
+            _loadCo = null;
+            _isLoading = false;
+            PendingGen = 0;
+            PendingType = null;
+            SetProgress(0f);
         }
+    }
 
-        // Phase 3: hide
-        yield return StartCoroutine(Fade(0f, 0.15f));
-        cg.blocksRaycasts = false;
+    void OnEnable() => SceneManager.sceneLoaded += OnSceneLoaded;
+
+    void OnDisable() => SceneManager.sceneLoaded -= OnSceneLoaded;
+
+    void OnSceneLoaded(Scene s, LoadSceneMode m)
+    {
+        // Make sure loader is clean whenever a scene finishes loading
+        _loadCo = null;
+        _isLoading = false;
+        SetProgress(0f);
+        SetVisible(false, immediate: true);
+        if (cg)
+            cg.blocksRaycasts = false;
     }
 }
 

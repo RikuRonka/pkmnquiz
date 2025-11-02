@@ -704,7 +704,6 @@ MonoBehaviour:
   sectionGroupPrefab: {fileID: 5857570121349899261, guid: ed3591256a27ba941aacf22951313b60, type: 3}
   content: {fileID: 1089968207}
   selectedType: 
-  loader: {fileID: 5879984476580737991, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
 --- !u!1 &195847650
 GameObject:
   m_ObjectHideFlags: 0
