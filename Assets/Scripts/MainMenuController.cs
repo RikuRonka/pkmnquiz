@@ -8,14 +8,13 @@ public class MainMenuController : MonoBehaviour
 
     void Awake()
     {
-        // ... existing wiring
         if (fullQuizBtn)
         {
             fullQuizBtn.onClick.RemoveAllListeners();
             fullQuizBtn.onClick.AddListener(() =>
             {
-                GameSettings.Generation = 0; // FULL (1–9)
-                GameSettings.TypeFilter = null; // reset type filter if you use it
+                GameSettings.Generation = 0;
+                GameSettings.TypeFilter = null;
                 SceneManager.LoadScene("Quiz");
             });
         }

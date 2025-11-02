@@ -13,7 +13,6 @@ public sealed class SpriteLibrary
     private readonly Dictionary<string, Sprite> _byKey = new();
     private static readonly Dictionary<int, string> ExplicitPathById = new()
     {
-        // place files with these names under: Resources/Sprites/Pokemon/
         { 12804, "Sprites/tauros_paldea_combat" },
         { 12814, "Sprites/tauros_paldea_blaze" },
         { 12824, "Sprites/tauros_paldea_aqua" },
@@ -87,7 +86,7 @@ public sealed class SpriteLibrary
             return "";
         s = s.ToLowerInvariant();
         s = s.Replace("é", "e");
-        // remove punctuation and collapse spaces/dashes
+
         var chars = s.Where(c => char.IsLetterOrDigit(c) || c == ' ' || c == '_').ToArray();
         s = new string(chars).Replace("  ", " ").Trim();
         return s.Replace(' ', '_').Replace("__", "_");
@@ -95,17 +94,14 @@ public sealed class SpriteLibrary
 
     private static IEnumerable<string> Candidates(Pokemon p)
     {
-        // by id
         yield return $"Sprites/{p.id}";
-        // by name
+
         yield return $"Sprites/{San(p.name)}";
 
-        // aliases
         if (p.aliases != null)
             foreach (var a in p.aliases)
                 yield return $"Sprites/{San(a)}";
 
-        // base + form key patterns
         if (p.baseId != 0)
         {
             var baseMon = PokemonDatabase.Instance.All().FirstOrDefault(x => x.id == p.baseId);
@@ -126,7 +122,6 @@ public sealed class SpriteLibrary
 
     public Sprite TryLoad(Pokemon p)
     {
-        // explicit overrides first
         if (ExplicitPathById.TryGetValue(p.id, out var path))
         {
             var s = Resources.Load<Sprite>(path);
@@ -159,14 +154,12 @@ public sealed class SpriteLibrary
 
     public Sprite ByPokemon(Pokemon p)
     {
-        // --- NEW: honor explicit overrides here too ---
         if (ExplicitPathById.TryGetValue(p.id, out var ex))
         {
-            var sEx = LoadAny(ex); // or Resources.Load<Sprite>(ex)
+            var sEx = LoadAny(ex);
             if (sEx)
                 return Cache(p, sEx);
         }
-        // ---------------------------------------------
 
         if (_byId.TryGetValue(p.id, out var s))
             return s;
@@ -193,7 +186,6 @@ public sealed class SpriteLibrary
 
         if (!s)
         {
-            // optional: try a sanitized version that keeps underscores
             var san = San(p.name);
             s = LoadAny($"Sprites/{san}") ?? LoadAny(san);
         }

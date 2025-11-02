@@ -49,8 +49,8 @@ public partial class PokemonCard : MonoBehaviour
     private RectTransform rt;
     private Vector2 baseAnchoredPos;
     private Quaternion baseRotation;
-    public Pokemon Bound; // already present in your card
-    public bool IsRevealed { get; private set; } // set in Reveal()
+    public Pokemon Bound;
+    public bool IsRevealed { get; private set; }
 
     void Awake()
     {
@@ -93,13 +93,13 @@ public partial class PokemonCard : MonoBehaviour
             Destroy(f1);
         if (f2)
             Destroy(f2);
-        // Ensure there is a Graphic on THIS GO so IPointer* works
+
         var anyGraphic = GetComponent<Graphic>();
         if (!anyGraphic)
         {
             var bg = gameObject.AddComponent<Image>();
-            bg.color = new Color(0, 0, 0, 0); // fully transparent
-            bg.raycastTarget = true; // receives pointer
+            bg.color = new Color(0, 0, 0, 0);
+            bg.raycastTarget = true;
         }
         else
         {
@@ -188,10 +188,17 @@ public partial class PokemonCard : MonoBehaviour
             return;
         IsRevealed = true;
 
-        if (spriteImage)
-            spriteImage.enabled = true;
         if (placeholderImage)
-            placeholderImage.enabled = false; // ← you were not hiding it
+        {
+            placeholderImage.enabled = true; // keep white tile visible
+            placeholderImage.color = Color.white; // make sure it's plain white
+            placeholderImage.transform.SetAsFirstSibling(); // stay behind sprite
+        }
+        if (spriteImage)
+        {
+            spriteImage.enabled = true;
+            spriteImage.transform.SetAsLastSibling();
+        }
         HideTypeIcons();
     }
 

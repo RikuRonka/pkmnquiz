@@ -54,6 +54,7 @@
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextSelector_A.cs" />
     <Compile Include="Assets\Scripts\SpriteLibrary.cs" />
     <Compile Include="Assets\Scripts\DexOrder.cs" />
+    <Compile Include="Assets\Scripts\TypeFilterButton.cs" />
     <Compile Include="Assets\Scripts\QuizManager.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark02.cs" />
     <Compile Include="Assets\Scripts\Toast.cs" />

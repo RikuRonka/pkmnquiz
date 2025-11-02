@@ -45,27 +45,22 @@ public class GridAutoFit : MonoBehaviour
         float headH = Header ? Header.rect.height : 0f;
         var pad = grid.padding;
 
-        // Width available for the grid rows
         float availW = Mathf.Max(1f, vp.width - 2f * OuterMarginX - (pad.left + pad.right));
         float availH = Mathf.Max(
             1f,
             vp.height - 2f * OuterMarginY - headH - (pad.top + pad.bottom)
         );
 
-        // Choose columns by WIDTH only.
-        // Max columns such that cell <= MaxCell, then clamp to [MinCols, MaxCols]
         int colsByMaxCell = Mathf.FloorToInt((availW + Spacing) / (MaxCell + Spacing));
         int bestCols = Mathf.Clamp(colsByMaxCell, MinCols, MaxCols);
         if (ItemCount < bestCols)
-            bestCols = Mathf.Max(MinCols, ItemCount); // don't overshoot tiny sections
+            bestCols = Mathf.Max(MinCols, ItemCount);
         if (bestCols <= 0)
             bestCols = Mathf.Clamp(MinCols, 1, MaxCols);
 
-        // Compute cell from chosen columns; cap at MaxCell for safety
         float cell = (availW - Spacing * (bestCols - 1)) / Mathf.Max(1, bestCols);
         cell = Mathf.Min(cell, MaxCell);
 
-        // Apply to grid
         grid.startAxis = GridLayoutGroup.Axis.Horizontal;
         grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
@@ -73,13 +68,10 @@ public class GridAutoFit : MonoBehaviour
         grid.cellSize = new Vector2(cell, cell);
         grid.spacing = new Vector2(Spacing, Spacing);
 
-        // Calculate resulting height and publish to LayoutElement so parent layouts size correctly
         int rows = Mathf.CeilToInt((float)ItemCount / Mathf.Max(1, bestCols));
         float gridHeight = rows * cell + Mathf.Max(0, rows - 1) * Spacing;
 
         layoutElem.preferredHeight = gridHeight;
-        // optional: ensure no shrink
-        // layoutElem.minHeight = gridHeight;
 
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
     }

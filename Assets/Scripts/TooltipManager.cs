@@ -1,4 +1,3 @@
-// TooltipManager.cs
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,11 +7,11 @@ public class TooltipManager : MonoBehaviour
 
     [Header("Wiring")]
     public Canvas uiCanvas;
-    public RectTransform tooltipLayer; // full-screen RT under the canvas
+    public RectTransform tooltipLayer;
     public PokemonTooltip tooltipPrefab;
 
     [Header("Behavior")]
-    public Vector2 screenOffset = new(16f, 16f); // <- Y is POSITIVE to go UP with top-left pivot
+    public Vector2 screenOffset = new(16f, 16f);
     public float fadeTime = 0.12f;
 
     PokemonTooltip _tip;
@@ -38,7 +37,7 @@ public class TooltipManager : MonoBehaviour
 
         _tipRT = (RectTransform)_tip.transform;
         _tipRT.anchorMin = _tipRT.anchorMax = new Vector2(0.4f, 0.75f);
-        _tipRT.pivot = new Vector2(0f, 1f); // top-left
+        _tipRT.pivot = new Vector2(0f, 1f);
     }
 
     RectTransform EnsureLayer()
@@ -51,7 +50,6 @@ public class TooltipManager : MonoBehaviour
         rt.anchorMax = Vector2.one;
         rt.offsetMin = rt.offsetMax = Vector2.zero;
 
-        // IMPORTANT: top-left origin for the layer
         rt.pivot = new Vector2(0f, 1f);
 
         go.transform.SetAsLastSibling();
@@ -87,19 +85,17 @@ public class TooltipManager : MonoBehaviour
 
     void Position(Vector2 screenPos, Camera eventCam)
     {
-        if (!_tipRT || !uiCanvas)
+        if (!uiCanvas || !tooltipLayer || !_tipRT)
             return;
 
-        // The rect we’re positioning inside
-        var parentRT = tooltipLayer ? tooltipLayer : (RectTransform)uiCanvas.transform;
-
-        // Pick the correct camera for the conversion
-        var cam =
-            uiCanvas.renderMode == RenderMode.ScreenSpaceOverlay
+        // choose camera
+        Camera cam =
+            (uiCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
                 ? null
                 : (eventCam ? eventCam : uiCanvas.worldCamera);
 
-        // Screen -> local in the SAME rect we will clamp to
+        // screen -> parent-local
+        RectTransform parentRT = tooltipLayer;
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             parentRT,
             screenPos,
@@ -107,21 +103,31 @@ public class TooltipManager : MonoBehaviour
             out var local
         );
 
-        // Prefer above/right of cursor (top-left pivot -> positive Y goes up)
-        local += screenOffset; // e.g. new Vector2(16f, 16f)
+        Vector2 size = _tip.PreferredSize; // tooltip size
+        Rect bounds = parentRT.rect; // parent rect
+        Vector2 margin = new(Mathf.Abs(screenOffset.x), Mathf.Abs(screenOffset.y));
 
-        // Clamp within parent rect for top-left pivot (0,1)
-        var r = parentRT.rect;
-        var size = _tip.PreferredSize;
+        // Start above-right of the cursor (pivot is top-left)
+        Vector2 pos = local + new Vector2(margin.x, -margin.y);
 
-        float minX = r.xMin;
-        float maxX = r.xMax - size.x;
-        float minY = r.yMin + size.y; // top-left pivot: keep bottom inside
-        float maxY = r.yMax;
+        // ---- horizontal flip (if would overflow right, place to the left of cursor)
+        if (pos.x + size.x > bounds.xMax)
+            pos.x = local.x - size.x - margin.x;
 
-        local.x = Mathf.Clamp(local.x, minX, maxX);
-        local.y = Mathf.Clamp(local.y, minY, maxY);
+        // keep inside left/right after deciding side
+        pos.x = Mathf.Clamp(pos.x, bounds.xMin, bounds.xMax - size.x);
 
-        _tipRT.anchoredPosition = local;
+        // ---- vertical flip
+        // prefer above; if bottom would go below, place below the cursor
+        if (pos.y - size.y < bounds.yMin)
+            pos.y = local.y + size.y + margin.y;
+
+        // keep inside top/bottom after deciding side
+        pos.y = Mathf.Clamp(pos.y, bounds.yMin + size.y, bounds.yMax);
+
+        _tipRT.anchoredPosition = pos;
+        const float EDGE_PAD = 8f;
+        pos.x = Mathf.Clamp(pos.x, bounds.xMin + EDGE_PAD, bounds.xMax - size.x - EDGE_PAD);
+        pos.y = Mathf.Clamp(pos.y, bounds.yMin + size.y + EDGE_PAD, bounds.yMax - EDGE_PAD);
     }
 }

@@ -37,15 +37,6 @@ public class QuizManager : MonoBehaviour
     private float elapsed;
     private bool running;
     public ScrollRect scrollRect;
-    private const string SecretRevealAll = "revealall";
-
-    private bool IsDialogOpen()
-    {
-        if (!confirmDialog)
-            return false;
-        // only count it as open when the dialog is actually active in the scene
-        return confirmDialog.gameObject.activeInHierarchy && confirmDialog.IsShowing;
-    }
 
     public Toast toast;
     private const int MIN_TOAST_LEN = 4;
@@ -54,6 +45,15 @@ public class QuizManager : MonoBehaviour
     public SectionGroup sectionGroupPrefab;
     public Transform content;
 
+    [SerializeField]
+    string selectedType;
+
+    string TypeDisplay =>
+        string.IsNullOrEmpty(selectedType)
+            ? null
+            : System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(
+                selectedType.ToLowerInvariant()
+            ); // "Water", "Bug"
     private readonly Dictionary<int, List<Pokemon>> megaFormsByBase = new();
     private readonly Dictionary<int, Pokemon> megaSlotPickByBase = new();
     private readonly Dictionary<int, PokemonCard> megaCardByBase = new();
@@ -108,15 +108,10 @@ public class QuizManager : MonoBehaviour
         }
         if (confirmDialog)
         {
-            // If your ConfirmDialog has a dedicated init/hide method, call it:
-            // confirmDialog.HideImmediate();   // (preferred if available)
-
-            // Otherwise: briefly activate then deactivate so Awake/Start run.
             bool wasActive = confirmDialog.gameObject.activeSelf;
             confirmDialog.gameObject.SetActive(true);
-            // optional: if it auto-shows on enable, immediately hide it here
-            // confirmDialog.HideImmediate();
-            confirmDialog.gameObject.SetActive(wasActive); // usually false at start
+
+            confirmDialog.gameObject.SetActive(wasActive);
         }
         if (giveUpBtn)
         {
@@ -124,6 +119,30 @@ public class QuizManager : MonoBehaviour
             giveUpBtn.onClick.AddListener(OnGiveUpClicked);
         }
         EnsureUIContracts();
+    }
+
+    void SetMainTitle(SectionGroup sec)
+    {
+        // If we're doing a type quiz, the top header should be just the type.
+        if (!string.IsNullOrEmpty(TypeDisplay))
+        {
+            sec.SetTitle($"All {TypeDisplay} types"); // e.g., "Bug type"
+            return;
+        }
+
+        // Otherwise keep your normal titles
+        if (generation == 0)
+            sec.SetTitle("Full Quiz (Gen 1–9)");
+        else
+            sec.SetTitle(Helpers.GetGenTitle(generation));
+    }
+
+    private bool IsDialogOpen()
+    {
+        if (!confirmDialog)
+            return false;
+
+        return confirmDialog.gameObject.activeInHierarchy && confirmDialog.IsShowing;
     }
 
     private static int BaseIdOf(Pokemon p) => p.baseId != 0 ? p.baseId : p.id;
@@ -154,7 +173,16 @@ public class QuizManager : MonoBehaviour
     {
         if (GameSettings.Generation.HasValue)
             generation = GameSettings.Generation.Value;
-
+        if (GameSettings.TypeFilter != null && GameSettings.TypeFilter.Length > 0)
+        {
+            // Accept the first selected type (you can extend to multi-type later)
+            selectedType = GameSettings.TypeFilter[0].Trim().ToLowerInvariant();
+            generation = 0; // type quizzes are always "full quiz" across Gen 1–9
+        }
+        else
+        {
+            selectedType = null; // no type filter
+        }
         BuildTargetList();
         RebuildGrid();
         ResetTimerOnly();
@@ -186,11 +214,9 @@ public class QuizManager : MonoBehaviour
             yield break;
         }
 
-        // 0) Validate target is under content
         if (!target.IsChildOf(scrollRect.content))
             Debug.LogWarning("[ScrollDbg] Target is NOT a child of scrollRect.content.");
 
-        // 1) Let layout settle
         yield return null;
         Canvas.ForceUpdateCanvases();
         yield return null;
@@ -199,7 +225,6 @@ public class QuizManager : MonoBehaviour
         var content = scrollRect.content;
         var viewport = scrollRect.viewport;
 
-        // 2) Bounds-based sizes (robust against anchors/pivots)
         var contentBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
             viewport,
             content
@@ -212,8 +237,6 @@ public class QuizManager : MonoBehaviour
         float contentH = contentBounds.size.y;
         float viewH = viewport.rect.height;
 
-        // 3) Compute desired normalized position
-        // In viewport local space: +Y is up. ‘fromTopPx’ = distance from content top to target top.
         float contentTopY = contentBounds.center.y + contentBounds.extents.y;
         float targetTopY = targetBounds.center.y + targetBounds.extents.y;
         float fromTopPx = contentTopY - targetTopY;
@@ -221,15 +244,12 @@ public class QuizManager : MonoBehaviour
         float scrollable = Mathf.Max(1f, contentH - viewH);
         float targetNorm = 1f - Mathf.Clamp01(fromTopPx / scrollable);
 
-        // Optional padding so the card isn’t glued to the top
         float pad = 0.12f * (viewH / scrollable);
         targetNorm = Mathf.Clamp01(targetNorm + pad);
 
-        // 4) Visual highlight (1 second)
         var hi = AddTempOutline(target, Color.yellow);
         Destroy(hi, 1.0f);
 
-        // 5) Smooth scroll
         float start = scrollRect.verticalNormalizedPosition;
         float t = 0f;
         while (t < 1f)
@@ -247,7 +267,6 @@ public class QuizManager : MonoBehaviour
 
     private Graphic AddTempOutline(RectTransform rt, Color c)
     {
-        // adds a temporary Image behind the card so you can see where we scrolled
         var go = new GameObject("ScrollDbgHi", typeof(Image));
         go.transform.SetParent(rt, false);
         var img = go.GetComponent<Image>();
@@ -298,7 +317,7 @@ public class QuizManager : MonoBehaviour
             return;
 
         list.Remove(item);
-        // re-find anchor because indices changed after Remove
+
         idxBefore = list.FindIndex(x => before(x));
         list.Insert(Math.Max(0, idxBefore), item);
     }
@@ -318,7 +337,7 @@ public class QuizManager : MonoBehaviour
             return;
 
         list.Remove(item);
-        // re-find anchor because indices changed after Remove
+
         idxAfter = list.FindIndex(x => after(x));
         list.Insert(Math.Min(list.Count, idxAfter + 1), item);
     }
@@ -389,7 +408,7 @@ public class QuizManager : MonoBehaviour
 
         var item = targetList[i];
         targetList.RemoveAt(i);
-        j = targetList.FindIndex(p => p.id == anchorId); // recompute after removal
+        j = targetList.FindIndex(p => p.id == anchorId);
         targetList.Insert(Math.Max(0, j), item);
     }
 
@@ -402,7 +421,7 @@ public class QuizManager : MonoBehaviour
 
         var item = targetList[i];
         targetList.RemoveAt(i);
-        j = targetList.FindIndex(p => p.id == anchorId); // recompute after removal
+        j = targetList.FindIndex(p => p.id == anchorId);
         targetList.Insert(Math.Min(targetList.Count, j + 1), item);
     }
 
@@ -429,20 +448,17 @@ public class QuizManager : MonoBehaviour
         if (guess == null)
             return null;
 
-        // If the exact entry is present in THIS quiz, use it.
         if (cardById.ContainsKey(guess.id))
             return guess;
 
         int baseId = guess.baseId != 0 ? guess.baseId : guess.id;
 
-        // Is a non-mega entry for this base species present in the quiz?
         bool baseInMain = targetList.Any(p =>
             !Helpers.IsMega(p) && (p.baseId != 0 ? p.baseId : p.id) == baseId
         );
 
         if (baseInMain)
         {
-            // Prefer the non-mega (main section) entry
             var baseEntry = targetList.FirstOrDefault(p =>
                 !Helpers.IsMega(p) && (p.baseId != 0 ? p.baseId : p.id) == baseId
             );
@@ -451,7 +467,6 @@ public class QuizManager : MonoBehaviour
         }
         else
         {
-            // Gen 6: Megas
             if (megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
                 return megaPick;
         }
@@ -461,7 +476,7 @@ public class QuizManager : MonoBehaviour
             && expeditionPickByBase.TryGetValue(baseId, out var expPick2)
         )
             return expPick2;
-        // Fallback: anything with same base id
+
         return targetList.FirstOrDefault(p => (p.baseId != 0 ? p.baseId : p.id) == baseId);
     }
 
@@ -488,7 +503,7 @@ public class QuizManager : MonoBehaviour
 
     private bool TryAcceptExpeditionByBaseName(string text, bool commit)
     {
-        if (generation != 9 && generation != 0) // allow in Full Quiz too
+        if (generation != 9 && generation != 0)
             return false;
         if (string.IsNullOrWhiteSpace(text))
             return false;
@@ -508,17 +523,15 @@ public class QuizManager : MonoBehaviour
     private bool TryAcceptMegaByBaseName(string text, bool commit)
     {
         if (generation != 6)
-            return false; // only relevant in Gen 6
+            return false;
         if (string.IsNullOrWhiteSpace(text))
             return false;
 
-        var norm = GuessNormalizer.Key(text); // "charizard" -> "charizard"
+        var norm = GuessNormalizer.Key(text);
 
-        // Find the *base* species in the full database by normalized name
         Pokemon baseSpecies = null;
         foreach (var p in PokemonDatabase.Instance.All())
         {
-            // We want the base species entry: either p.baseId == 0 or p.id == p.baseId
             var isBase = p.baseId == 0 || p.baseId == p.id;
             if (!isBase)
                 continue;
@@ -529,7 +542,6 @@ public class QuizManager : MonoBehaviour
                 break;
             }
 
-            // allow aliases on the base species too
             if (p.aliases != null)
             {
                 foreach (var a in p.aliases)
@@ -548,12 +560,10 @@ public class QuizManager : MonoBehaviour
         if (baseSpecies == null)
             return false;
 
-        // If we created a mega slot for this base species, map to it
         int baseId = baseSpecies.baseId != 0 ? baseSpecies.baseId : baseSpecies.id;
         if (!megaSlotPickByBase.TryGetValue(baseId, out var pickedMega))
-            return false; // no mega slot in this quiz, bail
+            return false;
 
-        // Route through the normal handler so scoring / highlight stays consistent
         HandleCandidate(
             baseSpecies,
             text,
@@ -588,7 +598,6 @@ public class QuizManager : MonoBehaviour
             return;
         }
 
-        // --- Layout ---
         var contentRt = (RectTransform)content;
         var vlg =
             contentRt.GetComponent<VerticalLayoutGroup>()
@@ -604,7 +613,6 @@ public class QuizManager : MonoBehaviour
         csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
         csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        // --- Clear UI/state ---
         foreach (Transform c in content)
             Destroy(c.gameObject);
         cardById.Clear();
@@ -612,6 +620,7 @@ public class QuizManager : MonoBehaviour
         solved.Clear();
         hinted.Clear();
         megaFormsByBase.Clear();
+
         megaSlotPickByBase.Clear();
         megaCardByBase.Clear();
         expeditionByBaseName.Clear();
@@ -624,34 +633,74 @@ public class QuizManager : MonoBehaviour
         hisuiCardByBase.Clear();
         hisuiByBaseName.Clear();
 
-        var ordered = targetList; // keep order from BuildTargetList
+        var ordered = targetList;
 
-        // --- Always build main section first ---
         var main = Instantiate(sectionGroupPrefab, content);
         main.EnsureLayout();
-        main.SetTitle(Helpers.GetGenTitle(generation));
+        SetMainTitle(main);
 
         SectionGroup megas = null,
             paldeaExpeditions = null,
             gmaxSec = null,
             hisuiSec = null;
-        SectionGroup fullGmax = null,
-            fullHisui = null; // used only in gen 0
+
         var allDb = PokemonDatabase.Instance.All();
 
-        // ------- FULL QUIZ (Gen 0) -------
+        foreach (var m in allDb.Where(Helpers.IsMega).Where(MatchesType))
+        {
+            int baseKey = BaseIdOf(m);
+            if (!megaFormsByBase.TryGetValue(baseKey, out var list))
+                megaFormsByBase[baseKey] = list = new List<Pokemon>();
+            list.Add(m);
+        }
+        megaByBaseName.Clear();
+        foreach (var kv in megaFormsByBase)
+        {
+            var baseId = kv.Key;
+            var megaIds = kv.Value.Select(m => m.id).ToList();
+
+            var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
+            void AddBaseKey(string s)
+            {
+                var k = GuessNormalizer.Key(s);
+                if (!string.IsNullOrEmpty(k))
+                    megaByBaseName[k] = megaIds;
+            }
+
+            if (baseMon != null)
+            {
+                AddBaseKey(baseMon.name);
+                if (baseMon.aliases != null)
+                    foreach (var a in baseMon.aliases)
+                        AddBaseKey(a);
+            }
+        }
+        var g9ExpPoolF = allDb.Where(Helpers.IsPaldeaExpedition).Where(MatchesType).ToList();
+        var gmaxPoolF = allDb
+            .Where(Helpers.IsGmax)
+            .Where(MatchesType)
+            .OrderBy(p => DexOrder.GetIndex(p))
+            .ToList();
+        var hisuiPoolF = allDb
+            .Where(Helpers.IsHisui)
+            .Where(MatchesType)
+            .OrderBy(p => DexOrder.GetIndex(p))
+            .ToList();
+
         if (generation == 0)
         {
-            // Create per-gen main sections (+ extra sections we need)
             var mainByGen = new Dictionary<int, SectionGroup>();
-            SectionGroup gen6Megas = null,
-                gen9Expeditions = null;
+            SectionGroup gen6Megas = null;
+            SectionGroup gen9Expeditions = null;
+            SectionGroup fullGmax = null;
+            SectionGroup fullHisui = null;
 
             foreach (var g in ordered.Select(p => p.generation).Distinct().OrderBy(x => x))
             {
                 var sec = Instantiate(sectionGroupPrefab, content);
                 sec.EnsureLayout();
-                sec.SetTitle(GenTitles.TryGetValue(g, out var t) ? t : $"Gen {g}");
+                string baseTitle = GenTitles.TryGetValue(g, out var t) ? t : $"Gen {g}";
+                sec.SetTitle(baseTitle);
                 mainByGen[g] = sec;
 
                 if (g == 6)
@@ -662,15 +711,20 @@ public class QuizManager : MonoBehaviour
                 }
                 if (g == 8)
                 {
-                    fullGmax = Instantiate(sectionGroupPrefab, content);
-                    fullGmax.EnsureLayout();
-                    fullGmax.SetTitle("Gigantamax (Gen 8)");
-
-                    fullHisui = Instantiate(sectionGroupPrefab, content);
-                    fullHisui.EnsureLayout();
-                    fullHisui.SetTitle("Hisui (Gen 8)");
+                    if (gmaxPoolF.Count > 0)
+                    {
+                        fullGmax = Instantiate(sectionGroupPrefab, content);
+                        fullGmax.EnsureLayout();
+                        fullGmax.SetTitle("Gigantamax (Gen 8)");
+                    }
+                    if (hisuiPoolF.Count > 0)
+                    {
+                        fullHisui = Instantiate(sectionGroupPrefab, content);
+                        fullHisui.EnsureLayout();
+                        fullHisui.SetTitle("Hisui (Gen 8)");
+                    }
                 }
-                if (g == 9)
+                if (g == 9 & g9ExpPoolF.Count > 0)
                 {
                     gen9Expeditions = Instantiate(sectionGroupPrefab, content);
                     gen9Expeditions.EnsureLayout();
@@ -678,7 +732,6 @@ public class QuizManager : MonoBehaviour
                 }
             }
 
-            // 1) Main entries
             foreach (var p in ordered)
             {
                 var sec = mainByGen[p.generation];
@@ -688,36 +741,25 @@ public class QuizManager : MonoBehaviour
                 pokemonById[p.id] = p;
             }
 
-            // 2) Megas pool (from full DB)
-            foreach (var m in allDb.Where(Helpers.IsMega))
-            {
-                int baseKey = BaseIdOf(m);
-                if (!megaFormsByBase.TryGetValue(baseKey, out var list))
-                    megaFormsByBase[baseKey] = list = new List<Pokemon>();
-                list.Add(m);
-            }
             if (gen6Megas != null && megaFormsByBase.Count > 0)
             {
                 var rng = new System.Random();
                 foreach (var kv in megaFormsByBase)
                 {
                     var pick = kv.Value[rng.Next(kv.Value.Count)];
-                    var card = Instantiate(cardPrefab, gen6Megas.gridRoot);
-                    card.Bind(pick);
+                    var c = Instantiate(cardPrefab, gen6Megas.gridRoot);
+                    c.Bind(pick);
                     megaSlotPickByBase[kv.Key] = pick;
-                    megaCardByBase[kv.Key] = card;
-                    cardById[pick.id] = card;
+                    megaCardByBase[kv.Key] = c;
+                    cardById[pick.id] = c;
                     pokemonById[pick.id] = pick;
                 }
             }
 
-            // 3) Expeditions (from full DB)
             if (gen9Expeditions != null)
             {
-                var expOrdered = allDb
-                    .Where(Helpers.IsPaldeaExpedition)
-                    .OrderBy(p => DexOrder.GetIndex(p))
-                    .ToList();
+                var expOrdered = g9ExpPoolF.OrderBy(p => DexOrder.GetIndex(p)).ToList();
+
                 int iBlood = expOrdered.FindIndex(x => x.id == 1015);
                 int iSini = expOrdered.FindIndex(x => x.id == 1014);
                 if (iBlood >= 0 && iSini >= 0 && iBlood < iSini)
@@ -730,14 +772,14 @@ public class QuizManager : MonoBehaviour
 
                 foreach (var p in expOrdered)
                 {
-                    var card = Instantiate(cardPrefab, gen9Expeditions.gridRoot);
-                    card.Bind(p);
-                    cardById[p.id] = card;
+                    var c = Instantiate(cardPrefab, gen9Expeditions.gridRoot);
+                    c.Bind(p);
+                    cardById[p.id] = c;
                     pokemonById[p.id] = p;
 
                     int baseKey = p.baseId != 0 ? p.baseId : p.id;
                     expeditionPickByBase[baseKey] = p;
-                    expeditionCardByBase[baseKey] = card;
+                    expeditionCardByBase[baseKey] = c;
 
                     void AddKey(string s)
                     {
@@ -752,6 +794,7 @@ public class QuizManager : MonoBehaviour
                     var idx = p.name.IndexOf('(');
                     if (idx > 0)
                         AddKey(p.name[..idx].Trim());
+
                     var baseMon = allDb.FirstOrDefault(x => x.id == baseKey);
                     if (baseMon != null)
                     {
@@ -763,23 +806,18 @@ public class QuizManager : MonoBehaviour
                 }
             }
 
-            // 4) Gmax (from full DB)
             if (fullGmax != null)
             {
-                var gmaxPool = allDb
-                    .Where(Helpers.IsGmax)
-                    .OrderBy(p => DexOrder.GetIndex(p))
-                    .ToList();
-                foreach (var p in gmaxPool)
+                foreach (var p in gmaxPoolF)
                 {
-                    var card = Instantiate(cardPrefab, fullGmax.gridRoot);
-                    card.Bind(p);
-                    cardById[p.id] = card;
+                    var c = Instantiate(cardPrefab, fullGmax.gridRoot);
+                    c.Bind(p);
+                    cardById[p.id] = c;
                     pokemonById[p.id] = p;
 
                     int baseId = p.baseId != 0 ? p.baseId : p.id;
                     gmaxPickByBase[baseId] = p;
-                    gmaxCardByBase[baseId] = card;
+                    gmaxCardByBase[baseId] = c;
 
                     var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
                     var baseName = baseMon?.name ?? BaseNameFrom(p.name);
@@ -805,23 +843,18 @@ public class QuizManager : MonoBehaviour
                 }
             }
 
-            // 5) Hisui (from full DB)
             if (fullHisui != null)
             {
-                var hisuiPool = allDb
-                    .Where(Helpers.IsHisui)
-                    .OrderBy(p => DexOrder.GetIndex(p))
-                    .ToList();
-                foreach (var p in hisuiPool)
+                foreach (var p in hisuiPoolF)
                 {
-                    var card = Instantiate(cardPrefab, fullHisui.gridRoot);
-                    card.Bind(p);
-                    cardById[p.id] = card;
+                    var c = Instantiate(cardPrefab, fullHisui.gridRoot);
+                    c.Bind(p);
+                    cardById[p.id] = c;
                     pokemonById[p.id] = p;
 
                     int baseId = p.baseId != 0 ? p.baseId : p.id;
                     hisuiPickByBase[baseId] = p;
-                    hisuiCardByBase[baseId] = card;
+                    hisuiCardByBase[baseId] = c;
 
                     var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
                     var baseName = baseMon?.name ?? BaseNameFrom(p.name);
@@ -845,7 +878,6 @@ public class QuizManager : MonoBehaviour
                 }
             }
 
-            // Counts + fit
             foreach (var sec in mainByGen.Values)
             {
                 sec.SetCardCount(sec.gridRoot.childCount);
@@ -876,8 +908,6 @@ public class QuizManager : MonoBehaviour
             return;
         }
 
-        // ------- SINGLE-GEN PATHS (6/8/9) -------
-
         if (generation == 6)
         {
             megas = Instantiate(sectionGroupPrefab, content);
@@ -904,7 +934,6 @@ public class QuizManager : MonoBehaviour
         var gmaxPoolGen = new List<Pokemon>();
         var hisuiPoolGen = new List<Pokemon>();
 
-        // place main / collect extras
         foreach (var p in ordered)
         {
             if (generation == 6 && Helpers.IsMega(p))
@@ -937,7 +966,6 @@ public class QuizManager : MonoBehaviour
             pokemonById[p.id] = p;
         }
 
-        // megas
         if (generation == 6 && megas != null)
         {
             var rng = new System.Random();
@@ -953,93 +981,6 @@ public class QuizManager : MonoBehaviour
             }
         }
 
-        // expeditions
-        if (generation == 9 && paldeaExpeditions != null)
-        {
-            var expOrdered = expeditionPool.OrderBy(p => DexOrder.GetIndex(p)).ToList();
-            int iBlood = expOrdered.FindIndex(x => x.id == 1015);
-            int iSini = expOrdered.FindIndex(x => x.id == 1014);
-            if (iBlood >= 0 && iSini >= 0 && iBlood < iSini)
-            {
-                var item = expOrdered[iBlood];
-                expOrdered.RemoveAt(iBlood);
-                iSini = expOrdered.FindIndex(x => x.id == 1014);
-                expOrdered.Insert(Math.Min(expOrdered.Count, iSini + 1), item);
-            }
-            foreach (var p in expOrdered)
-            {
-                var card = Instantiate(cardPrefab, paldeaExpeditions.gridRoot);
-                card.Bind(p);
-                cardById[p.id] = card;
-                pokemonById[p.id] = p;
-
-                int baseKey = p.baseId != 0 ? p.baseId : p.id;
-                expeditionPickByBase[baseKey] = p;
-                expeditionCardByBase[baseKey] = card;
-
-                void AddKey(string s)
-                {
-                    var k = GuessNormalizer.Key(s);
-                    if (!string.IsNullOrEmpty(k))
-                        expeditionByBaseName[k] = baseKey;
-                }
-                AddKey(p.name);
-                if (p.aliases != null)
-                    foreach (var a in p.aliases)
-                        AddKey(a);
-                var idx = p.name.IndexOf('(');
-                if (idx > 0)
-                    AddKey(p.name.Substring(0, idx).Trim());
-                var baseMon = allDb.FirstOrDefault(x => x.id == baseKey);
-                if (baseMon != null)
-                {
-                    AddKey(baseMon.name);
-                    if (baseMon.aliases != null)
-                        foreach (var a in baseMon.aliases)
-                            AddKey(a);
-                }
-            }
-        }
-
-        // gmax (gen 8)
-        if (generation == 8 && gmaxSec)
-        {
-            foreach (var p in gmaxPoolGen.OrderBy(p => DexOrder.GetIndex(p)))
-            {
-                var card = Instantiate(cardPrefab, gmaxSec.gridRoot);
-                card.Bind(p);
-                cardById[p.id] = card;
-                pokemonById[p.id] = p;
-
-                int baseId = p.baseId != 0 ? p.baseId : p.id;
-                gmaxPickByBase[baseId] = p;
-                gmaxCardByBase[baseId] = card;
-
-                var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
-                var baseName = baseMon?.name ?? BaseNameFrom(p.name);
-                AddKey(gmaxByBaseName, p.name, baseId);
-                if (p.aliases != null)
-                    foreach (var a in p.aliases)
-                        AddKey(gmaxByBaseName, a, baseId);
-                if (!string.IsNullOrEmpty(baseName))
-                {
-                    AddKey(gmaxByBaseName, $"{baseName} gmax", baseId);
-                    AddKey(gmaxByBaseName, $"gmax {baseName}", baseId);
-                    AddKey(gmaxByBaseName, $"{baseName} gigantamax", baseId);
-                    AddKey(gmaxByBaseName, $"gigantamax {baseName}", baseId);
-                }
-                if (baseMon?.aliases != null)
-                    foreach (var a in baseMon.aliases)
-                    {
-                        AddKey(gmaxByBaseName, $"{a} gmax", baseId);
-                        AddKey(gmaxByBaseName, $"gmax {a}", baseId);
-                        AddKey(gmaxByBaseName, $"{a} gigantamax", baseId);
-                        AddKey(gmaxByBaseName, $"gigantamax {a}", baseId);
-                    }
-            }
-        }
-
-        // hisui (gen 8)
         if (generation == 8 && hisuiSec)
         {
             foreach (var p in hisuiPoolGen.OrderBy(p => DexOrder.GetIndex(p)))
@@ -1075,7 +1016,6 @@ public class QuizManager : MonoBehaviour
             }
         }
 
-        // counts + fit
         main.SetCardCount(main.gridRoot.childCount);
         FitSection(main);
         if (megas != null)
@@ -1102,6 +1042,37 @@ public class QuizManager : MonoBehaviour
         UpdateScore();
     }
 
+    bool HasTypeFilter => !string.IsNullOrEmpty(selectedType);
+
+    bool MatchesType(Pokemon p)
+    {
+        if (!HasTypeFilter)
+            return true;
+        if (p?.types == null)
+            return false;
+        for (int i = 0; i < p.types.Length; i++)
+            if (string.Equals(p.types[i], selectedType, System.StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
+    public void StartTypeQuiz(string typeKey)
+    {
+        selectedType = typeKey.ToLowerInvariant(); // e.g. "fire"
+        generation = 0; // FORCE full-quiz layout (Gen 1–9)
+        BuildTargetList();
+        RebuildGrid();
+    }
+
+    public void StartGenQuiz(int gen)
+    {
+        selectedType = null; // clear type filter
+        GameSettings.TypeFilter = null;
+        generation = gen;
+        BuildTargetList();
+        RebuildGrid();
+    }
+
     static void AddKey(Dictionary<string, int> map, string s, int baseId)
     {
         var k = GuessNormalizer.Key(s);
@@ -1109,7 +1080,6 @@ public class QuizManager : MonoBehaviour
             map[k] = baseId;
     }
 
-    // Derive “base” name from "Xxx (Something)"
     static string BaseNameFrom(string name)
     {
         var i = name.IndexOf('(');
@@ -1144,7 +1114,6 @@ public class QuizManager : MonoBehaviour
 
     private void RevealAllVariantsForBase(int baseKey)
     {
-        // 1) Any placed card sharing this base
         foreach (var kv in cardById)
         {
             if (!pokemonById.TryGetValue(kv.Key, out var poke))
@@ -1160,7 +1129,6 @@ public class QuizManager : MonoBehaviour
             }
         }
 
-        // 2) Mega pick (if present)
         if (
             megaSlotPickByBase.TryGetValue(baseKey, out var megaPick)
             && cardById.TryGetValue(megaPick.id, out var megaCard)
@@ -1171,7 +1139,6 @@ public class QuizManager : MonoBehaviour
             megaCard.Reveal();
         }
 
-        // 3) Expedition pick (if present)
         if (
             expeditionPickByBase.TryGetValue(baseKey, out var expPick)
             && cardById.TryGetValue(expPick.id, out var expCard)
@@ -1237,7 +1204,6 @@ public class QuizManager : MonoBehaviour
 
         if (generation == 0)
         {
-            // FULL (Gen 1–9): main species only
             all = all.Where(p =>
                 p.generation >= 1
                 && p.generation <= 9
@@ -1246,9 +1212,6 @@ public class QuizManager : MonoBehaviour
                 && !Helpers.IsHisui(p)
                 && !Helpers.IsPaldeaExpedition(p)
             );
-
-            // Optional: if you want to hide regional variants outside their gen’s main dex, also filter here.
-            // Otherwise they’ll appear if they’re marked as main entries.
         }
         else if (generation > 0)
         {
@@ -1274,7 +1237,16 @@ public class QuizManager : MonoBehaviour
             all = genSet.Concat(extras).Distinct();
         }
 
-        if (GameSettings.TypeFilter != null && GameSettings.TypeFilter.Length > 0)
+        // Use the active in-memory filter (selectedType) for type quizzes
+        if (HasTypeFilter)
+        {
+            string key = selectedType.ToLowerInvariant();
+            all = all.Where(p =>
+                p.types != null
+                && p.types.Any(t => string.Equals(t, key, StringComparison.OrdinalIgnoreCase))
+            );
+        }
+        else if (GameSettings.TypeFilter != null && GameSettings.TypeFilter.Length > 0)
         {
             var allowed = new HashSet<string>(
                 GameSettings.TypeFilter.Select(t => t.Trim().ToLowerInvariant())
@@ -1286,22 +1258,19 @@ public class QuizManager : MonoBehaviour
 
         DexOrder.LoadForGeneration(generation);
 
-        // Work on a LIST we control
         var ordered = all.OrderBy(p => DexOrder.GetIndex(p)).ToList();
 
         if (generation == 9)
         {
-            // ---- collapse Paldean Tauros to EXACTLY ONE entry ----
             var taurosForms = ordered.Where(Helpers.IsPaldeaTauros).ToList();
-            var taurosOne = taurosForms.FirstOrDefault(); // keep the first by dex order
+            var taurosOne = taurosForms.FirstOrDefault();
             if (taurosForms.Count > 0)
             {
                 ordered.RemoveAll(Helpers.IsPaldeaTauros);
-                ordered.Add(taurosOne); // add back one; we'll position it precisely next
+                ordered.Add(taurosOne);
             }
 
-            // ---- Wooper (Paldea) immediately BEFORE Clodsire ----
-            int iWoo = ordered.FindIndex(p => p.id == 980); // Wooper (Paldea)
+            int iWoo = ordered.FindIndex(p => p.id == 980);
             int iClod = ordered.FindIndex(p => GuessNormalizer.Key(p.name) == "clodsire");
 
             if (iWoo >= 0 && iClod >= 0 && iWoo != iClod - 1)
@@ -1312,7 +1281,7 @@ public class QuizManager : MonoBehaviour
                 ordered.Insert(Math.Max(0, iClod), w);
             }
 
-            int iTau = ordered.FindIndex(p => p.baseId == 128 && p.formKey == "paldea"); // the one we kept
+            int iTau = ordered.FindIndex(p => p.baseId == 128 && p.formKey == "paldea");
             int iGra = ordered.FindIndex(p => GuessNormalizer.Key(p.name) == "grafaiai");
 
             if (iTau >= 0 && iGra >= 0 && iTau != iGra + 1)
@@ -1324,7 +1293,6 @@ public class QuizManager : MonoBehaviour
             }
         }
 
-        // Finalize
         targetList = ordered.ToList();
     }
 
@@ -1385,7 +1353,6 @@ public class QuizManager : MonoBehaviour
 
     private void UpdateScore()
     {
-        // cardById.Count is the true number of cards rendered (main + extras)
         int total = cardById.Count;
         if (scoreText)
             scoreText.text = $"{solved.Count} / {total}";
@@ -1417,7 +1384,6 @@ public class QuizManager : MonoBehaviour
                 && ids.Count > 0
             )
             {
-                // Find the base species by name/alias
                 Pokemon baseSpecies = null;
                 foreach (var p in PokemonDatabase.Instance.All())
                 {
@@ -1445,7 +1411,6 @@ public class QuizManager : MonoBehaviour
                         !Helpers.IsMega(p) && (p.baseId != 0 ? p.baseId : p.id) == baseId
                     );
 
-                // Only auto-map to a mega if the base is NOT in the main section (Charizard/Mewtwo case)
                 if (!baseInMain)
                 {
                     int pickId = ids[UnityEngine.Random.Range(0, ids.Count)];
@@ -1456,7 +1421,6 @@ public class QuizManager : MonoBehaviour
                         return;
                     }
                 }
-                // else: let normal flow continue so the base card is revealed
             }
         }
 
@@ -1530,7 +1494,6 @@ public class QuizManager : MonoBehaviour
         if (string.IsNullOrWhiteSpace(text))
             return;
 
-        // 1) EXACT (digit-preserving)
         var exact = FindByExactPreserveDigits(text);
         if (exact != null)
         {
@@ -1560,16 +1523,12 @@ public class QuizManager : MonoBehaviour
             return;
         }
 
-        // --- NEW: while typing (no commit), accept base names that map to a mega slot (charizard/mewtwo) ---
         if (!commit && TryAcceptMegaByBaseName(text, commit: false))
             return;
-        // --- end NEW ---
 
-        // 2) No exact match and not committed: wait for more typing
         if (!commit)
             return;
 
-        // 3) Committed: fuzzy
         var fuzzy = PokemonDatabase.Instance.FindByGuess(text);
         if (fuzzy == null)
             return;
@@ -1714,7 +1673,6 @@ public class QuizManager : MonoBehaviour
         float duration
     )
     {
-        // Let layout settle (important when a card just revealed / sections resize)
         yield return null;
         Canvas.ForceUpdateCanvases();
         yield return null;
@@ -1723,33 +1681,27 @@ public class QuizManager : MonoBehaviour
         var content = scrollRect.content;
         var viewport = scrollRect.viewport;
 
-        // If content isn't taller than viewport, nothing to scroll
         float contentH = content.rect.height;
         float viewH = viewport.rect.height;
         if (contentH <= viewH)
             yield break;
 
-        // Compute target top distance from content top using world corners (pivot/anchors agnostic)
         Vector3[] targetCorners = new Vector3[4];
         Vector3[] contentCorners = new Vector3[4];
         target.GetWorldCorners(targetCorners);
         content.GetWorldCorners(contentCorners);
 
-        float targetTopY = targetCorners[1].y; // top-left of target
-        float contentTopY = contentCorners[1].y; // top-left of content
+        float targetTopY = targetCorners[1].y;
+        float contentTopY = contentCorners[1].y;
 
-        // How far the target's top is below the content's top (in pixels)
         float fromTopPx = contentTopY - targetTopY;
 
-        // Convert to verticalNormalizedPosition (1 = top, 0 = bottom)
         float scrollable = Mathf.Max(1f, contentH - viewH);
         float targetNorm = 1f - Mathf.Clamp01(fromTopPx / scrollable);
 
-        // Optional: pad so item isn't glued to the top edge
-        float pad = 0.15f * (viewH / scrollable); // ~15% of viewport height
+        float pad = 0.15f * (viewH / scrollable);
         targetNorm = Mathf.Clamp01(targetNorm + pad);
 
-        // Smooth scroll
         float start = scrollRect.verticalNormalizedPosition;
         float t = 0f;
         while (t < 1f)
@@ -1829,7 +1781,7 @@ public class QuizManager : MonoBehaviour
         void DoGiveUp()
         {
             DefocusUI();
-            RevealAll(); // reuse your existing logic
+            RevealAll();
             if (giveUpBtn)
                 giveUpBtn.interactable = false;
         }

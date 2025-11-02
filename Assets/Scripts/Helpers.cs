@@ -29,7 +29,7 @@ public static class Helpers
     public static bool IsGalarForm(Pokemon p) =>
         HasForm(p, "galar") || NameHas(p, "(Galar") || NameHas(p, "Galarian");
 
-    public static bool IsPaldeaTauros(Pokemon p) => p.formKey == "paldea" && p.baseId == 128; // 128 = Tauros base
+    public static bool IsPaldeaTauros(Pokemon p) => p.formKey == "paldea" && p.baseId == 128;
 
     public static int IdOrBase(Pokemon p) => p.baseId != 0 ? p.baseId : p.id;
 
@@ -42,7 +42,6 @@ public static class Helpers
         if (PaldeaExpeditionBaseIds.Contains(baseId))
             return true;
 
-        // Fallback by normalized name (handles datasets with slightly different ids)
         string k = GuessNormalizer.Key(p.name);
         return PaldeaExpeditionNames.Contains(k);
     }
@@ -50,23 +49,23 @@ public static class Helpers
     private static readonly HashSet<int> PaldeaExpeditionBaseIds = new()
     {
         1009,
-        1010, // Walking Wake, Iron Leaves
+        1010,
         1011,
         1012,
-        1013, // Dipplin, Poltchageist, Sinistcha
+        1013,
         1014,
         1015,
         1016,
-        1017, // Okidogi, Munkidori, Fezandipiti, Ogerpon
+        1017,
         1018,
-        1019, // Archaludon, Hydrapple
+        1019,
         1020,
-        1021, // Gouging Fire, Raging Bolt
+        1021,
         1022,
-        1023, // Iron Boulder, Iron Crown
+        1023,
         1024,
-        1025, // Terapagos, Pecharunt
-        901, // Ursaluna (base id; BM is a form of this)
+        1025,
+        901,
     };
 
     private static readonly HashSet<string> PaldeaExpeditionNames = new()
@@ -88,7 +87,6 @@ public static class Helpers
         "ironcrown",
         "terapagos",
         "pecharunt",
-        // Bloodmoon aliases in case the entry’s name differs
         "ursaluna",
         "ursalunabloodmoon",
         "ursalunabm",

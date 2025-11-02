@@ -12,7 +12,6 @@ public class PokemonTooltip : MonoBehaviour
 
     public bool IsVisible => cg && cg.alpha > 0.001f;
 
-    // call after changing content to get up-to-date size
     public Vector2 PreferredSize
     {
         get
@@ -35,7 +34,7 @@ public class PokemonTooltip : MonoBehaviour
             cg.blocksRaycasts = false;
             cg.interactable = false;
         }
-        // black background is the root Image
+
         var bg = GetComponent<Image>();
         if (bg)
         {
@@ -62,7 +61,6 @@ public class PokemonTooltip : MonoBehaviour
             type2Image.enabled = s2 != null;
         }
 
-        // rebuild layout so PreferredSize is correct on this frame
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
     }
 
