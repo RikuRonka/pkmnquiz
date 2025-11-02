@@ -222,7 +222,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (!hasRouterParams)
             StartCoroutine(LocalBuildWithOverlay()); // <— new helper below
-
+        UpdateTypeHintButtonVisibility();
         ResetTimerOnly();
         running = true;
         guessInput?.ActivateInputField();
@@ -1129,7 +1129,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         selectedType = typeKey.ToLowerInvariant();
         generation = 0;
-
+        UpdateTypeHintButtonVisibility();
         StopAllCoroutines();
     }
 
@@ -1138,7 +1138,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         selectedType = null;
         GameSettings.TypeFilter = null;
         generation = gen;
-
+        UpdateTypeHintButtonVisibility();
         StopAllCoroutines();
     }
 
@@ -1391,6 +1391,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             yield return null; // let layout breathe & loader update
         }
         UpdateScore();
+    }
+
+    void UpdateTypeHintButtonVisibility()
+    {
+        if (hintTypeBtn)
+            hintTypeBtn.gameObject.SetActive(!HasTypeFilter); // hide when doing a TYPE quiz
     }
 
     private IEnumerator CoRecalcSafe(GridAutoFit fit, int token)

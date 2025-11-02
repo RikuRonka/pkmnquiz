@@ -1551,7 +1551,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0f0cfe7ddb129441b36f6f7a419d5af, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TypeFilterButton
-  typeName: psychic
+  typeName: poison
   button: {fileID: 0}
 --- !u!114 &279787461
 MonoBehaviour:
