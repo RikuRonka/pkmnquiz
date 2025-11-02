@@ -692,6 +692,7 @@ MonoBehaviour:
   timerText: {fileID: 139364236}
   giveUpBtn: {fileID: 1966726903}
   cardPrefab: {fileID: -1664643470272936200, guid: c28ef6287702d3b4b90792efe950a242, type: 3}
+  loaderPrefab: {fileID: 5879984476580737991, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
   generation: 1
   backToMenuBtn: {fileID: 370419967}
   resetBtn: {fileID: 922586061}
@@ -702,6 +703,8 @@ MonoBehaviour:
   sectionHeaderPrefab: {fileID: 416681718957693049, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
   sectionGroupPrefab: {fileID: 5857570121349899261, guid: ed3591256a27ba941aacf22951313b60, type: 3}
   content: {fileID: 1089968207}
+  selectedType: 
+  loader: {fileID: 5879984476580737991, guid: 138504d639154a24c8e9f45cc2850911, type: 3}
 --- !u!1 &195847650
 GameObject:
   m_ObjectHideFlags: 0
@@ -1958,7 +1961,6 @@ RectTransform:
   - {fileID: 2040036037}
   - {fileID: 601180227}
   - {fileID: 1763520577}
-  - {fileID: 1290010052}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -3171,15 +3173,15 @@ RectTransform:
   m_GameObject: {fileID: 1290010051}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 2, y: 2, z: 2}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 755016231}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -9.6843, y: -54.5}
-  m_SizeDelta: {x: -19.369, y: -109}
+  m_AnchoredPosition: {x: 945.4735, y: 458.25}
+  m_SizeDelta: {x: 1900.631, y: 971}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1290010053
 MonoBehaviour:
@@ -4703,3 +4705,4 @@ SceneRoots:
   - {fileID: 755016231}
   - {fileID: 559388932}
   - {fileID: 169267540}
+  - {fileID: 1290010052}

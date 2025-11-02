@@ -33,4 +33,9 @@ public class MainMenuController : MonoBehaviour
         GameSettings.TypeFilter = new[] { typeName };
         SceneManager.LoadScene("Quiz");
     }
+
+    public void Quit()
+    {
+        Application.Quit();
+    }
 }

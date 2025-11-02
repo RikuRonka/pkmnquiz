@@ -9,7 +9,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-public class QuizManager : MonoBehaviour
+public class QuizManager : MonoBehaviour, IQuizProgress
 {
     [Header("UI")]
     public TMP_InputField guessInput;
@@ -19,6 +19,10 @@ public class QuizManager : MonoBehaviour
 
     [Header("Grid")]
     public PokemonCard cardPrefab;
+
+    [Header("Loader")]
+    public LoadingManager loaderPrefab; // <- drag your LoadingOverlay prefab here
+    private LoadingManager _loader; // scene instance we create/use
 
     [Header("Config")]
     public int generation = 1;
@@ -44,10 +48,10 @@ public class QuizManager : MonoBehaviour
     public SectionHeader sectionHeaderPrefab;
     public SectionGroup sectionGroupPrefab;
     public Transform content;
+    private int _buildToken;
 
     [SerializeField]
     string selectedType;
-
     string TypeDisplay =>
         string.IsNullOrEmpty(selectedType)
             ? null
@@ -147,6 +151,28 @@ public class QuizManager : MonoBehaviour
 
     private static int BaseIdOf(Pokemon p) => p.baseId != 0 ? p.baseId : p.id;
 
+    void EnsureLoader()
+    {
+        if (_loader && _loader.gameObject.scene.IsValid())
+            return;
+
+        if (LoadingManager.Instance)
+        {
+            _loader = LoadingManager.Instance;
+            return;
+        }
+
+        if (loaderPrefab)
+        {
+            // NOTE: no parent
+            _loader = Instantiate(loaderPrefab);
+            _loader.gameObject.SetActive(true);
+            return;
+        }
+
+        Debug.LogWarning("No LoadingManager instance or prefab assigned; loader UI will not show.");
+    }
+
     private void EnsureUIContracts()
     {
         if (!content)
@@ -173,24 +199,55 @@ public class QuizManager : MonoBehaviour
     {
         if (GameSettings.Generation.HasValue)
             generation = GameSettings.Generation.Value;
+
         if (GameSettings.TypeFilter != null && GameSettings.TypeFilter.Length > 0)
         {
-            // Accept the first selected type (you can extend to multi-type later)
             selectedType = GameSettings.TypeFilter[0].Trim().ToLowerInvariant();
-            generation = 0; // type quizzes are always "full quiz" across Gen 1–9
+            generation = 0;
         }
         else
         {
-            selectedType = null; // no type filter
+            selectedType = null;
         }
-        BuildTargetList();
-        RebuildGrid();
+
+        EnsureLoader();
+
+        // Fallback: if no router-driven load is happening, build here with the overlay.
+        bool hasRouterParams =
+            LoadingManager.Instance
+            && (
+                LoadingManager.Instance.PendingGen != 0
+                || !string.IsNullOrEmpty(LoadingManager.Instance.PendingType)
+            );
+
+        if (!hasRouterParams)
+            StartCoroutine(LocalBuildWithOverlay()); // <— new helper below
+
         ResetTimerOnly();
         running = true;
-        if (guessInput)
-            guessInput.ActivateInputField();
+        guessInput?.ActivateInputField();
         if (giveUpBtn)
             giveUpBtn.interactable = true;
+    }
+
+    IEnumerator LocalBuildWithOverlay()
+    {
+        // Title
+        string title;
+        if (!string.IsNullOrEmpty(TypeDisplay))
+            title = $"Loading {TypeDisplay} type quiz…";
+        else if (generation == 0)
+            title = "Loading Full Quiz…";
+        else
+            title = $"Loading {Helpers.GetGenTitle(generation)}…";
+
+        _loader?.Show(title, immediate: true);
+
+        yield return StartCoroutine(
+            BuildWithExternalProgress(t => _loader?.SetProgress(t), 0f, 1f)
+        );
+
+        _loader?.Hide();
     }
 
     private void DefocusUI()
@@ -585,8 +642,20 @@ public class QuizManager : MonoBehaviour
         { 9, "Paldea (Gen 9)" },
     };
 
+    private void OnDisable()
+    {
+        StopAllCoroutines();
+    }
+
+    private void OnDestroy()
+    {
+        StopAllCoroutines();
+    }
+
     private void RebuildGrid()
     {
+        _buildToken++; // invalidate older coroutines
+        StopAllCoroutines(); // cancel any CoRecalc/scroll coroutines from the previous build
         if (!scrollRect || !scrollRect.viewport)
         {
             Debug.LogError("ScrollRect/Viewport missing");
@@ -1058,19 +1127,19 @@ public class QuizManager : MonoBehaviour
 
     public void StartTypeQuiz(string typeKey)
     {
-        selectedType = typeKey.ToLowerInvariant(); // e.g. "fire"
-        generation = 0; // FORCE full-quiz layout (Gen 1–9)
-        BuildTargetList();
-        RebuildGrid();
+        selectedType = typeKey.ToLowerInvariant();
+        generation = 0;
+
+        StopAllCoroutines();
     }
 
     public void StartGenQuiz(int gen)
     {
-        selectedType = null; // clear type filter
+        selectedType = null;
         GameSettings.TypeFilter = null;
         generation = gen;
-        BuildTargetList();
-        RebuildGrid();
+
+        StopAllCoroutines();
     }
 
     static void AddKey(Dictionary<string, int> map, string s, int baseId)
@@ -1152,15 +1221,17 @@ public class QuizManager : MonoBehaviour
 
     private void FitSection(SectionGroup grp)
     {
-        var grid = grp.gridRoot.GetComponent<GridLayoutGroup>();
+        var grid =
+            grp.gridRoot.GetComponent<GridLayoutGroup>()
+            ?? grp.gridRoot.gameObject.AddComponent<GridLayoutGroup>();
+        grid.spacing = new Vector2(16, 16);
+        grid.childAlignment = TextAnchor.UpperLeft;
+
         var fit =
             grp.gridRoot.GetComponent<GridAutoFit>()
             ?? grp.gridRoot.gameObject.AddComponent<GridAutoFit>();
 
-        grid.spacing = new Vector2(16, 16);
-        grid.childAlignment = TextAnchor.UpperLeft;
-
-        fit.Viewport = scrollRect.viewport;
+        fit.Viewport = scrollRect ? scrollRect.viewport : null;
         fit.Header = grp.headerRect;
         fit.ItemCount = grp.CardCount;
         fit.OuterMarginX = 16;
@@ -1169,14 +1240,181 @@ public class QuizManager : MonoBehaviour
         fit.MinCols = 6;
         fit.MaxCols = 30;
 
-        StartCoroutine(CoRecalc(fit));
+        StartCoroutine(CoRecalcSafe(fit, _buildToken));
     }
 
-    private static IEnumerator CoRecalc(GridAutoFit fit)
+    IEnumerator PrewarmSprites(float start, float end)
     {
+        var all = targetList;
+        int n = Mathf.Max(1, all.Count);
+        for (int i = 0; i < all.Count; i++)
+        {
+            // Touch cache if you have one
+            try
+            {
+                var _ = SpriteLibrary.Instance.ByPokemon(all[i]);
+            }
+            catch { }
+            if ((i & 31) == 0)
+            {
+                _loader?.SetProgress(Mathf.Lerp(start, end, (float)i / n));
+                yield return null;
+            }
+        }
+        _loader?.SetProgress(end);
+    }
+
+    IEnumerator RebuildGridAsync(float start = 0.10f, float end = 1.00f)
+    {
+        var ordered = targetList;
+        var allSections = new List<SectionGroup>();
+        Dictionary<int, SectionGroup> mainByGen = null;
+        SectionGroup mainSec = null,
+            megasSec = null,
+            gmaxSec = null,
+            hisuiSec = null,
+            expSec = null;
+
+        // helper to create + register a section
+        SectionGroup AddSection(string title)
+        {
+            var s = Instantiate(sectionGroupPrefab, content);
+            s.EnsureLayout();
+            s.SetTitle(title);
+            allSections.Add(s);
+            return s;
+        }
+
+        // plan sections (matches your previous RebuildGrid logic)
+        if (generation == 0)
+        {
+            mainByGen = new Dictionary<int, SectionGroup>();
+            foreach (var g in ordered.Select(p => p.generation).Distinct().OrderBy(x => x))
+            {
+                // per your latest request: per-gen titles should be plain "Kanto (Gen 1)" etc. (no type prefix)
+                var baseTitle = GenTitles.TryGetValue(g, out var t) ? t : $"Gen {g}";
+                mainByGen[g] = AddSection(baseTitle);
+
+                if (g == 6)
+                    megasSec = AddSection("Mega Evolutions (Gen 6)");
+                if (g == 8)
+                {
+                    gmaxSec = AddSection("Gigantamax (Gen 8)");
+                    hisuiSec = AddSection("Hisui (Gen 8)");
+                }
+                if (g == 9)
+                    expSec = AddSection("Paldea Expeditions");
+            }
+        }
+        else
+        {
+            // single-gen path: main section title already handled by SetMainTitle(main) in your non-async code,
+            // here just use the plain gen title as well (no type prefix on per-gen sections).
+            var baseTitle = Helpers.GetGenTitle(generation);
+            mainSec = AddSection(baseTitle);
+
+            if (generation == 6)
+                megasSec = AddSection("Mega Evolutions");
+            if (generation == 8)
+            {
+                gmaxSec = AddSection("Gigantamax (Gen 8)");
+                hisuiSec = AddSection("Hisui (Gen 8)");
+            }
+            if (generation == 9)
+                expSec = AddSection("Paldea Expeditions");
+        }
+
+        // --- build main cards in chunks with progress ---
+        int total = Mathf.Max(1, ordered.Count);
+        int built = 0;
+
+        foreach (var p in ordered)
+        {
+            // choose the section root for this pokemon
+            SectionGroup secForP = (generation == 0) ? mainByGen[p.generation] : mainSec;
+
+            var card = Instantiate(cardPrefab, secForP.gridRoot);
+            card.Bind(p);
+            cardById[p.id] = card;
+            pokemonById[p.id] = p;
+
+            built++;
+            if ((built & 31) == 0) // yield every ~32 items
+            {
+                float k = Mathf.Lerp(start, end, (float)built / total);
+                _loader?.SetProgress(k);
+                yield return null; // let overlay refresh
+            }
+        }
+
+        // --- build extras (megas/gmax/hisui/expeditions) the same way you already do, but chunk + add progress ---
+        // (example for megas; repeat pattern for others as you already compute their pools)
+        if (megasSec && megaFormsByBase.Count > 0)
+        {
+            var rng = new System.Random();
+            var entries = megaFormsByBase.ToList();
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var kv = entries[i];
+                var pick = kv.Value[rng.Next(kv.Value.Count)];
+                var c = Instantiate(cardPrefab, megasSec.gridRoot);
+                c.Bind(pick);
+                megaSlotPickByBase[kv.Key] = pick;
+                megaCardByBase[kv.Key] = c;
+                cardById[pick.id] = c;
+                pokemonById[pick.id] = pick;
+
+                if ((i & 31) == 0)
+                {
+                    // nudge progress within the same [start..end] band or use your own sub-range
+                    float k = Mathf.Lerp(start, end, (float)(built + i) / (total + entries.Count));
+                    _loader?.SetProgress(k);
+                    yield return null;
+                }
+            }
+        }
+
+        // ... do the same for gmaxSec / hisuiSec / expSec using your existing pools ...
+
+        // --- finalize sections (counts + layout), skip empty extras so titles hide ---
+        foreach (var sec in allSections)
+        {
+            // hide section if empty (e.g., no Hisui of this type)
+            if (sec.gridRoot.childCount == 0)
+            {
+                sec.gameObject.SetActive(false);
+                continue;
+            }
+
+            sec.SetCardCount(sec.gridRoot.childCount);
+            FitSection(sec);
+            yield return null; // let layout breathe & loader update
+        }
+        UpdateScore();
+    }
+
+    private IEnumerator CoRecalcSafe(GridAutoFit fit, int token)
+    {
+        if (!fit)
+            yield break;
+
+        // let layout settle
         yield return null;
+        if (token != _buildToken || !fit || !fit.gameObject)
+            yield break;
+
         Canvas.ForceUpdateCanvases();
-        fit.Recalculate();
+
+        // one more frame for safety (optional)
+        yield return null;
+        if (token != _buildToken || !fit || !fit.isActiveAndEnabled)
+            yield break;
+
+        // final null checks on dependencies the script might use
+        if (!fit.gameObject.activeInHierarchy)
+            yield break;
+
+        fit.Recalculate(); // safe now
     }
 
     private void RevealTypeHintForOne()
@@ -1818,5 +2056,29 @@ public class QuizManager : MonoBehaviour
         if (guessInput)
             guessInput.interactable = false;
         toast?.Show($"Finished in {TimeSpan.FromSeconds(elapsed):hh\\:mm\\:ss}", 2.5f);
+    }
+
+    public IEnumerator BuildWithExternalProgress(Action<float> report, float from, float to)
+    {
+        float span = Mathf.Max(0.0001f, to - from);
+        float Map(float k) => from + k * span;
+
+        // 1) Data
+        BuildTargetList();
+        report(Map(0.10f));
+        yield return null;
+
+        // 2) Prewarm sprites with progress (0.10..0.35)
+        yield return StartCoroutine(PrewarmSprites(0.10f, 0.35f));
+        report(Map(0.35f));
+
+        // 3) Build UI in chunks with progress (0.35..0.98)
+        yield return StartCoroutine(RebuildGridAsync(0.35f, 0.98f));
+        report(Map(0.98f));
+
+        // 4) Final touches
+        UpdateScore();
+        report(Map(1.00f));
+        yield return null;
     }
 }
