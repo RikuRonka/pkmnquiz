@@ -18,10 +18,6 @@ public class TooltipManager : MonoBehaviour
     PokemonTooltip _tip;
     RectTransform _tipRT;
 
-    [Header("Debug")]
-    public bool debugPositions = true;
-    public Color probeColor = new Color(1, 0.2f, 0.2f, 0.9f); // red-ish
-
     void Awake()
     {
         if (Instance && Instance != this)

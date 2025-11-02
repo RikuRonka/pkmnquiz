@@ -1592,9 +1592,6 @@ public class QuizManager : MonoBehaviour
 
         if (solved.Contains(target.id))
         {
-            if (!commit && HasInQuizContinuation(originalText))
-                return;
-
             var keyNorm = GuessNormalizer.Key(originalText);
             var baseKey = StripDigits(keyNorm);
             if (!string.IsNullOrEmpty(baseKey) && baseKey != keyNorm)
@@ -1648,6 +1645,8 @@ public class QuizManager : MonoBehaviour
             {
                 already.FlashHighlight();
             }
+            if (!commit && HasInQuizContinuation(originalText))
+                return;
             guessInput?.SetTextWithoutNotify(string.Empty);
             guessInput?.ActivateInputField();
             guessInput?.Select();
