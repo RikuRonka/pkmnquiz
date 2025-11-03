@@ -73,19 +73,7 @@ Sprites are texture-compressed at build time using `TextureImporter` automation 
 
 ---
 
-## 🗂️ Project Structure
-Assets/
-├─ Scripts/
-│ ├─ Quiz/
-│ ├─ UI/
-│ ├─ Tooltips/
-│ └─ Data/
-├─ Resources/
-│ ├─ Sprites/
-│ └─ TypeIcons/
-└─ Scenes/
-├─ MainMenu.unity
-└─ Quiz.unity
+<img width="255" height="409" alt="image" src="https://github.com/user-attachments/assets/61d6c4ac-9ba5-4c29-9a60-bdf425fe887a" />
 
 ---
 
