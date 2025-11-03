@@ -145,8 +145,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     int TotalGoal()
     {
-        // After grid is built, cardById.Count is authoritative.
-        // Before build, fall back to targetList.
         return (cardById != null && cardById.Count > 0) ? cardById.Count : targetList.Count;
     }
 
@@ -157,7 +155,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!guessInput)
             yield break;
 
-        // make sure the grid exists
         if (cardById == null || cardById.Count == 0)
         {
             BuildTargetList();
@@ -176,7 +173,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         guessInput.ActivateInputField();
         guessInput.Select();
 
-        // ✅ use what’s actually rendered (includes Megas/Hisui/G-Max/Expeditions)
         var testList = pokemonById
             .Values.Distinct()
             .OrderBy(p => DexOrder.GetIndex(p)) // nice, stable order
@@ -191,12 +187,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (solved.Contains(p.id))
                 continue;
 
-            // Type the card's display name (reveals forms like Mega Gyarados directly)
             yield return StartCoroutine(TypeAndCommit(p.name));
             typed++;
 
-            // Optional: also try the base name for forms to exercise your mapping
-            // so e.g. typing "Gyarados" reveals the picked Mega in type quizzes.
             if (p.baseId != 0 && p.baseId != p.id)
             {
                 var baseMon = PokemonDatabase.Instance.All().FirstOrDefault(x => x.id == p.baseId);
@@ -229,15 +222,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     IEnumerator TypeAndCommit(string s)
     {
-        // Your OnGuessChanged treats trailing whitespace as "commit"
-        // Use .text (not SetTextWithoutNotify) so the onValueChanged listener fires.
         var commit = s + " ";
         guessInput.text = commit;
 
-        // Let OnGuessChanged run this frame
         yield return null;
 
-        // tiny delay for stability if you run super fast
         if (testDelay > 0f)
             yield return new WaitForSecondsRealtime(testDelay);
         else
@@ -248,13 +237,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         if (!string.IsNullOrEmpty(TypeDisplay))
         {
-            // one leading icon based on selectedType
             var icon = TypeIconLibrary.Instance.Get(selectedType); // e.g., "bug" -> bug.png
             sec.SetTitle($"All {TypeDisplay} types", isMain: true, icon: icon);
             return;
         }
 
-        // Non-type quizzes: no icon
         if (generation == 0)
             sec.SetTitle("Full Quiz (Gen 1–9)", isMain: true, icon: null);
         else
@@ -284,7 +271,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (loaderPrefab)
         {
-            // NOTE: no parent
             _loader = Instantiate(loaderPrefab);
             _loader.gameObject.SetActive(true);
             return;
@@ -332,7 +318,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         EnsureLoader();
 
-        // Fallback: if no router-driven load is happening, build here with the overlay.
         bool hasRouterParams =
             LoadingManager.Instance
             && (
@@ -352,7 +337,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     IEnumerator LocalBuildWithOverlay()
     {
-        // Title
         string title;
         if (!string.IsNullOrEmpty(TypeDisplay))
             title = $"Loading {TypeDisplay} type quiz…";
@@ -597,7 +581,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         static void LeaveNow()
         {
-            // Make sure the loader isn't left in "loading" state
             LoadingManager.Instance?.CancelLoad(); // hides overlay + clears flags
             SceneManager.LoadScene("MainMenu");
         }
@@ -1148,7 +1131,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
         if (generation == 8 && gmaxSec)
         {
-            // ensure order matches DexOrder like elsewhere
             foreach (var p in gmaxPoolGen.OrderBy(p => DexOrder.GetIndex(p)))
             {
                 var c = Instantiate(cardPrefab, gmaxSec.gridRoot);
@@ -1156,12 +1138,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 cardById[p.id] = c;
                 pokemonById[p.id] = p;
 
-                // wire base->pick & card maps (used by guess handling)
                 int baseId = p.baseId != 0 ? p.baseId : p.id;
                 gmaxPickByBase[baseId] = p;
                 gmaxCardByBase[baseId] = c;
 
-                // build lookup keys for TryAcceptGmaxByBaseName(...)
                 var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
                 var baseName = baseMon?.name ?? BaseNameFrom(p.name);
 
@@ -1190,7 +1170,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
         if (generation == 9 && paldeaExpeditions)
         {
-            // keep same ordering tweak you used in the full-quiz path
             var expOrdered = expeditionPool.OrderBy(p => DexOrder.GetIndex(p)).ToList();
             int iBlood = expOrdered.FindIndex(x => x.id == 1015);
             int iSini = expOrdered.FindIndex(x => x.id == 1014);
@@ -1209,12 +1188,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 cardById[p.id] = c;
                 pokemonById[p.id] = p;
 
-                // map base -> expedition pick & card
                 int baseKey = p.baseId != 0 ? p.baseId : p.id;
                 expeditionPickByBase[baseKey] = p;
                 expeditionCardByBase[baseKey] = c;
 
-                // keys for TryAcceptExpeditionByBaseName(...)
                 void AddKey(string s)
                 {
                     var k = GuessNormalizer.Key(s);
@@ -1227,12 +1204,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     foreach (var a in p.aliases)
                         AddKey(a);
 
-                // strip "(...)" from names like “X (something)”
                 var idx = p.name.IndexOf('(');
                 if (idx > 0)
                     AddKey(p.name[..idx].Trim());
 
-                // also index the base mon’s names/aliases
                 var baseMon = allDb.FirstOrDefault(x => x.id == baseKey);
                 if (baseMon != null)
                 {
@@ -1275,7 +1250,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             && hisuiSec == null
             && paldeaExpeditions == null;
 
-        // after you instantiate `main` and set its title:
         main.SetHeaderGap(noSubSections);
     }
 
@@ -1422,19 +1396,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!fit)
             yield break;
 
-        // let layout settle
         yield return null;
         if (token != _buildToken || !fit || !fit.gameObject)
             yield break;
 
         Canvas.ForceUpdateCanvases();
 
-        // one more frame for safety (optional)
         yield return null;
         if (token != _buildToken || !fit || !fit.isActiveAndEnabled)
             yield break;
 
-        // final null checks on dependencies the script might use
         if (!fit.gameObject.activeInHierarchy)
             yield break;
 
@@ -1499,7 +1470,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             all = genSet.Concat(extras).Distinct();
         }
 
-        // Use the active in-memory filter (selectedType) for type quizzes
         if (HasTypeFilter)
         {
             string key = selectedType.ToLowerInvariant();

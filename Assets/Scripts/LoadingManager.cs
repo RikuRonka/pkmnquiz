@@ -34,7 +34,6 @@ public class LoadingManager : MonoBehaviour
         }
         Instance = this;
 
-        // Make sure this GO is root before DontDestroyOnLoad
         if (transform.parent != null)
             transform.SetParent(null, false);
 
@@ -53,7 +52,6 @@ public class LoadingManager : MonoBehaviour
         if (!cg)
             return;
 
-        // stop only the fade, not all coroutines
         if (_fadeCo != null)
         {
             StopCoroutine(_fadeCo);
@@ -134,7 +132,6 @@ public class LoadingManager : MonoBehaviour
         _fadeCo = null; // finished
     }
 
-    // Call this from menu buttons
     public void LoadQuiz(int gen, string typeKey)
     {
         if (_loadCo != null) // <-- the guard
@@ -220,7 +217,6 @@ public class LoadingManager : MonoBehaviour
         }
         finally
         {
-            // ALWAYS clear state so the next click works
             _loadCo = null;
             PendingGen = 0;
             PendingType = null;
@@ -234,7 +230,6 @@ public class LoadingManager : MonoBehaviour
 
     void OnSceneLoaded(Scene s, LoadSceneMode m)
     {
-        // Make sure loader is clean whenever a scene finishes loading
         _loadCo = null;
         SetProgress(0f);
         SetVisible(false, immediate: true);
@@ -243,9 +238,7 @@ public class LoadingManager : MonoBehaviour
     }
 }
 
-// simple interface the quiz scene can optionally implement
 public interface IQuizProgress
 {
-    // report maps progress into [from..to] segment (e.g., 0.7..1.0)
     IEnumerator BuildWithExternalProgress(Action<float> report, float from, float to);
 }

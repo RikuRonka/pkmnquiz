@@ -15,7 +15,7 @@ public sealed class TypeIconLibrary
         if (string.IsNullOrWhiteSpace(s))
             return string.Empty;
         s = s.Trim().ToLowerInvariant();
-        // tolerate names like "ice-cream" or "ice cream" -> "icecream"
+
         s = s.Replace("-", "").Replace(" ", "");
         return s;
     }

@@ -88,13 +88,11 @@ public class TooltipManager : MonoBehaviour
         if (!uiCanvas || !tooltipLayer || !_tipRT)
             return;
 
-        // camera to use for ScreenPoint conversions
         Camera cam =
             uiCanvas.renderMode == RenderMode.ScreenSpaceOverlay
                 ? null
                 : (eventCam ? eventCam : uiCanvas.worldCamera);
 
-        // 1) Start near the cursor (top-left pivot)
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             tooltipLayer,
             screenPos,
@@ -107,7 +105,6 @@ public class TooltipManager : MonoBehaviour
         _tipRT.anchoredPosition = pos; // set first
         LayoutRebuilder.ForceRebuildLayoutImmediate(_tipRT); // ensure size/layout is up-to-date
 
-        // 2) Clamp by comparing WORLD corners of tooltip vs canvas
         const float EDGE = 8f;
 
         var parentRT = tooltipLayer;
@@ -116,26 +113,21 @@ public class TooltipManager : MonoBehaviour
         _tipRT.GetWorldCorners(tip);
         parentRT.GetWorldCorners(par);
 
-        // Compute how far the tooltip is beyond each edge (in world space)
         float dxLeft = Mathf.Max(0f, par[0].x + EDGE - tip[0].x); // need to move right
         float dxRight = Mathf.Min(0f, par[2].x - EDGE - tip[2].x); // need to move left (negative)
         float dyBottom = Mathf.Max(0f, par[0].y + EDGE - tip[0].y); // need to move up
         float dyTop = Mathf.Min(0f, par[2].y - EDGE - tip[2].y); // need to move down (negative)
 
-        // Total world-space nudge to keep fully inside
         const float EPS = 1e-4f;
 
-        // X: dxLeft is ≥0, dxRight is ≤0. We want whichever is non-zero.
         float shiftX = (dxLeft > EPS) ? dxLeft : (dxRight < -EPS ? dxRight : 0f);
 
-        // Y: dyBottom is ≥0, dyTop is ≤0. Same idea.
         float shiftY = (dyBottom > EPS) ? dyBottom : (dyTop < -EPS ? dyTop : 0f);
 
         Vector3 worldDelta = new Vector3(shiftX, shiftY, 0f);
 
         if (worldDelta.sqrMagnitude > 0f)
         {
-            // Convert the world-space delta into the tooltipLayer's local space
             Vector2 localDelta = (Vector2)tooltipLayer.InverseTransformVector(worldDelta);
             _tipRT.anchoredPosition += localDelta;
         }

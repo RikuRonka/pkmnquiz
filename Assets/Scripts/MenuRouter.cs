@@ -21,7 +21,6 @@ public class MenuRouter : MonoBehaviour
         if (LoadingManager.Instance)
             return;
 
-        // Instantiate as a ROOT object (no parent) so DontDestroyOnLoad works
         var lm = Instantiate(loadingPrefab);
         lm.name = "LoadingOverlay (Singleton)";
         lm.transform.SetParent(null, false);

@@ -46,15 +46,14 @@ public class PokemonCardHover
         if (!_hovering || !CanShow)
             return;
 
-        // Get current mouse position each frame
         Vector2 pos;
 
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
-        // new Input System
+
         var mouse = UnityEngine.InputSystem.Mouse.current;
         pos = mouse != null ? mouse.position.ReadValue() : (Vector2)Input.mousePosition;
 #else
-        // old Input Manager
+
         pos = Input.mousePosition;
 #endif
         TooltipManager.Instance?.Move(pos, null); // Overlay canvas => cam is null
