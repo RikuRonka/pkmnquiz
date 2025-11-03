@@ -20,12 +20,12 @@ Test your knowledge across:
 ## 🖼️ Screenshots
 *(Add actual images later)*
 
-| Main Menu | In-Game Quiz | Tooltip Example |
-|-----------|--------------|-----------------|
-| ![menu](<img width="3331" height="1865" alt="image" src="https://github.com/user-attachments/assets/5da3a81a-b868-45b6-9fcb-98c634cb7b06" />
-) | ![quiz](<img width="3331" height="1853" alt="image" src="https://github.com/user-attachments/assets/75af0c1c-6d45-4637-ac5d-99ce3721e113" />
-) | ![tooltip](<img width="3333" height="1626" alt="image" src="https://github.com/user-attachments/assets/faba6a2a-4f1c-4346-91f4-78bbb3b1ecb7" />
-) |
+
+
+![menu](<img width="3331" height="1865" alt="image" src="https://github.com/user-attachments/assets/5da3a81a-b868-45b6-9fcb-98c634cb7b06" />
+![quiz](<img width="3331" height="1853" alt="image" src="https://github.com/user-attachments/assets/75af0c1c-6d45-4637-ac5d-99ce3721e113" />
+![tooltip](<img width="3333" height="1626" alt="image" src="https://github.com/user-attachments/assets/faba6a2a-4f1c-4346-91f4-78bbb3b1ecb7" />
+
 
 ---
 
