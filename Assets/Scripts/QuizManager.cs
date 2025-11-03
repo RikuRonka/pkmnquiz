@@ -50,6 +50,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     public Transform content;
     private int _buildToken;
 
+    [Header("Dev/Test")]
+    public Button testBtn; // assign in Inspector (can hide it in builds)
+    public bool testIncludeAliases; // optional: also try aliases
+    public float testDelay = 0.02f; // seconds between entries
+
     [SerializeField]
     string selectedType;
     string TypeDisplay =>
@@ -75,6 +80,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<int, Pokemon> hisuiPickByBase = new();
     private readonly Dictionary<int, PokemonCard> hisuiCardByBase = new();
     private readonly Dictionary<string, int> hisuiByBaseName = new();
+    private bool _testRunning;
+    private bool _testCancel;
 
     private void Awake()
     {
@@ -122,7 +129,119 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             giveUpBtn.onClick.RemoveAllListeners();
             giveUpBtn.onClick.AddListener(OnGiveUpClicked);
         }
+        if (testBtn)
+        {
+            testBtn.onClick.RemoveAllListeners();
+            testBtn.onClick.AddListener(() =>
+            {
+                if (!_testRunning)
+                    StartCoroutine(CoAutoTypeAll());
+                else
+                    _testCancel = true; // pressing again cancels
+            });
+        }
         EnsureUIContracts();
+    }
+
+    int TotalGoal()
+    {
+        // After grid is built, cardById.Count is authoritative.
+        // Before build, fall back to targetList.
+        return (cardById != null && cardById.Count > 0) ? cardById.Count : targetList.Count;
+    }
+
+    bool IsComplete() => solved.Count >= TotalGoal();
+
+    IEnumerator CoAutoTypeAll()
+    {
+        if (!guessInput)
+            yield break;
+
+        // make sure the grid exists
+        if (cardById == null || cardById.Count == 0)
+        {
+            BuildTargetList();
+            RebuildGrid();
+            yield return null;
+        }
+
+        _testRunning = true;
+        _testCancel = false;
+        running = true;
+        if (giveUpBtn)
+            giveUpBtn.interactable = true;
+        guessInput.interactable = true;
+
+        guessInput.text = string.Empty;
+        guessInput.ActivateInputField();
+        guessInput.Select();
+
+        // ✅ use what’s actually rendered (includes Megas/Hisui/G-Max/Expeditions)
+        var testList = pokemonById
+            .Values.Distinct()
+            .OrderBy(p => DexOrder.GetIndex(p)) // nice, stable order
+            .ToList();
+
+        int typed = 0;
+
+        foreach (var p in testList)
+        {
+            if (_testCancel)
+                break;
+            if (solved.Contains(p.id))
+                continue;
+
+            // Type the card's display name (reveals forms like Mega Gyarados directly)
+            yield return StartCoroutine(TypeAndCommit(p.name));
+            typed++;
+
+            // Optional: also try the base name for forms to exercise your mapping
+            // so e.g. typing "Gyarados" reveals the picked Mega in type quizzes.
+            if (p.baseId != 0 && p.baseId != p.id)
+            {
+                var baseMon = PokemonDatabase.Instance.All().FirstOrDefault(x => x.id == p.baseId);
+                if (baseMon != null)
+                    yield return StartCoroutine(TypeAndCommit(baseMon.name));
+            }
+
+            if (testIncludeAliases && p.aliases != null)
+            {
+                foreach (var a in p.aliases)
+                {
+                    if (_testCancel)
+                        break;
+                    yield return StartCoroutine(TypeAndCommit(a));
+                    typed++;
+                }
+            }
+
+            if (testDelay > 0f)
+                yield return new WaitForSecondsRealtime(testDelay);
+            if ((typed & 31) == 0)
+                yield return null;
+        }
+
+        guessInput.ActivateInputField();
+        guessInput.Select();
+        _testRunning = false;
+        _testCancel = false;
+    }
+
+    IEnumerator TypeAndCommit(string s)
+    {
+        // Your OnGuessChanged treats trailing whitespace as "commit"
+        // Use .text (not SetTextWithoutNotify) so the onValueChanged listener fires.
+        var commit = s + " ";
+        guessInput.text = commit;
+
+        // Let OnGuessChanged run this frame
+        yield return null;
+
+        // tiny delay for stability if you run super fast
+        if (testDelay > 0f)
+            yield return new WaitForSecondsRealtime(testDelay);
+        else
+            yield return null;
     }
 
     void SetMainTitle(SectionGroup sec)
@@ -397,7 +516,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         guessInput?.ActivateInputField();
         guessInput?.Select();
 
-        if (solved.Count >= targetList.Count)
+        if (IsComplete())
         {
             running = false;
             if (guessInput)
@@ -1719,7 +1838,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                         guessInput?.SetTextWithoutNotify(string.Empty);
                         guessInput?.ActivateInputField();
                         guessInput?.Select();
-                        if (solved.Count >= targetList.Count)
+                        if (IsComplete())
                         {
                             running = false;
                             if (guessInput)
@@ -1770,6 +1889,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (cardById.TryGetValue(target.id, out var card))
         {
             card.Reveal();
+            ScrollToCard_FullQuiz(target);
         }
 
         if (generation == 0)
@@ -1789,7 +1909,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         guessInput?.ActivateInputField();
         guessInput?.Select();
 
-        if (solved.Count >= targetList.Count)
+        if (IsComplete())
         {
             running = false;
             if (guessInput)
@@ -1812,10 +1932,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         StartCoroutine(CoScrollToCard_FullQuiz(rt, duration));
     }
 
-    private System.Collections.IEnumerator CoScrollToCard_FullQuiz(
-        RectTransform target,
-        float duration
-    )
+    private IEnumerator CoScrollToCard_FullQuiz(RectTransform target, float duration)
     {
         yield return null;
         Canvas.ForceUpdateCanvases();
