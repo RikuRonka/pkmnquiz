@@ -46,6 +46,25 @@ public static class Helpers
         return PaldeaExpeditionNames.Contains(k);
     }
 
+    public static bool IsPaldeaExpeditionOrBloodmoon(Pokemon p)
+    {
+        if (p == null)
+            return false;
+        if (Helpers.IsPaldeaExpedition(p))
+            return true;
+
+        // Make this match your data model:
+        // formKey, tags, or explicit ID(s) if needed.
+        // Example using formKey:
+        return string.Equals(p.formKey, "bloodmoon", System.StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                p.formKey,
+                "bloodmoonursaluna",
+                System.StringComparison.OrdinalIgnoreCase
+            );
+        // If you don't have formKey, you can check name contains "(Bloodmoon)" as a fallback.
+    }
+
     private static readonly HashSet<int> PaldeaExpeditionBaseIds = new()
     {
         1009,

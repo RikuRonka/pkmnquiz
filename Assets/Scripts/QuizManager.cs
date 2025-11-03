@@ -684,7 +684,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                         AddBaseKey(a);
             }
         }
-        var g9ExpPoolF = allDb.Where(Helpers.IsPaldeaExpedition).Where(MatchesType).ToList();
+        var g9ExpPoolF = allDb
+            .Where(Helpers.IsPaldeaExpeditionOrBloodmoon)
+            .Where(MatchesType)
+            .ToList();
         var gmaxPoolF = allDb
             .Where(Helpers.IsGmax)
             .Where(MatchesType)
@@ -963,7 +966,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 hisuiPoolGen.Add(p);
                 continue;
             }
-            if (generation == 9 && Helpers.IsPaldeaExpedition(p))
+            if (generation == 9 && Helpers.IsPaldeaExpeditionOrBloodmoon(p))
             {
                 expeditionPool.Add(p);
                 continue;
