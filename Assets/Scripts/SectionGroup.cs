@@ -112,7 +112,7 @@ public class SectionGroup : MonoBehaviour
             titleText.enableAutoSizing = false;
             if (isMain)
             {
-                titleText.fontSize = 60;
+                titleText.fontSize = 55;
             }
 
             titleText.text = text;
