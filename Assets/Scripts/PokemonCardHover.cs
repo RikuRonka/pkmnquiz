@@ -8,6 +8,7 @@ public class PokemonCardHover
         IPointerMoveHandler
 {
     PokemonCard card;
+    bool _hovering;
 
     void Awake() => card = GetComponent<PokemonCard>();
 
@@ -23,6 +24,7 @@ public class PokemonCardHover
         string t2 = p.types != null && p.types.Length > 1 ? p.types[1] : null;
         var cam = e.pressEventCamera ?? e.enterEventCamera ?? Camera.main;
         TooltipManager.Instance?.Show(p.name, t1, t2, e.position, cam);
+        _hovering = true;
     }
 
     public void OnPointerMove(PointerEventData e)
@@ -35,6 +37,26 @@ public class PokemonCardHover
 
     public void OnPointerExit(PointerEventData e)
     {
+        _hovering = false;
         TooltipManager.Instance?.Hide();
+    }
+
+    void Update()
+    {
+        if (!_hovering || !CanShow)
+            return;
+
+        // Get current mouse position each frame
+        Vector2 pos;
+
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+        // new Input System
+        var mouse = UnityEngine.InputSystem.Mouse.current;
+        pos = mouse != null ? mouse.position.ReadValue() : (Vector2)Input.mousePosition;
+#else
+        // old Input Manager
+        pos = Input.mousePosition;
+#endif
+        TooltipManager.Instance?.Move(pos, null); // Overlay canvas => cam is null
     }
 }

@@ -36,7 +36,7 @@ public class TooltipManager : MonoBehaviour
         _tip.SetVisible(false, immediate: true);
 
         _tipRT = (RectTransform)_tip.transform;
-        _tipRT.anchorMin = _tipRT.anchorMax = new Vector2(0.4f, 0.75f);
+        _tipRT.anchorMin = _tipRT.anchorMax = new Vector2(0.42f, 0.67f);
         _tipRT.pivot = new Vector2(0f, 1f);
     }
 
@@ -88,46 +88,58 @@ public class TooltipManager : MonoBehaviour
         if (!uiCanvas || !tooltipLayer || !_tipRT)
             return;
 
-        // choose camera
+        // camera to use for ScreenPoint conversions
         Camera cam =
-            (uiCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            uiCanvas.renderMode == RenderMode.ScreenSpaceOverlay
                 ? null
                 : (eventCam ? eventCam : uiCanvas.worldCamera);
 
-        // screen -> parent-local
-        RectTransform parentRT = tooltipLayer;
+        // 1) Start near the cursor (top-left pivot)
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            parentRT,
+            tooltipLayer,
             screenPos,
             cam,
             out var local
         );
-
-        Vector2 size = _tip.PreferredSize; // tooltip size
-        Rect bounds = parentRT.rect; // parent rect
         Vector2 margin = new(Mathf.Abs(screenOffset.x), Mathf.Abs(screenOffset.y));
-
-        // Start above-right of the cursor (pivot is top-left)
         Vector2 pos = local + new Vector2(margin.x, -margin.y);
 
-        // ---- horizontal flip (if would overflow right, place to the left of cursor)
-        if (pos.x + size.x > bounds.xMax)
-            pos.x = local.x - size.x - margin.x;
+        _tipRT.anchoredPosition = pos; // set first
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_tipRT); // ensure size/layout is up-to-date
 
-        // keep inside left/right after deciding side
-        pos.x = Mathf.Clamp(pos.x, bounds.xMin, bounds.xMax - size.x);
+        // 2) Clamp by comparing WORLD corners of tooltip vs canvas
+        const float EDGE = 8f;
 
-        // ---- vertical flip
-        // prefer above; if bottom would go below, place below the cursor
-        if (pos.y - size.y < bounds.yMin)
-            pos.y = local.y + size.y + margin.y;
+        var parentRT = tooltipLayer;
+        Vector3[] tip = new Vector3[4];
+        Vector3[] par = new Vector3[4];
+        _tipRT.GetWorldCorners(tip);
+        parentRT.GetWorldCorners(par);
 
-        // keep inside top/bottom after deciding side
-        pos.y = Mathf.Clamp(pos.y, bounds.yMin + size.y, bounds.yMax);
+        // Compute how far the tooltip is beyond each edge (in world space)
+        float dxLeft = Mathf.Max(0f, par[0].x + EDGE - tip[0].x); // need to move right
+        float dxRight = Mathf.Min(0f, par[2].x - EDGE - tip[2].x); // need to move left (negative)
+        float dyBottom = Mathf.Max(0f, par[0].y + EDGE - tip[0].y); // need to move up
+        float dyTop = Mathf.Min(0f, par[2].y - EDGE - tip[2].y); // need to move down (negative)
 
-        _tipRT.anchoredPosition = pos;
-        const float EDGE_PAD = 8f;
-        pos.x = Mathf.Clamp(pos.x, bounds.xMin + EDGE_PAD, bounds.xMax - size.x - EDGE_PAD);
-        pos.y = Mathf.Clamp(pos.y, bounds.yMin + size.y + EDGE_PAD, bounds.yMax - EDGE_PAD);
+        // Total world-space nudge to keep fully inside
+        const float EPS = 1e-4f;
+
+        // X: dxLeft is ≥0, dxRight is ≤0. We want whichever is non-zero.
+        float shiftX = (dxLeft > EPS) ? dxLeft : (dxRight < -EPS ? dxRight : 0f);
+
+        // Y: dyBottom is ≥0, dyTop is ≤0. Same idea.
+        float shiftY = (dyBottom > EPS) ? dyBottom : (dyTop < -EPS ? dyTop : 0f);
+
+        Vector3 worldDelta = new Vector3(shiftX, shiftY, 0f);
+
+        if (worldDelta.sqrMagnitude > 0f)
+        {
+            // Convert the world-space delta into the tooltipLayer's local space
+            Vector2 localDelta = (Vector2)tooltipLayer.InverseTransformVector(worldDelta);
+            _tipRT.anchoredPosition += localDelta;
+        }
+
+        _tipRT.SetAsLastSibling(); // make sure it renders on top
     }
 }

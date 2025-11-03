@@ -1,8 +1,8 @@
 ﻿using System.Collections;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(Graphic))]
 public partial class PokemonCard : MonoBehaviour
 {
     [Header("Refs")]
@@ -104,6 +104,17 @@ public partial class PokemonCard : MonoBehaviour
         else
         {
             anyGraphic.raycastTarget = true;
+        }
+
+        var rootGraphic = GetComponent<Graphic>();
+        if (rootGraphic)
+            rootGraphic.raycastTarget = true;
+
+        foreach (var g in GetComponentsInChildren<Graphic>(true))
+        {
+            if (g.gameObject == gameObject)
+                continue; // keep root ON
+            g.raycastTarget = false;
         }
         ResizeArtToCell();
     }

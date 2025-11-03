@@ -29,7 +29,7 @@ RectTransform:
   m_GameObject: {fileID: 691340800376451043}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.42841, y: 0.42841, z: 0.42841}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3998107404798708062}
@@ -191,6 +191,9 @@ GameObject:
   m_Component:
   - component: {fileID: 5333079193829697259}
   - component: {fileID: 4902834451421771105}
+  - component: {fileID: 4171893185443187809}
+  - component: {fileID: 7883810196330156652}
+  - component: {fileID: 8765958572996652437}
   m_Layer: 5
   m_Name: PokemonTooltip
   m_TagString: Untagged
@@ -234,6 +237,56 @@ MonoBehaviour:
   type1Image: {fileID: 8863840350558703337}
   type2Image: {fileID: 9148875107792558331}
   cg: {fileID: 7424324138560122049}
+--- !u!222 &4171893185443187809
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3184004787888005155}
+  m_CullTransparentMesh: 1
+--- !u!114 &7883810196330156652
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3184004787888005155}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 0}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!225 &8765958572996652437
+CanvasGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3184004787888005155}
+  m_Enabled: 1
+  m_Alpha: 1
+  m_Interactable: 1
+  m_BlocksRaycasts: 1
+  m_IgnoreParentGroups: 0
 --- !u!1 &4348881966933697031
 GameObject:
   m_ObjectHideFlags: 0

@@ -2,6 +2,8 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(Image))]
+[RequireComponent(typeof(CanvasGroup))]
 public class PokemonTooltip : MonoBehaviour
 {
     [Header("Wiring")]
