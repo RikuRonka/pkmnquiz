@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 
 public sealed class TypeIconLibrary
@@ -8,7 +7,18 @@ public sealed class TypeIconLibrary
     public static TypeIconLibrary Instance => _i ??= new TypeIconLibrary();
 
     private readonly Dictionary<string, Sprite> map = new();
+    private readonly HashSet<string> warned = new();
     private bool loaded;
+
+    static string Normalize(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s))
+            return string.Empty;
+        s = s.Trim().ToLowerInvariant();
+        // tolerate names like "ice-cream" or "ice cream" -> "icecream"
+        s = s.Replace("-", "").Replace(" ", "");
+        return s;
+    }
 
     public void Preload()
     {
@@ -16,17 +26,15 @@ public sealed class TypeIconLibrary
             return;
 
         var sprites = Resources.LoadAll<Sprite>("TypeIcons");
-        var sb = new StringBuilder();
         int n = sprites?.Length ?? 0;
         for (int i = 0; i < n; i++)
         {
             var s = sprites[i];
-            if (s == null)
+            if (!s)
                 continue;
-            var key = s.name.Trim().ToLowerInvariant();
+            var key = Normalize(s.name);
             if (!map.ContainsKey(key))
                 map[key] = s;
-            sb.Append(key).Append(i == n - 1 ? "" : ", ");
         }
 
         loaded = true;
@@ -36,17 +44,37 @@ public sealed class TypeIconLibrary
     {
         if (!loaded)
             Preload();
-        if (string.IsNullOrWhiteSpace(typeName))
+        var k = Normalize(typeName);
+        if (string.IsNullOrEmpty(k))
             return null;
 
-        var k = typeName.Trim().ToLowerInvariant();
-        map.TryGetValue(k, out var s);
-        if (!s)
+        if (map.TryGetValue(k, out var s) && s)
+            return s;
+
+        if (!warned.Contains(k))
         {
+            warned.Add(k);
             Debug.LogWarning(
-                $"[TypeIconLibrary] No icon for type '{k}'. Add '{k}.png' under Resources/TypeIcons/"
+                $"[TypeIconLibrary] No icon for type '{k}'. "
+                    + "Add a sprite named '"
+                    + k
+                    + ".png' under Resources/TypeIcons/"
             );
         }
-        return s;
+        return null;
+    }
+
+    public Sprite[] GetMany(params string[] typeNames)
+    {
+        if (typeNames == null || typeNames.Length == 0)
+            return System.Array.Empty<Sprite>();
+        var list = new List<Sprite>(typeNames.Length);
+        foreach (var t in typeNames)
+        {
+            var sp = Get(t);
+            if (sp)
+                list.Add(sp);
+        }
+        return list.ToArray();
     }
 }

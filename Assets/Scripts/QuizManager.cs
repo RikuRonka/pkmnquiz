@@ -127,36 +127,19 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     void SetMainTitle(SectionGroup sec)
     {
-        // Type quiz: show icons before the big title
         if (!string.IsNullOrEmpty(TypeDisplay))
         {
-            // Single selected type
-            if (!string.IsNullOrEmpty(selectedType))
-            {
-                var icon = TypeIconLibrary.Instance.Get(selectedType); // use your library’s accessor
-                sec.SetTitleWithIcons($"All {TypeDisplay} types", new[] { icon }, isMain: true);
-                return;
-            }
-
-            // (Optional) multiple-type filter support (GameSettings.TypeFilter)
-            if (GameSettings.TypeFilter != null && GameSettings.TypeFilter.Length > 0)
-            {
-                var sprites = GameSettings
-                    .TypeFilter.Select(t =>
-                        TypeIconLibrary.Instance.Get(t.Trim().ToLowerInvariant())
-                    )
-                    .Where(s => s != null)
-                    .ToArray();
-                sec.SetTitleWithIcons($"All selected types", sprites, isMain: true);
-                return;
-            }
+            // one leading icon based on selectedType
+            var icon = TypeIconLibrary.Instance.Get(selectedType); // e.g., "bug" -> bug.png
+            sec.SetTitle($"All {TypeDisplay} types", isMain: true, icon: icon);
+            return;
         }
 
-        // Non-type quizzes: normal title, no icons
+        // Non-type quizzes: no icon
         if (generation == 0)
-            sec.SetTitle("Full Quiz (Gen 1–9)", isMain: true);
+            sec.SetTitle("Full Quiz (Gen 1–9)", isMain: true, icon: null);
         else
-            sec.SetTitle(Helpers.GetGenTitle(generation), isMain: true);
+            sec.SetTitle(Helpers.GetGenTitle(generation), isMain: true, icon: null);
     }
 
     private bool IsDialogOpen()

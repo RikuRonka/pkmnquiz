@@ -6,17 +6,10 @@ public class SectionGroup : MonoBehaviour
 {
     [Header("Refs (assign in prefab OR created at runtime)")]
     public RectTransform headerRect;
-    public TMP_Text headerLabel;
     public RectTransform gridRoot;
 
     [SerializeField]
-    RectTransform titleRow; // the row with icons + text
-
-    [SerializeField]
-    RectTransform iconContainer; // holds icon Images
-
-    [SerializeField]
-    Image iconPrefab; // small square image prefab
+    Image typeIcon; // small square image prefab
 
     [SerializeField]
     TMP_Text titleText;
@@ -68,7 +61,7 @@ public class SectionGroup : MonoBehaviour
             img.color = new Color(0, 0, 0, 0.3f);
         }
 
-        if (!headerLabel)
+        if (!titleText)
         {
             var lblGO = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
             lblGO.transform.SetParent(headerRect, false);
@@ -76,14 +69,14 @@ public class SectionGroup : MonoBehaviour
             lrt.anchorMin = lrt.anchorMax = new Vector2(0, 0.5f);
             lrt.pivot = new Vector2(0, 0.5f);
             lrt.anchoredPosition = new Vector2(16, 0);
-            headerLabel = lblGO.GetComponent<TextMeshProUGUI>();
-            headerLabel.alignment = TextAlignmentOptions.TopLeft;
-            headerLabel.fontSize = 36;
-            headerLabel.enableAutoSizing = true;
-            headerLabel.fontSizeMin = 18;
-            headerLabel.fontSizeMax = 42;
-            headerLabel.color = Color.white;
-            headerLabel.text = "Header";
+            titleText = lblGO.GetComponent<TextMeshProUGUI>();
+            titleText.alignment = TextAlignmentOptions.TopLeft;
+            titleText.fontSize = 36;
+            titleText.enableAutoSizing = true;
+            titleText.fontSizeMin = 18;
+            titleText.fontSizeMax = 42;
+            titleText.color = Color.white;
+            titleText.text = "Header";
         }
 
         if (!gridRoot)
@@ -112,44 +105,33 @@ public class SectionGroup : MonoBehaviour
         le.preferredHeight = 100;
     }
 
-    public void SetTitleWithIcons(string text, Sprite[] icons, bool isMain = true)
+    public void SetTitle(string text, bool isMain, Sprite icon = null)
     {
-        // size + text
-        SetTitle(text, isMain);
-
-        if (!iconContainer || iconPrefab == null || icons == null || icons.Length == 0)
+        if (titleText)
         {
-            if (iconContainer)
-                iconContainer.gameObject.SetActive(false);
+            titleText.enableAutoSizing = false;
+            if (isMain)
+            {
+                titleText.fontSize = 60;
+            }
+
+            titleText.text = text;
+        }
+
+        if (!typeIcon)
             return;
-        }
 
-        // clear old
-        for (int i = iconContainer.childCount - 1; i >= 0; i--)
-            Destroy(iconContainer.GetChild(i).gameObject);
-
-        foreach (var sp in icons)
+        if (icon)
         {
-            if (!sp)
-                continue;
-            var img = Instantiate(iconPrefab, iconContainer);
-            img.sprite = sp;
-            var rt = (RectTransform)img.transform;
+            typeIcon.sprite = icon;
+            typeIcon.preserveAspect = true;
+            var rt = (RectTransform)typeIcon.transform;
             rt.sizeDelta = mainIconSize;
-            img.preserveAspect = true;
+            typeIcon.enabled = true; // show
         }
-        iconContainer.gameObject.SetActive(true);
-        // ensure icons sit BEFORE text
-        iconContainer.SetAsFirstSibling();
-    }
-
-    public void SetTitle(string t, bool isMain)
-    {
-        if (headerLabel)
-            headerLabel.text = t;
-        if (isMain)
+        else
         {
-            headerLabel.fontSize = 60;
+            typeIcon.enabled = false; // hide when not a type quiz
         }
     }
 
