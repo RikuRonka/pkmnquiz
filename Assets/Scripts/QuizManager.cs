@@ -1024,6 +1024,103 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     }
             }
         }
+        if (generation == 8 && gmaxSec)
+        {
+            // ensure order matches DexOrder like elsewhere
+            foreach (var p in gmaxPoolGen.OrderBy(p => DexOrder.GetIndex(p)))
+            {
+                var c = Instantiate(cardPrefab, gmaxSec.gridRoot);
+                c.Bind(p);
+                cardById[p.id] = c;
+                pokemonById[p.id] = p;
+
+                // wire base->pick & card maps (used by guess handling)
+                int baseId = p.baseId != 0 ? p.baseId : p.id;
+                gmaxPickByBase[baseId] = p;
+                gmaxCardByBase[baseId] = c;
+
+                // build lookup keys for TryAcceptGmaxByBaseName(...)
+                var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
+                var baseName = baseMon?.name ?? BaseNameFrom(p.name);
+
+                AddKey(gmaxByBaseName, p.name, baseId);
+                if (p.aliases != null)
+                    foreach (var a in p.aliases)
+                        AddKey(gmaxByBaseName, a, baseId);
+
+                if (!string.IsNullOrEmpty(baseName))
+                {
+                    AddKey(gmaxByBaseName, $"{baseName} gmax", baseId);
+                    AddKey(gmaxByBaseName, $"gmax {baseName}", baseId);
+                    AddKey(gmaxByBaseName, $"{baseName} gigantamax", baseId);
+                    AddKey(gmaxByBaseName, $"gigantamax {baseName}", baseId);
+                }
+
+                if (baseMon?.aliases != null)
+                    foreach (var a in baseMon.aliases)
+                    {
+                        AddKey(gmaxByBaseName, $"{a} gmax", baseId);
+                        AddKey(gmaxByBaseName, $"gmax {a}", baseId);
+                        AddKey(gmaxByBaseName, $"{a} gigantamax", baseId);
+                        AddKey(gmaxByBaseName, $"gigantamax {a}", baseId);
+                    }
+            }
+        }
+        if (generation == 9 && paldeaExpeditions)
+        {
+            // keep same ordering tweak you used in the full-quiz path
+            var expOrdered = expeditionPool.OrderBy(p => DexOrder.GetIndex(p)).ToList();
+            int iBlood = expOrdered.FindIndex(x => x.id == 1015);
+            int iSini = expOrdered.FindIndex(x => x.id == 1014);
+            if (iBlood >= 0 && iSini >= 0 && iBlood < iSini)
+            {
+                var item = expOrdered[iBlood];
+                expOrdered.RemoveAt(iBlood);
+                iSini = expOrdered.FindIndex(x => x.id == 1014);
+                expOrdered.Insert(Math.Min(expOrdered.Count, iSini + 1), item);
+            }
+
+            foreach (var p in expOrdered)
+            {
+                var c = Instantiate(cardPrefab, paldeaExpeditions.gridRoot);
+                c.Bind(p);
+                cardById[p.id] = c;
+                pokemonById[p.id] = p;
+
+                // map base -> expedition pick & card
+                int baseKey = p.baseId != 0 ? p.baseId : p.id;
+                expeditionPickByBase[baseKey] = p;
+                expeditionCardByBase[baseKey] = c;
+
+                // keys for TryAcceptExpeditionByBaseName(...)
+                void AddKey(string s)
+                {
+                    var k = GuessNormalizer.Key(s);
+                    if (!string.IsNullOrEmpty(k))
+                        expeditionByBaseName[k] = baseKey;
+                }
+
+                AddKey(p.name);
+                if (p.aliases != null)
+                    foreach (var a in p.aliases)
+                        AddKey(a);
+
+                // strip "(...)" from names like “X (something)”
+                var idx = p.name.IndexOf('(');
+                if (idx > 0)
+                    AddKey(p.name[..idx].Trim());
+
+                // also index the base mon’s names/aliases
+                var baseMon = allDb.FirstOrDefault(x => x.id == baseKey);
+                if (baseMon != null)
+                {
+                    AddKey(baseMon.name);
+                    if (baseMon.aliases != null)
+                        foreach (var a in baseMon.aliases)
+                            AddKey(a);
+                }
+            }
+        }
 
         main.SetCardCount(main.gridRoot.childCount);
         FitSection(main);
