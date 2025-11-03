@@ -1,6 +1,114 @@
-TODO:
-paldea expeditions not showing in gen8 quiz
-galar gigantamax not showing in gen8 quiz
-but galar hisui is showing in gen8 quiz
+# 🧠 Pokémon Quiz  
+A fast-paced name guessing quiz for all 9 Pokémon generations and 18 types — built in Unity.
 
-tooltip going over borders
+---
+
+## 🎮 About the Game
+Think you know every Pokémon by sight?  
+Test your knowledge across:
+
+✅ Full National Dex (Gen 1–9)  
+✅ Region-only quizzes (Kanto, Johto, Hoenn, etc.)  
+✅ Type-based quizzes (Fire, Ghost, Steel, etc.)  
+✅ Timer + score tracking  
+✅ Tooltip system for revealed Pokémon (name + types)  
+✅ Built-in autotype tester for debugging all names  
+✅ Clean, minimal UI, keyboard-driven gameplay
+
+---
+
+## 🖼️ Screenshots
+*(Add actual images later)*
+
+| Main Menu | In-Game Quiz | Tooltip Example |
+|-----------|--------------|-----------------|
+| ![menu](docs/img/menu.png) | ![quiz](docs/img/quiz.png) | ![tooltip](docs/img/tooltip.png) |
+
+---
+
+## 🛠️ Tech Stack
+| Feature | Details |
+|---------|---------|
+| Engine | Unity (2022/2023+) |
+| Language | C# |
+| Build Target | Windows (x64) |
+| Rendering | 2D UI, no external frameworks |
+| Assets | Pokémon sprites (compressed, optimized) |
+| JSON Data | Full Pokédex metadata |
+
+---
+
+## 🚀 Download & Play
+**[⬇️ Download latest release](https://github.com/USERNAME/REPO/releases)**  
+No install required — unzip & run `PokemonQuiz.exe`
+
+---
+
+## 🎯 Controls
+| Action | Key |
+|--------|-----|
+| Type Pokémon name | Keyboard |
+| Submit | `Enter` |
+| Backspace | `Backspace` |
+| Reveal Types | Button / UI |
+| Quit to Menu | `Esc` |
+
+---
+
+## 📦 Build Size Notes
+| Format | Size |
+|--------|------|
+| Raw build | ~550 MB |
+| Compressed installer/zip | ~160 MB |
+
+Sprites are texture-compressed at build time using `TextureImporter` automation to reduce size.
+
+---
+
+## 🧩 Development Notes
+✅ Sprite compression pipeline (`OptimizeSprites.cs`)  
+✅ Tooltip hover system with world-to-UI clamping  
+✅ Dynamic test-input autofill tool for debugging names  
+✅ ScriptableJSON Pokémon database loaded at runtime  
+
+---
+
+## 🗂️ Project Structure
+Assets/
+├─ Scripts/
+│ ├─ Quiz/
+│ ├─ UI/
+│ ├─ Tooltips/
+│ └─ Data/
+├─ Resources/
+│ ├─ Sprites/
+│ └─ TypeIcons/
+└─ Scenes/
+├─ MainMenu.unity
+└─ Quiz.unity
+
+---
+
+## 📝 License
+This project is for educational / fan purposes only.  
+**Pokémon and Pokémon images are trademarks of Nintendo / Game Freak / The Pokémon Company.**  
+All gameplay code is original and licensed under MIT unless stated otherwise.
+
+---
+
+## 🙌 Credits
+| Category | Source |
+|----------|--------|
+| Pokémon Sprites | Official Pokémon artwork (fair use) |
+| Type Icons | Custom vector icons |
+| Code & UI | @cheese |
+| Inspired by | Sporcle quizzes, Pokémon fandom |
+
+---
+
+## ⭐ Support / Contribute
+✅ Star the repo  
+✅ Report bugs via Issues  
+✅ PRs welcome (UI, features, refactor, etc.)
+
+---
