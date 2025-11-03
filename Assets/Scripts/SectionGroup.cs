@@ -9,6 +9,14 @@ public class SectionGroup : MonoBehaviour
     public TMP_Text headerLabel;
     public RectTransform gridRoot;
 
+    [SerializeField]
+    RectTransform headerSpacer; // <- assign the spacer
+
+    [SerializeField]
+    float normalGap = 16f;
+
+    [SerializeField]
+    float mainOnlyGap = 64f;
     public int CardCount { get; private set; }
 
     public void SetCardCount(int n)
@@ -89,9 +97,23 @@ public class SectionGroup : MonoBehaviour
         le.preferredHeight = 100;
     }
 
-    public void SetTitle(string t)
+    public void SetTitle(string t, bool isMain)
     {
         if (headerLabel)
             headerLabel.text = t;
+        if (isMain)
+        {
+            headerLabel.fontSize = 60;
+        }
+    }
+
+    public void SetHeaderGap(bool mainOnlyScreen)
+    {
+        if (!headerSpacer)
+            return;
+        var le =
+            headerSpacer.GetComponent<LayoutElement>()
+            ?? headerSpacer.gameObject.AddComponent<LayoutElement>();
+        le.minHeight = mainOnlyScreen ? mainOnlyGap : normalGap;
     }
 }

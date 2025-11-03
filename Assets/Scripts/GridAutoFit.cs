@@ -42,14 +42,9 @@ public class GridAutoFit : MonoBehaviour
             layoutElem = GetComponent<LayoutElement>();
 
         var vp = Viewport.rect;
-        float headH = Header ? Header.rect.height : 0f;
         var pad = grid.padding;
 
         float availW = Mathf.Max(1f, vp.width - 2f * OuterMarginX - (pad.left + pad.right));
-        float availH = Mathf.Max(
-            1f,
-            vp.height - 2f * OuterMarginY - headH - (pad.top + pad.bottom)
-        );
 
         int colsByMaxCell = Mathf.FloorToInt((availW + Spacing) / (MaxCell + Spacing));
         int bestCols = Mathf.Clamp(colsByMaxCell, MinCols, MaxCols);

@@ -81,6 +81,41 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!1 &5544665980901962025
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2830314000169783317}
+  m_Layer: 5
+  m_Name: headerRect
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &2830314000169783317
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5544665980901962025}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4816554982128323672}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &7565292023961007417
 GameObject:
   m_ObjectHideFlags: 0
@@ -113,6 +148,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 942222563425826053}
+  - {fileID: 2830314000169783317}
   - {fileID: 1674755790142928699}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -176,6 +212,9 @@ MonoBehaviour:
   headerRect: {fileID: 0}
   headerLabel: {fileID: 9087307359504771461}
   gridRoot: {fileID: 1674755790142928699}
+  headerSpacer: {fileID: 2830314000169783317}
+  normalGap: 16
+  mainOnlyGap: 64
 --- !u!1001 &6983061789346117976
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -189,8 +228,16 @@ PrefabInstance:
       value: SectionHeader
       objectReference: {fileID: 0}
     - target: {fileID: 2230487252050841821, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
+      propertyPath: m_fontSize
+      value: 36
+      objectReference: {fileID: 0}
+    - target: {fileID: 2230487252050841821, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
       propertyPath: m_margin.z
       value: -152.2143
+      objectReference: {fileID: 0}
+    - target: {fileID: 2230487252050841821, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
+      propertyPath: m_fontSizeBase
+      value: 36
       objectReference: {fileID: 0}
     - target: {fileID: 2230487252050841821, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
       propertyPath: m_HorizontalAlignment

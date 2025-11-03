@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -130,15 +130,15 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         // If we're doing a type quiz, the top header should be just the type.
         if (!string.IsNullOrEmpty(TypeDisplay))
         {
-            sec.SetTitle($"All {TypeDisplay} types"); // e.g., "Bug type"
+            sec.SetTitle($"All {TypeDisplay} types", true); // e.g., "Bug type"
             return;
         }
 
         // Otherwise keep your normal titles
         if (generation == 0)
-            sec.SetTitle("Full Quiz (Gen 1–9)");
+            sec.SetTitle("Full Quiz (Gen 1–9)", true);
         else
-            sec.SetTitle(Helpers.GetGenTitle(generation));
+            sec.SetTitle(Helpers.GetGenTitle(generation), true);
     }
 
     private bool IsDialogOpen()
@@ -359,46 +359,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
-    private static void MoveBefore(
-        List<Pokemon> list,
-        Predicate<Pokemon> what,
-        Predicate<Pokemon> before
-    )
-    {
-        var item = list.FirstOrDefault(x => what(x));
-        if (item == null)
-            return;
-
-        var idxBefore = list.FindIndex(x => before(x));
-        if (idxBefore < 0)
-            return;
-
-        list.Remove(item);
-
-        idxBefore = list.FindIndex(x => before(x));
-        list.Insert(Math.Max(0, idxBefore), item);
-    }
-
-    private static void MoveAfter(
-        List<Pokemon> list,
-        Predicate<Pokemon> what,
-        Predicate<Pokemon> after
-    )
-    {
-        var item = list.FirstOrDefault(x => what(x));
-        if (item == null)
-            return;
-
-        var idxAfter = list.FindIndex(x => after(x));
-        if (idxAfter < 0)
-            return;
-
-        list.Remove(item);
-
-        idxAfter = list.FindIndex(x => after(x));
-        list.Insert(Math.Min(list.Count, idxAfter + 1), item);
-    }
-
     private void RevealByBaseIds(params int[] baseIds)
     {
         bool any = false;
@@ -454,32 +414,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             guessInput.ActivateInputField();
             guessInput.Select();
         }
-    }
-
-    private void MoveIdBefore(int idToMove, int anchorId)
-    {
-        int i = targetList.FindIndex(p => p.id == idToMove);
-        int j = targetList.FindIndex(p => p.id == anchorId);
-        if (i < 0 || j < 0)
-            return;
-
-        var item = targetList[i];
-        targetList.RemoveAt(i);
-        j = targetList.FindIndex(p => p.id == anchorId);
-        targetList.Insert(Math.Max(0, j), item);
-    }
-
-    private void MoveIdAfter(int idToMove, int anchorId)
-    {
-        int i = targetList.FindIndex(p => p.id == idToMove);
-        int j = targetList.FindIndex(p => p.id == anchorId);
-        if (i < 0 || j < 0)
-            return;
-
-        var item = targetList[i];
-        targetList.RemoveAt(i);
-        j = targetList.FindIndex(p => p.id == anchorId);
-        targetList.Insert(Math.Min(targetList.Count, j + 1), item);
     }
 
     public void OnResetClicked()
@@ -541,7 +475,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         DefocusUI();
 
-        void LeaveNow()
+        static void LeaveNow()
         {
             // Make sure the loader isn't left in "loading" state
             LoadingManager.Instance?.CancelLoad(); // hides overlay + clears flags
@@ -774,14 +708,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 var sec = Instantiate(sectionGroupPrefab, content);
                 sec.EnsureLayout();
                 string baseTitle = GenTitles.TryGetValue(g, out var t) ? t : $"Gen {g}";
-                sec.SetTitle(baseTitle);
+                sec.SetTitle(baseTitle, false);
                 mainByGen[g] = sec;
 
                 if (g == 6)
                 {
                     gen6Megas = Instantiate(sectionGroupPrefab, content);
                     gen6Megas.EnsureLayout();
-                    gen6Megas.SetTitle("Mega Evolutions (Gen 6)");
+                    gen6Megas.SetTitle("Mega Evolutions (Gen 6)", false);
                 }
                 if (g == 8)
                 {
@@ -789,20 +723,20 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     {
                         fullGmax = Instantiate(sectionGroupPrefab, content);
                         fullGmax.EnsureLayout();
-                        fullGmax.SetTitle("Gigantamax (Gen 8)");
+                        fullGmax.SetTitle("Gigantamax (Gen 8)", false);
                     }
                     if (hisuiPoolF.Count > 0)
                     {
                         fullHisui = Instantiate(sectionGroupPrefab, content);
                         fullHisui.EnsureLayout();
-                        fullHisui.SetTitle("Hisui (Gen 8)");
+                        fullHisui.SetTitle("Hisui (Gen 8)", false);
                     }
                 }
                 if (g == 9 & g9ExpPoolF.Count > 0)
                 {
                     gen9Expeditions = Instantiate(sectionGroupPrefab, content);
                     gen9Expeditions.EnsureLayout();
-                    gen9Expeditions.SetTitle("Paldea Expeditions");
+                    gen9Expeditions.SetTitle("Paldea Expeditions", false);
                 }
             }
 
@@ -986,22 +920,22 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         {
             megas = Instantiate(sectionGroupPrefab, content);
             megas.EnsureLayout();
-            megas.SetTitle("Mega Evolutions");
+            megas.SetTitle("Mega Evolutions", false);
         }
         if (generation == 8)
         {
             gmaxSec = Instantiate(sectionGroupPrefab, content);
             gmaxSec.EnsureLayout();
-            gmaxSec.SetTitle("Gigantamax (Gen 8)");
+            gmaxSec.SetTitle("Gigantamax (Gen 8)", false);
             hisuiSec = Instantiate(sectionGroupPrefab, content);
             hisuiSec.EnsureLayout();
-            hisuiSec.SetTitle("Hisui (Gen 8)");
+            hisuiSec.SetTitle("Hisui (Gen 8)", false);
         }
         if (generation == 9)
         {
             paldeaExpeditions = Instantiate(sectionGroupPrefab, content);
             paldeaExpeditions.EnsureLayout();
-            paldeaExpeditions.SetTitle("Paldea Expeditions");
+            paldeaExpeditions.SetTitle("Paldea Expeditions", false);
         }
 
         var expeditionPool = new List<Pokemon>();
@@ -1114,6 +1048,15 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         UpdateScore();
+        bool noSubSections =
+            generation > 0
+            && megas == null
+            && gmaxSec == null
+            && hisuiSec == null
+            && paldeaExpeditions == null;
+
+        // after you instantiate `main` and set its title:
+        main.SetHeaderGap(noSubSections);
     }
 
     bool HasTypeFilter => !string.IsNullOrEmpty(selectedType);
@@ -1267,135 +1210,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             }
         }
         _loader?.SetProgress(end);
-    }
-
-    IEnumerator RebuildGridAsync(float start = 0.10f, float end = 1.00f)
-    {
-        var ordered = targetList;
-        var allSections = new List<SectionGroup>();
-        Dictionary<int, SectionGroup> mainByGen = null;
-        SectionGroup mainSec = null,
-            megasSec = null,
-            gmaxSec = null,
-            hisuiSec = null,
-            expSec = null;
-
-        // helper to create + register a section
-        SectionGroup AddSection(string title)
-        {
-            var s = Instantiate(sectionGroupPrefab, content);
-            s.EnsureLayout();
-            s.SetTitle(title);
-            allSections.Add(s);
-            return s;
-        }
-
-        // plan sections (matches your previous RebuildGrid logic)
-        if (generation == 0)
-        {
-            mainByGen = new Dictionary<int, SectionGroup>();
-            foreach (var g in ordered.Select(p => p.generation).Distinct().OrderBy(x => x))
-            {
-                // per your latest request: per-gen titles should be plain "Kanto (Gen 1)" etc. (no type prefix)
-                var baseTitle = GenTitles.TryGetValue(g, out var t) ? t : $"Gen {g}";
-                mainByGen[g] = AddSection(baseTitle);
-
-                if (g == 6)
-                    megasSec = AddSection("Mega Evolutions (Gen 6)");
-                if (g == 8)
-                {
-                    gmaxSec = AddSection("Gigantamax (Gen 8)");
-                    hisuiSec = AddSection("Hisui (Gen 8)");
-                }
-                if (g == 9)
-                    expSec = AddSection("Paldea Expeditions");
-            }
-        }
-        else
-        {
-            // single-gen path: main section title already handled by SetMainTitle(main) in your non-async code,
-            // here just use the plain gen title as well (no type prefix on per-gen sections).
-            var baseTitle = Helpers.GetGenTitle(generation);
-            mainSec = AddSection(baseTitle);
-
-            if (generation == 6)
-                megasSec = AddSection("Mega Evolutions");
-            if (generation == 8)
-            {
-                gmaxSec = AddSection("Gigantamax (Gen 8)");
-                hisuiSec = AddSection("Hisui (Gen 8)");
-            }
-            if (generation == 9)
-                expSec = AddSection("Paldea Expeditions");
-        }
-
-        // --- build main cards in chunks with progress ---
-        int total = Mathf.Max(1, ordered.Count);
-        int built = 0;
-
-        foreach (var p in ordered)
-        {
-            // choose the section root for this pokemon
-            SectionGroup secForP = (generation == 0) ? mainByGen[p.generation] : mainSec;
-
-            var card = Instantiate(cardPrefab, secForP.gridRoot);
-            card.Bind(p);
-            cardById[p.id] = card;
-            pokemonById[p.id] = p;
-
-            built++;
-            if ((built & 31) == 0) // yield every ~32 items
-            {
-                float k = Mathf.Lerp(start, end, (float)built / total);
-                _loader?.SetProgress(k);
-                yield return null; // let overlay refresh
-            }
-        }
-
-        // --- build extras (megas/gmax/hisui/expeditions) the same way you already do, but chunk + add progress ---
-        // (example for megas; repeat pattern for others as you already compute their pools)
-        if (megasSec && megaFormsByBase.Count > 0)
-        {
-            var rng = new System.Random();
-            var entries = megaFormsByBase.ToList();
-            for (int i = 0; i < entries.Count; i++)
-            {
-                var kv = entries[i];
-                var pick = kv.Value[rng.Next(kv.Value.Count)];
-                var c = Instantiate(cardPrefab, megasSec.gridRoot);
-                c.Bind(pick);
-                megaSlotPickByBase[kv.Key] = pick;
-                megaCardByBase[kv.Key] = c;
-                cardById[pick.id] = c;
-                pokemonById[pick.id] = pick;
-
-                if ((i & 31) == 0)
-                {
-                    // nudge progress within the same [start..end] band or use your own sub-range
-                    float k = Mathf.Lerp(start, end, (float)(built + i) / (total + entries.Count));
-                    _loader?.SetProgress(k);
-                    yield return null;
-                }
-            }
-        }
-
-        // ... do the same for gmaxSec / hisuiSec / expSec using your existing pools ...
-
-        // --- finalize sections (counts + layout), skip empty extras so titles hide ---
-        foreach (var sec in allSections)
-        {
-            // hide section if empty (e.g., no Hisui of this type)
-            if (sec.gridRoot.childCount == 0)
-            {
-                sec.gameObject.SetActive(false);
-                continue;
-            }
-
-            sec.SetCardCount(sec.gridRoot.childCount);
-            FitSection(sec);
-            yield return null; // let layout breathe & loader update
-        }
-        UpdateScore();
     }
 
     void UpdateTypeHintButtonVisibility()
@@ -2072,16 +1886,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     public IEnumerator BuildWithExternalProgress(Action<float> report, float from, float to)
     {
-        Debug.Log(
-            $"[Quiz] BuildWithExternalProgress START (type='{selectedType ?? "none"}', gen={generation})"
-        );
-
         float span = Mathf.Max(0.0001f, to - from);
         void Step(float k) => report(from + k * span);
 
         BuildTargetList();
         Step(0.25f);
-        Debug.Log($"[Quiz] After BuildTargetList: targetCount={targetList?.Count ?? -1}");
         yield return null;
 
         Step(0.40f);
@@ -2089,12 +1898,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         RebuildGrid();
         Step(0.90f);
-        Debug.Log("[Quiz] After RebuildGrid");
         yield return null;
 
         UpdateScore();
         Step(1.00f);
-        Debug.Log("[Quiz] BuildWithExternalProgress END");
         yield return null;
     }
 }

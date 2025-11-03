@@ -1,4 +1,3 @@
-// LoadingManager.cs
 using System;
 using System.Collections;
 using TMPro;
@@ -20,7 +19,6 @@ public class LoadingManager : MonoBehaviour
 
     [SerializeField]
     TMP_Text percentLabel;
-    bool _isLoading = false;
     public int PendingGen { get; private set; } = 0;
     public string PendingType { get; private set; } = null;
     string _title = "Building…";
@@ -29,7 +27,6 @@ public class LoadingManager : MonoBehaviour
 
     void Awake()
     {
-        _isLoading = false;
         if (Instance && Instance != this)
         {
             Destroy(gameObject);
@@ -167,7 +164,6 @@ public class LoadingManager : MonoBehaviour
             StopCoroutine(_loadCo);
             _loadCo = null;
         }
-        _isLoading = false;
         SetVisible(false, immediate: true);
         SetProgress(0f);
     }
@@ -226,7 +222,6 @@ public class LoadingManager : MonoBehaviour
         {
             // ALWAYS clear state so the next click works
             _loadCo = null;
-            _isLoading = false;
             PendingGen = 0;
             PendingType = null;
             SetProgress(0f);
@@ -241,7 +236,6 @@ public class LoadingManager : MonoBehaviour
     {
         // Make sure loader is clean whenever a scene finishes loading
         _loadCo = null;
-        _isLoading = false;
         SetProgress(0f);
         SetVisible(false, immediate: true);
         if (cg)
