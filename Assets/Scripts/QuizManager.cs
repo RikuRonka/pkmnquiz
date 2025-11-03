@@ -127,18 +127,36 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     void SetMainTitle(SectionGroup sec)
     {
-        // If we're doing a type quiz, the top header should be just the type.
+        // Type quiz: show icons before the big title
         if (!string.IsNullOrEmpty(TypeDisplay))
         {
-            sec.SetTitle($"All {TypeDisplay} types", true); // e.g., "Bug type"
-            return;
+            // Single selected type
+            if (!string.IsNullOrEmpty(selectedType))
+            {
+                var icon = TypeIconLibrary.Instance.Get(selectedType); // use your library’s accessor
+                sec.SetTitleWithIcons($"All {TypeDisplay} types", new[] { icon }, isMain: true);
+                return;
+            }
+
+            // (Optional) multiple-type filter support (GameSettings.TypeFilter)
+            if (GameSettings.TypeFilter != null && GameSettings.TypeFilter.Length > 0)
+            {
+                var sprites = GameSettings
+                    .TypeFilter.Select(t =>
+                        TypeIconLibrary.Instance.Get(t.Trim().ToLowerInvariant())
+                    )
+                    .Where(s => s != null)
+                    .ToArray();
+                sec.SetTitleWithIcons($"All selected types", sprites, isMain: true);
+                return;
+            }
         }
 
-        // Otherwise keep your normal titles
+        // Non-type quizzes: normal title, no icons
         if (generation == 0)
-            sec.SetTitle("Full Quiz (Gen 1–9)", true);
+            sec.SetTitle("Full Quiz (Gen 1–9)", isMain: true);
         else
-            sec.SetTitle(Helpers.GetGenTitle(generation), true);
+            sec.SetTitle(Helpers.GetGenTitle(generation), isMain: true);
     }
 
     private bool IsDialogOpen()
@@ -1189,27 +1207,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         fit.MaxCols = 30;
 
         StartCoroutine(CoRecalcSafe(fit, _buildToken));
-    }
-
-    IEnumerator PrewarmSprites(float start, float end)
-    {
-        var all = targetList;
-        int n = Mathf.Max(1, all.Count);
-        for (int i = 0; i < all.Count; i++)
-        {
-            // Touch cache if you have one
-            try
-            {
-                var _ = SpriteLibrary.Instance.ByPokemon(all[i]);
-            }
-            catch { }
-            if ((i & 31) == 0)
-            {
-                _loader?.SetProgress(Mathf.Lerp(start, end, (float)i / n));
-                yield return null;
-            }
-        }
-        _loader?.SetProgress(end);
     }
 
     void UpdateTypeHintButtonVisibility()

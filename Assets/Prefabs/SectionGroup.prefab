@@ -212,8 +212,13 @@ MonoBehaviour:
   headerRect: {fileID: 0}
   headerLabel: {fileID: 9087307359504771461}
   gridRoot: {fileID: 1674755790142928699}
+  titleRow: {fileID: 0}
+  iconContainer: {fileID: 0}
+  iconPrefab: {fileID: 0}
+  titleText: {fileID: 0}
   headerSpacer: {fileID: 2830314000169783317}
   normalGap: 16
+  mainIconSize: {x: 48, y: 48}
   mainOnlyGap: 64
 --- !u!1001 &6983061789346117976
 PrefabInstance:
@@ -233,7 +238,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2230487252050841821, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
       propertyPath: m_margin.z
-      value: -152.2143
+      value: -0.6607971
       objectReference: {fileID: 0}
     - target: {fileID: 2230487252050841821, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
       propertyPath: m_fontSizeBase
@@ -269,7 +274,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7925108147441536093, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 355.4416
+      value: 553.5245
       objectReference: {fileID: 0}
     - target: {fileID: 7925108147441536093, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
       propertyPath: m_SizeDelta.y
@@ -324,8 +329,16 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9183408427397857405, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 553.52
+      objectReference: {fileID: 0}
+    - target: {fileID: 9183408427397857405, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: -74.5
+      value: 0.0001297
+      objectReference: {fileID: 0}
+    - target: {fileID: 9183408427397857405, guid: 48ca7b4765599524591ee5d8d9b5cf23, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

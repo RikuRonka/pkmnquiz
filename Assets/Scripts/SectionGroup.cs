@@ -10,10 +10,25 @@ public class SectionGroup : MonoBehaviour
     public RectTransform gridRoot;
 
     [SerializeField]
+    RectTransform titleRow; // the row with icons + text
+
+    [SerializeField]
+    RectTransform iconContainer; // holds icon Images
+
+    [SerializeField]
+    Image iconPrefab; // small square image prefab
+
+    [SerializeField]
+    TMP_Text titleText;
+
+    [SerializeField]
     RectTransform headerSpacer; // <- assign the spacer
 
     [SerializeField]
     float normalGap = 16f;
+
+    [SerializeField]
+    Vector2 mainIconSize = new(48, 48);
 
     [SerializeField]
     float mainOnlyGap = 64f;
@@ -95,6 +110,37 @@ public class SectionGroup : MonoBehaviour
             ?? gridRoot.gameObject.AddComponent<LayoutElement>();
         le.minHeight = 0;
         le.preferredHeight = 100;
+    }
+
+    public void SetTitleWithIcons(string text, Sprite[] icons, bool isMain = true)
+    {
+        // size + text
+        SetTitle(text, isMain);
+
+        if (!iconContainer || iconPrefab == null || icons == null || icons.Length == 0)
+        {
+            if (iconContainer)
+                iconContainer.gameObject.SetActive(false);
+            return;
+        }
+
+        // clear old
+        for (int i = iconContainer.childCount - 1; i >= 0; i--)
+            Destroy(iconContainer.GetChild(i).gameObject);
+
+        foreach (var sp in icons)
+        {
+            if (!sp)
+                continue;
+            var img = Instantiate(iconPrefab, iconContainer);
+            img.sprite = sp;
+            var rt = (RectTransform)img.transform;
+            rt.sizeDelta = mainIconSize;
+            img.preserveAspect = true;
+        }
+        iconContainer.gameObject.SetActive(true);
+        // ensure icons sit BEFORE text
+        iconContainer.SetAsFirstSibling();
     }
 
     public void SetTitle(string t, bool isMain)
