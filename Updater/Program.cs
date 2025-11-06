@@ -1,12 +1,5 @@
-﻿// Updater.csproj -> <TargetFramework>net6.0</TargetFramework>
-// Add <UseWindowsForms>false</UseWindowsForms> etc. Keep it minimal.
-
-using System;
-using System.Diagnostics;
-using System.IO;
+﻿using System.Diagnostics;
 using System.IO.Compression;
-using System.Linq;
-using System.Threading;
 
 class Program
 {
@@ -17,9 +10,15 @@ class Program
         string exeName = GetArg(args, "--exe");
         int waitMs = int.TryParse(GetArg(args, "--waitms") ?? "0", out var w) ? w : 0;
 
-        if (string.IsNullOrWhiteSpace(zip) || string.IsNullOrWhiteSpace(target) || string.IsNullOrWhiteSpace(exeName))
+        if (
+            string.IsNullOrWhiteSpace(zip)
+            || string.IsNullOrWhiteSpace(target)
+            || string.IsNullOrWhiteSpace(exeName)
+        )
         {
-            Console.Error.WriteLine("Usage: Updater.exe --zip <path> --target <dir> --exe <Game.exe> [--waitms 1000]");
+            Console.Error.WriteLine(
+                "Usage: Updater.exe --zip <path> --target <dir> --exe <Game.exe> [--waitms 1000]"
+            );
             return 2;
         }
 
@@ -35,44 +34,61 @@ class Program
             return 4;
         }
 
-        // 1) Wait a little for the main app to exit
         Thread.Sleep(waitMs);
-
-        // Also try to ensure no process with exeName is running
         for (int i = 0; i < 50; i++)
         {
-            if (!IsProcessRunning(exeName)) break;
+            if (!IsProcessRunning(exeName))
+                break;
             Thread.Sleep(200);
         }
 
-        // 2) Extract to a staging folder to avoid partial writes
-        string staging = Path.Combine(Path.GetTempPath(), "pkmnquiz_update_" + Guid.NewGuid().ToString("N"));
+        string staging = Path.Combine(
+            Path.GetTempPath(),
+            "pkmnquiz_update_" + Guid.NewGuid().ToString("N")
+        );
         Directory.CreateDirectory(staging);
+
         try
         {
             ZipFile.ExtractToDirectory(zip, staging, true);
+
             string root = staging;
             var entries = Directory.GetFileSystemEntries(staging);
-            if (entries.Length == 1 && Directory.Exists(entries[0]))
+            var realEntries = entries
+                .Where(e =>
+                {
+                    var name = Path.GetFileName(e);
+                    return !name.StartsWith("__MACOSX", StringComparison.OrdinalIgnoreCase)
+                        && !name.StartsWith(".", StringComparison.Ordinal);
+                })
+                .ToArray();
+
+            if (realEntries.Length == 1 && Directory.Exists(realEntries[0]))
             {
-                root = entries[0]; // use inner folder as root
+                root = realEntries[0];
                 Console.WriteLine("Detected single-root folder in zip. Using: " + root);
             }
 
-            // 3) Copy all files from staging over target
             CopyAll(new DirectoryInfo(root), new DirectoryInfo(target));
 
-            // 4) Relaunch game
-            string exePath = Directory.GetFiles(target, exeName, SearchOption.TopDirectoryOnly).FirstOrDefault();
+            string exePath = Directory
+                .GetFiles(target, exeName, SearchOption.AllDirectories)
+                .FirstOrDefault();
             if (string.IsNullOrEmpty(exePath))
             {
                 Console.Error.WriteLine("Cannot find game exe in target: " + exeName);
                 return 5;
             }
 
-            var p = new Process();
-            p.StartInfo.FileName = exePath;
-            p.StartInfo.WorkingDirectory = target;
+            var p = new Process
+            {
+                StartInfo =
+                {
+                    FileName = exePath,
+                    WorkingDirectory = Path.GetDirectoryName(exePath)!,
+                    UseShellExecute = true,
+                },
+            };
             p.Start();
         }
         catch (Exception ex)
@@ -82,9 +98,16 @@ class Program
         }
         finally
         {
-            try { Directory.Delete(staging, true); } catch { }
-            // optionally delete the zip:
-            try { File.Delete(zip); } catch { }
+            try
+            {
+                Directory.Delete(staging, true);
+            }
+            catch { }
+            try
+            {
+                File.Delete(zip);
+            }
+            catch { }
         }
 
         return 0;
@@ -106,9 +129,10 @@ class Program
             try
             {
                 var name = Path.GetFileName(p.MainModule?.FileName ?? "").ToLowerInvariant();
-                if (name == exeName) return true;
+                if (name == exeName)
+                    return true;
             }
-            catch { /* access denied */ }
+            catch { }
         }
         return false;
     }
@@ -118,13 +142,32 @@ class Program
         foreach (var dir in source.GetDirectories())
         {
             var destDir = new DirectoryInfo(Path.Combine(target.FullName, dir.Name));
-            if (!destDir.Exists) destDir.Create();
+            if (!destDir.Exists)
+                destDir.Create();
             CopyAll(dir, destDir);
         }
+
         foreach (var file in source.GetFiles())
         {
+            if (string.Equals(file.Name, "Updater.exe", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             string dest = Path.Combine(target.FullName, file.Name);
-            file.CopyTo(dest, true);
+            try
+            {
+                if (File.Exists(dest))
+                {
+                    var attrs = File.GetAttributes(dest);
+                    if ((attrs & FileAttributes.ReadOnly) != 0)
+                        File.SetAttributes(dest, attrs & ~FileAttributes.ReadOnly);
+                }
+                file.CopyTo(dest, true);
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(100);
+                file.CopyTo(dest, true);
+            }
         }
     }
 }

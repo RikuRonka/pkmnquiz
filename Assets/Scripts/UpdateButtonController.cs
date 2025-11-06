@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 [RequireComponent(typeof(Button))]
+[RequireComponent(typeof(CanvasGroup))]
 public class UpdateButtonController : MonoBehaviour
 {
     [Header("Wiring")]
@@ -21,29 +22,40 @@ public class UpdateButtonController : MonoBehaviour
 
     void Awake()
     {
+#if UNITY_EDITOR
+        // Editor-only: disable the button and bail out
+        if (currentVersionLabel)
+            currentVersionLabel.text = $"v{Application.version}";
+        if (label)
+            label.text = "Updates disabled in Editor";
+        if (button)
+            button.interactable = false;
+
+        var cg = GetComponent<CanvasGroup>();
+        if (!cg)
+            cg = gameObject.AddComponent<CanvasGroup>();
+        cg.interactable = false;
+        cg.blocksRaycasts = false;
+
+#else
         if (!button)
             button = GetComponent<Button>();
-        currentVersionLabel?.SetText($"v{Application.version}");
+        if (currentVersionLabel)
+            currentVersionLabel.text = $"v{Application.version}";
         button.onClick.AddListener(OnClick);
 
-        // Hook updater events for UI state
-        checker.OnNoUpdate += () =>
-        {
-            _pending = null;
-            SetVisual("No updates available", okColor, false);
-        };
+        SetChecking();
+        checker.OnNoUpdate += () => SetNoUpdate();
         checker.OnUpdateFound += info =>
         {
             _pending = info;
-            SetVisual("Updates available!", readyColor, true);
+            SetUpdateAvailable();
         };
-        checker.OnDownloadProgress += p =>
-            SetVisual($"Downloading {p * 100f:0}%", checkingColor, false);
-        checker.OnStatus += s => label?.SetText(s);
+        checker.OnDownloadProgress += p => SetStatus($"Downloading {p * 100f:0}%");
+        checker.OnStatus += s => SetStatus(s);
 
-        // Start check
-        SetVisual("Checking updates…", checkingColor, false);
         checker.CheckForUpdate();
+#endif
     }
 
     void SetVisual(string text, Color c, bool interactable)
@@ -57,6 +69,11 @@ public class UpdateButtonController : MonoBehaviour
 
     void OnClick()
     {
+#if UNITY_EDITOR
+        // Guard in case the button is still clickable in the Editor
+        Debug.Log("Update disabled in Editor.");
+        return;
+#endif
         if (_pending == null)
             return; // nothing to do
         SetVisual("Preparing update…", checkingColor, false);

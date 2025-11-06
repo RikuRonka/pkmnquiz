@@ -36,13 +36,14 @@ public class UpdateInstaller : MonoBehaviour
         }
 
         // 2) Optional: verify SHA256
-        if (!string.IsNullOrEmpty(info.sha256) && info.sha256 != "optional-checksum-here")
+        if (
+            !string.IsNullOrEmpty(info.sha256)
+            && info.sha256 != "optional-checksum-here"
+            && !VerifySha256(zipPath, info.sha256)
+        )
         {
-            if (!VerifySha256(zipPath, info.sha256))
-            {
-                UnityEngine.Debug.LogError("Checksum mismatch. Aborting update.");
-                yield break;
-            }
+            UnityEngine.Debug.LogError("Checksum mismatch. Aborting update.");
+            yield break;
         }
 
         // 3) Launch updater and quit

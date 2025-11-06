@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 using System.IO;
-using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.Networking;
 
