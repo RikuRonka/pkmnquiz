@@ -10,12 +10,19 @@ public class UpdateInfo
     public string notes;
     public string url;
     public string sha256;
+
+    public static UpdateInfo Instance;
+
+    public UpdateInfo()
+    {
+        Instance = this;
+    }
 }
 
 public class UpdateChecker : MonoBehaviour
 {
     private const string manifestUrl =
-        "https://raw.githubusercontent.com/RikuRonka/pkmnquiz/main/latest.json";
+        "https://raw.githubusercontent.com/RikuRonka/pkmnquiz/refs/heads/main/latest.json";
 
     public event Action OnNoUpdate;
     public event Action<UpdateInfo> OnUpdateFound;
@@ -32,7 +39,6 @@ public class UpdateChecker : MonoBehaviour
         req.SetRequestHeader("User-Agent", "pkmnquiz-updater");
         req.SetRequestHeader("Accept", "application/json");
         req.SetRequestHeader("Cache-Control", "no-cache");
-        // optional: req.redirectLimit = 2;
 
         yield return req.SendWebRequest();
 
@@ -45,7 +51,6 @@ public class UpdateChecker : MonoBehaviour
         }
 
         var json = req.downloadHandler.text.Trim();
-        Debug.Log($"Update manifest:\n{json}");
 
         UpdateInfo info = null;
         try
