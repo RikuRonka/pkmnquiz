@@ -5,7 +5,6 @@ TODO:
 - pokeball icon in exe
 - after finishing show all in modal x button
 - background music volume in game, after correct guess. toggle on off
-- updater
 
 
 # 🧠 Pokémon Quiz  
