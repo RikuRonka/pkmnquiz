@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 
+[RequireComponent(typeof(PokemonCard))]
 public class PokemonCardHover
     : MonoBehaviour,
         IPointerEnterHandler,
@@ -23,7 +24,7 @@ public class PokemonCardHover
         string t1 = p.types != null && p.types.Length > 0 ? p.types[0] : null;
         string t2 = p.types != null && p.types.Length > 1 ? p.types[1] : null;
         var cam = e.pressEventCamera ?? e.enterEventCamera ?? Camera.main;
-        TooltipManager.Instance?.Show(p.name, t1, t2, e.position, cam);
+        TooltipManager.Instance?.ShowFollow(p.name, t1, t2, null, e.position, cam);
         _hovering = true;
     }
 
@@ -32,7 +33,7 @@ public class PokemonCardHover
         if (!CanShow)
             return;
         var cam = e.pressEventCamera ?? e.enterEventCamera ?? Camera.main;
-        TooltipManager.Instance?.Move(e.position, cam);
+        TooltipManager.Instance?.MoveFollow(e.position, cam);
     }
 
     public void OnPointerExit(PointerEventData e)
@@ -56,6 +57,6 @@ public class PokemonCardHover
 
         pos = Input.mousePosition;
 #endif
-        TooltipManager.Instance?.Move(pos, null); // Overlay canvas => cam is null
+        TooltipManager.Instance?.MoveFollow(pos, null); // Overlay canvas => cam is null
     }
 }

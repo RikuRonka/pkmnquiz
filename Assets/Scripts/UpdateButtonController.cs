@@ -1,17 +1,22 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 [RequireComponent(typeof(Button))]
 [RequireComponent(typeof(CanvasGroup))]
-public class UpdateButtonController : MonoBehaviour
+public class UpdateButtonController
+    : MonoBehaviour,
+        IPointerEnterHandler,
+        IPointerExitHandler,
+        IPointerMoveHandler
 {
     [Header("Wiring")]
     public Button button;
-    public Image buttonBg; // optional, can be null
-    public TMP_Text currentVersionLabel; // "v1.0.0"
-    public TMP_Text label; // main button text
-    public UpdaterRunner checker; // your UpdaterRunner component
+    public Image buttonBg;
+    public TMP_Text currentVersionLabel;
+    public TMP_Text label;
+    public UpdaterRunner checker;
 
     [Header("Colors")]
     public Color okColor = new(0.70f, 0.20f, 0.20f);
@@ -22,40 +27,27 @@ public class UpdateButtonController : MonoBehaviour
 
     void Awake()
     {
-#if UNITY_EDITOR
-        // Editor-only: disable the button and bail out
-        if (currentVersionLabel)
-            currentVersionLabel.text = $"v{Application.version}";
-        if (label)
-            label.text = "Updates disabled in Editor";
-        if (button)
-            button.interactable = false;
-
-        var cg = GetComponent<CanvasGroup>();
-        if (!cg)
-            cg = gameObject.AddComponent<CanvasGroup>();
-        cg.interactable = false;
-        cg.blocksRaycasts = false;
-
-#else
         if (!button)
             button = GetComponent<Button>();
-        if (currentVersionLabel)
-            currentVersionLabel.text = $"v{Application.version}";
+        currentVersionLabel?.SetText($"v{Application.version}");
         button.onClick.AddListener(OnClick);
 
-        SetChecking();
-        checker.OnNoUpdate += () => SetNoUpdate();
+        checker.OnNoUpdate += () =>
+        {
+            _pending = null;
+            SetVisual("No updates available", okColor, false);
+        };
         checker.OnUpdateFound += info =>
         {
             _pending = info;
-            SetUpdateAvailable();
+            SetVisual("Updates available!", readyColor, true);
         };
-        checker.OnDownloadProgress += p => SetStatus($"Downloading {p * 100f:0}%");
-        checker.OnStatus += s => SetStatus(s);
+        checker.OnDownloadProgress += p =>
+            SetVisual($"Downloading {p * 100f:0}%", checkingColor, false);
+        checker.OnStatus += s => label.SetText(s);
 
+        SetVisual("Checking updates…", checkingColor, false);
         checker.CheckForUpdate();
-#endif
     }
 
     void SetVisual(string text, Color c, bool interactable)
@@ -67,16 +59,59 @@ public class UpdateButtonController : MonoBehaviour
         button.interactable = interactable;
     }
 
-    void OnClick()
+    void OnDestroy()
+    {
+        if (checker == null)
+            return;
+        checker.OnNoUpdate -= OnNoUpdate;
+        checker.OnUpdateFound -= OnFound;
+        checker.OnDownloadProgress -= OnProgress;
+        checker.OnStatus -= OnStatusText;
+    }
+
+    void OnNoUpdate() => SetVisual("No updates available", okColor, false);
+
+    void OnFound(UpdateInfo i)
+    {
+        _pending = i;
+        SetVisual("Updates available!", readyColor, true);
+    }
+
+    void OnProgress(float p) => SetVisual($"Downloading {p * 100f:0}%", checkingColor, false);
+
+    void OnStatusText(string s) => label.SetText(s);
+
+    private void OnClick()
     {
 #if UNITY_EDITOR
-        // Guard in case the button is still clickable in the Editor
-        Debug.Log("Update disabled in Editor.");
-        return;
-#endif
+        Debug.LogWarning("Updater disabled in Editor.");
+#else
         if (_pending == null)
-            return; // nothing to do
+            return;
         SetVisual("Preparing update…", checkingColor, false);
-        checker.StartUpdate(); // <-- launches download + Updater.exe
+        checker.StartUpdate();
+#endif
+    }
+
+    public void OnPointerEnter(PointerEventData e)
+    {
+        if (_pending == null)
+            return;
+
+        var anchor = (RectTransform)button.transform; // the "Full quiz" button RectTransform
+        TooltipManager.Instance?.ShowUpdateUnder(
+            anchor,
+            version: $"v{_pending.version}",
+            notes: _pending.notes,
+            gapY: 10f,
+            centerToAnchor: false // set true if you prefer centered
+        );
+    }
+
+    public void OnPointerMove(PointerEventData e) { }
+
+    public void OnPointerExit(PointerEventData e)
+    {
+        TooltipManager.Instance.Hide();
     }
 }
