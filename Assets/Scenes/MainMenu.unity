@@ -2291,6 +2291,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c9e37e7027571d49ab69db1af70b099, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UpdateChecker
+  manifestUrl: https://raw.githubusercontent.com/RikuRonka/pkmnquiz/main/latest.json
+  gameExeName: pkmnquiz.exe
+  updaterExeName: Updater.exe
+  updaterWaitMs: 800
 --- !u!114 &552352882
 MonoBehaviour:
   m_ObjectHideFlags: 0
