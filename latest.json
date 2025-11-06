@@ -1,6 +1,5 @@
 {
-  "version": "1.0.1",
-  "notes": "test",
-  "url": "https://www.mediafire.com/file/n9z8r3t0bja8xfd/pkmnquiz_build.zip/file",
-  "sha256": "optional-checksum-here"
+  "version": "1.0.2",
+  "notes": "added cheese background",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build_with_cheese.zip"
 }
