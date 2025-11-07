@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 [RequireComponent(typeof(Graphic))]
+[RequireComponent(typeof(Image))]
 public partial class PokemonCard : MonoBehaviour
 {
     [Header("Refs")]
@@ -52,6 +53,13 @@ public partial class PokemonCard : MonoBehaviour
     public Pokemon Bound;
     public bool IsRevealed { get; private set; }
 
+    [SerializeField]
+    Image background; // the white tile Image
+
+    [SerializeField]
+    GameObject missRing; // the red circle child
+    Outline _outline;
+
     void Awake()
     {
         if (!TryGetComponent<PokemonCardHover>(out _))
@@ -68,7 +76,19 @@ public partial class PokemonCard : MonoBehaviour
             highlight = transform.Find("Highlight")?.GetComponent<Image>();
 
         rt = (RectTransform)transform;
-
+        if (!background)
+            background = GetComponent<Image>();
+        if (!_outline && background)
+        {
+            _outline = background.GetComponent<Outline>();
+            if (!_outline)
+                _outline = background.gameObject.AddComponent<Outline>();
+            _outline.useGraphicAlpha = false;
+            _outline.effectDistance = new Vector2(4f, -4f); // nice crisp square
+            _outline.enabled = false;
+        }
+        if (missRing)
+            missRing.SetActive(false);
         if (spriteImage)
         {
             spriteImage.preserveAspect = true;
@@ -117,6 +137,27 @@ public partial class PokemonCard : MonoBehaviour
             g.raycastTarget = false;
         }
         ResizeArtToCell();
+    }
+
+    public void ShowEndState(bool guessed)
+    {
+        if (_outline)
+        {
+            _outline.enabled = guessed;
+            if (guessed)
+                _outline.effectColor = new Color(0.30f, 0.95f, 0.30f, 1f); // green
+        }
+        if (missRing)
+            missRing.SetActive(!guessed); // red circle for missed
+    }
+
+    /// clear any markers when (re)starting a quiz
+    public void ClearEndState()
+    {
+        if (_outline)
+            _outline.enabled = false;
+        if (missRing)
+            missRing.SetActive(false);
     }
 
     private static void FitImageAsCenteredSquare(Image img, float pad)

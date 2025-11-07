@@ -17,6 +17,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     public TMP_Text timerText;
     public Button giveUpBtn;
 
+    public FinishedDialog finishedDialog;
+
     [Header("Grid")]
     public PokemonCard cardPrefab;
 
@@ -758,7 +760,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         solved.Clear();
         hinted.Clear();
         megaFormsByBase.Clear();
-
+        finishedDialog.Hide();
         megaSlotPickByBase.Clear();
         megaCardByBase.Clear();
         expeditionByBaseName.Clear();
@@ -877,6 +879,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             {
                 var sec = mainByGen[p.generation];
                 var card = Instantiate(cardPrefab, sec.gridRoot);
+                card.ClearEndState();
                 card.Bind(p);
                 cardById[p.id] = card;
                 pokemonById[p.id] = p;
@@ -889,6 +892,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 {
                     var pick = kv.Value[rng.Next(kv.Value.Count)];
                     var c = Instantiate(cardPrefab, gen6Megas.gridRoot);
+                    c.ClearEndState();
                     c.Bind(pick);
                     megaSlotPickByBase[kv.Key] = pick;
                     megaCardByBase[kv.Key] = c;
@@ -952,6 +956,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 foreach (var p in gmaxPoolF)
                 {
                     var c = Instantiate(cardPrefab, fullGmax.gridRoot);
+                    c.ClearEndState();
                     c.Bind(p);
                     cardById[p.id] = c;
                     pokemonById[p.id] = p;
@@ -989,6 +994,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 foreach (var p in hisuiPoolF)
                 {
                     var c = Instantiate(cardPrefab, fullHisui.gridRoot);
+                    c.ClearEndState();
                     c.Bind(p);
                     cardById[p.id] = c;
                     pokemonById[p.id] = p;
@@ -1102,6 +1108,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             }
 
             var card = Instantiate(cardPrefab, main.gridRoot);
+            card.ClearEndState();
             card.Bind(p);
             cardById[p.id] = card;
             pokemonById[p.id] = p;
@@ -1114,6 +1121,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             {
                 var pick = kv.Value[rng.Next(kv.Value.Count)];
                 var card = Instantiate(cardPrefab, megas.gridRoot);
+                card.ClearEndState();
                 card.Bind(pick);
                 megaSlotPickByBase[kv.Key] = pick;
                 megaCardByBase[kv.Key] = card;
@@ -1127,6 +1135,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             foreach (var p in hisuiPoolGen.OrderBy(p => DexOrder.GetIndex(p)))
             {
                 var card = Instantiate(cardPrefab, hisuiSec.gridRoot);
+                card.ClearEndState();
                 card.Bind(p);
                 cardById[p.id] = card;
                 pokemonById[p.id] = p;
@@ -1161,6 +1170,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             foreach (var p in gmaxPoolGen.OrderBy(p => DexOrder.GetIndex(p)))
             {
                 var c = Instantiate(cardPrefab, gmaxSec.gridRoot);
+                c.ClearEndState();
                 c.Bind(p);
                 cardById[p.id] = c;
                 pokemonById[p.id] = p;
@@ -1211,6 +1221,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             foreach (var p in expOrdered)
             {
                 var c = Instantiate(cardPrefab, paldeaExpeditions.gridRoot);
+                c.ClearEndState();
                 c.Bind(p);
                 cardById[p.id] = c;
                 pokemonById[p.id] = p;
@@ -1608,6 +1619,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             guessInput.ActivateInputField();
         }
         running = true;
+        finishedDialog.Hide();
     }
 
     private void UpdateScore()
@@ -1840,10 +1852,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                             running = false;
                             if (guessInput)
                                 guessInput.interactable = false;
-                            toast?.Show(
-                                $"Finished in {TimeSpan.FromSeconds(elapsed):hh\\:mm\\:ss}",
-                                2.5f
-                            );
+                            if (finishedDialog)
+                                finishedDialog.Show(
+                                    solved.Count,
+                                    cardById.Count,
+                                    System.TimeSpan.FromSeconds(elapsed)
+                                );
                         }
                         return;
                     }
@@ -2085,17 +2099,35 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         {
             int id = kv.Key;
             var card = kv.Value;
+
             if (!solved.Contains(id))
                 solved.Add(id);
-            card.Reveal();
+
+            card.Reveal(); // your existing reveal
+        }
+
+        // markers
+        foreach (var kv in cardById)
+        {
+            bool guessed = solved.Contains(kv.Key);
+            kv.Value.ShowEndState(guessed);
         }
 
         UpdateScore();
-
         running = false;
         if (guessInput)
             guessInput.interactable = false;
-        toast?.Show($"Finished in {TimeSpan.FromSeconds(elapsed):hh\\:mm\\:ss}", 2.5f);
+
+        // modal instead of auto-dismissing toast
+        if (finishedDialog)
+        {
+            Debug.Log("[QuizManager] Calling FinishedDialog.Show");
+            finishedDialog.Show(solved.Count, cardById.Count, TimeSpan.FromSeconds(elapsed));
+        }
+        else
+        {
+            Debug.LogWarning("[QuizManager] finishedDialog reference is NULL");
+        }
     }
 
     public IEnumerator BuildWithExternalProgress(Action<float> report, float from, float to)
