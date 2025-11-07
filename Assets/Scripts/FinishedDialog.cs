@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -25,27 +26,24 @@ public class FinishedDialog : MonoBehaviour
         Hide(); // start hidden
     }
 
-    public void Show(int guessed, int total, System.TimeSpan time)
+    public void Show(int guessed, int total, TimeSpan elapsed, bool gaveUp)
     {
         if (!cg)
             cg = GetComponent<CanvasGroup>();
-
-        if (header)
-            header.text = "Finished!";
-        if (body)
-            body.text = $"Guessed {guessed} • Missed {total - guessed}\nTime: {time:hh\\:mm\\:ss}";
-
-        // ensure on top of its siblings (above ScrollRect/content)
+        gameObject.SetActive(true);
         transform.SetAsLastSibling();
 
-        // if it lives under some layout, give it its own overlay canvas
-        // EnsureOverlayCanvas();
+        if (header)
+            header.text = gaveUp ? "Finished! (You gave up)" : "Finished!";
+        if (body)
+        {
+            var missed = Mathf.Max(0, total - guessed);
+            body.text = $"Guessed {guessed} • Missed {missed}\nTime: {elapsed:hh\\:mm\\:ss}";
+        }
 
         cg.alpha = 1f;
         cg.blocksRaycasts = true;
         cg.interactable = true;
-
-        Debug.Log("[FinishedDialog] Show called.");
     }
 
     void Update()

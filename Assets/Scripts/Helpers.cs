@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 public static class Helpers
 {
@@ -46,19 +45,31 @@ public static class Helpers
         return PaldeaExpeditionNames.Contains(k);
     }
 
+    public static bool IsRegionalForm(Pokemon p)
+    {
+        if (p == null)
+            return false;
+
+        // Existing regional checks you already have:
+        if (IsAlola(p) || IsGalarForm(p) || IsHisui(p))
+            return true;
+
+        // Paldea regional forms (e.g., Tauros-Paldea). Adjust if your DB uses a different key.
+        if (HasForm(p, "paldea") || NameHas(p, "(Paldea") || NameHas(p, "Paldean"))
+            return true;
+
+        return false;
+    }
+
     public static bool IsPaldeaExpeditionOrBloodmoon(Pokemon p)
     {
         if (p == null)
             return false;
-        if (Helpers.IsPaldeaExpedition(p))
+        if (IsPaldeaExpedition(p))
             return true;
 
-        return string.Equals(p.formKey, "bloodmoon", System.StringComparison.OrdinalIgnoreCase)
-            || string.Equals(
-                p.formKey,
-                "bloodmoonursaluna",
-                System.StringComparison.OrdinalIgnoreCase
-            );
+        return string.Equals(p.formKey, "bloodmoon", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(p.formKey, "bloodmoonursaluna", StringComparison.OrdinalIgnoreCase);
     }
 
     private static readonly HashSet<int> PaldeaExpeditionBaseIds = new()

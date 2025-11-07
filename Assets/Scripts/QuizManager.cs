@@ -90,6 +90,22 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private bool _testRunning;
     private bool _testCancel;
 
+    [Header("Audio")]
+    [SerializeField]
+    AudioSource sfx; // drag an AudioSource here
+
+    [SerializeField]
+    AudioClip correctSfx; // “ding”
+
+    [SerializeField]
+    AudioClip duplicateSfx; // “already guessed”
+
+    [SerializeField]
+    AudioClip backgroundMusic; // “already guessed”
+
+    [SerializeField, Range(0f, 1f)]
+    float sfxVolume = 1f;
+
     private void Awake()
     {
         PokemonDatabase.Instance.LoadIfNeeded();
@@ -156,6 +172,18 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     }
 
     bool IsComplete() => solved.Count >= TotalGoal();
+
+    void PlayCorrect()
+    {
+        if (sfx && correctSfx)
+            sfx.PlayOneShot(correctSfx, sfxVolume);
+    }
+
+    void PlayDuplicate()
+    {
+        if (sfx && duplicateSfx)
+            sfx.PlayOneShot(duplicateSfx, sfxVolume);
+    }
 
     IEnumerator CoAutoTypeAll()
     {
@@ -512,6 +540,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             running = false;
             if (guessInput)
                 guessInput.interactable = false;
+            if (finishedDialog)
+                finishedDialog.Show(
+                    solved.Count,
+                    cardById.Count,
+                    TimeSpan.FromSeconds(elapsed),
+                    gaveUp: false
+                );
         }
     }
 
@@ -572,36 +607,46 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (guess == null)
             return null;
 
+        // If this exact species has a card in the current quiz, use it.
         if (cardById.ContainsKey(guess.id))
             return guess;
 
-        int baseId = guess.baseId != 0 ? guess.baseId : guess.id;
+        // Only consider base redirection for true *forms*, not separate species.
+        bool isForm =
+            Helpers.IsMega(guess)
+            || Helpers.IsGmax(guess)
+            || Helpers.IsHisui(guess)
+            || (
+                typeof(Helpers).GetMethod("IsRegionalForm") != null && Helpers.IsRegionalForm(guess)
+            )
+            || Helpers.IsPaldeaExpeditionOrBloodmoon(guess);
 
-        bool baseInMain = targetList.Any(p =>
-            !Helpers.IsMega(p) && (p.baseId != 0 ? p.baseId : p.id) == baseId
-        );
-
-        if (baseInMain)
+        if (isForm)
         {
+            int baseId = guess.baseId != 0 ? guess.baseId : guess.id;
+
+            // If this quiz shows a single picked Mega slot per base, route to that card.
+            if (generation == 6 && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
+                return megaPick;
+
+            // Route to Expedition card when applicable (Full or Gen9 quiz).
+            if (
+                (generation == 9 || generation == 0)
+                && expeditionPickByBase.TryGetValue(baseId, out var expPick)
+            )
+                return expPick;
+
+            // Otherwise, if the base species itself is in this quiz, target it.
             var baseEntry = targetList.FirstOrDefault(p =>
-                !Helpers.IsMega(p) && (p.baseId != 0 ? p.baseId : p.id) == baseId
+                !Helpers.IsMega(p) && ((p.baseId != 0 ? p.baseId : p.id) == baseId)
             );
-            if (baseEntry != null)
+
+            if (baseEntry != null && cardById.ContainsKey(baseEntry.id))
                 return baseEntry;
         }
-        else
-        {
-            if (megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
-                return megaPick;
-        }
-        if (
-            generation == 9
-            && !baseInMain
-            && expeditionPickByBase.TryGetValue(baseId, out var expPick2)
-        )
-            return expPick2;
 
-        return targetList.FirstOrDefault(p => (p.baseId != 0 ? p.baseId : p.id) == baseId);
+        // No mapping possible.
+        return null;
     }
 
     public void OnBackToMenuClicked()
@@ -918,6 +963,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 foreach (var p in expOrdered)
                 {
                     var c = Instantiate(cardPrefab, gen9Expeditions.gridRoot);
+                    c.ClearEndState();
                     c.Bind(p);
                     cardById[p.id] = c;
                     pokemonById[p.id] = p;
@@ -1293,6 +1339,38 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     bool HasTypeFilter => !string.IsNullOrEmpty(selectedType);
 
+    private void RevealSiblingFormsForBase(int baseKey, bool includeExpeditions = false)
+    {
+        foreach (var kv in cardById)
+        {
+            if (!pokemonById.TryGetValue(kv.Key, out var poke))
+                continue;
+
+            int pokeBase = poke.baseId != 0 ? poke.baseId : poke.id;
+            if (pokeBase != baseKey)
+                continue;
+
+            // treat only forms as siblings (NOT evolutions)
+            bool isVariantForm =
+                Helpers.IsMega(poke)
+                || Helpers.IsGmax(poke)
+                || Helpers.IsHisui(poke)
+                || Helpers.IsRegionalForm(poke)
+                || // add this helper if you have it
+                (!string.IsNullOrEmpty(poke.formKey) && poke.baseId != 0 && poke.baseId != poke.id)
+                || (includeExpeditions && Helpers.IsPaldeaExpeditionOrBloodmoon(poke));
+
+            if (!isVariantForm)
+                continue;
+
+            if (!solved.Contains(kv.Key))
+            {
+                solved.Add(kv.Key);
+                kv.Value.Reveal();
+            }
+        }
+    }
+
     bool MatchesType(Pokemon p)
     {
         if (!HasTypeFilter)
@@ -1300,7 +1378,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (p?.types == null)
             return false;
         for (int i = 0; i < p.types.Length; i++)
-            if (string.Equals(p.types[i], selectedType, System.StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(p.types[i], selectedType, StringComparison.OrdinalIgnoreCase))
                 return true;
         return false;
     }
@@ -1361,14 +1439,26 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         return true;
     }
 
-    private void RevealAllVariantsForBase(int baseKey)
+    private void RevealAllVariantsForBase(int baseKey, bool includeExpeditions = false)
     {
         foreach (var kv in cardById)
         {
-            if (!pokemonById.TryGetValue(kv.Key, out var poke))
+            if (!pokemonById.TryGetValue(kv.Key, out var p))
                 continue;
-            int pokeBase = poke.baseId != 0 ? poke.baseId : poke.id;
-            if (pokeBase != baseKey)
+
+            int b = p.baseId != 0 ? p.baseId : p.id;
+            if (b != baseKey)
+                continue;
+
+            bool isVariant =
+                Helpers.IsMega(p)
+                || Helpers.IsGmax(p)
+                || Helpers.IsHisui(p)
+                || Helpers.IsRegionalForm(p)
+                || // <- regional forms only
+                (includeExpeditions && Helpers.IsPaldeaExpeditionOrBloodmoon(p));
+
+            if (!isVariant)
                 continue;
 
             if (!solved.Contains(kv.Key))
@@ -1376,26 +1466,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 solved.Add(kv.Key);
                 kv.Value.Reveal();
             }
-        }
-
-        if (
-            megaSlotPickByBase.TryGetValue(baseKey, out var megaPick)
-            && cardById.TryGetValue(megaPick.id, out var megaCard)
-            && !solved.Contains(megaPick.id)
-        )
-        {
-            solved.Add(megaPick.id);
-            megaCard.Reveal();
-        }
-
-        if (
-            expeditionPickByBase.TryGetValue(baseKey, out var expPick)
-            && cardById.TryGetValue(expPick.id, out var expCard)
-            && !solved.Contains(expPick.id)
-        )
-        {
-            solved.Add(expPick.id);
-            expCard.Reveal();
         }
     }
 
@@ -1702,9 +1772,17 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
         }
 
-        bool commit = char.IsWhiteSpace(currentText[currentText.Length - 1]);
+        bool commit = char.IsWhiteSpace(currentText[^1]);
         string raw = commit ? currentText.TrimEnd() : currentText;
-
+        if (commit)
+        {
+            var ov = ExactNameOverrides.TryGet(raw);
+            if (ov != null)
+            {
+                HandleCandidate(ov, raw, true);
+                return;
+            }
+        }
         TryAcceptWithDisambiguation(raw, commit);
     }
 
@@ -1730,6 +1808,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private static Pokemon FindByExactPreserveDigits(string text)
     {
+        var ov = ExactNameOverrides.TryGet(text);
+        if (ov != null)
+            return ov;
         var k = KeyKeepDigits(text);
         if (string.IsNullOrEmpty(k))
             return null;
@@ -1768,17 +1849,18 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         var exact = FindByExactPreserveDigits(text);
         if (exact != null)
         {
-            var mappedFromExact = MapToTargetSpecies(exact);
-            if (mappedFromExact != null && !cardById.ContainsKey(exact.id))
+            // If that exact species has a card, just use it — no base folding.
+            if (cardById.ContainsKey(exact.id))
             {
-                HandleCandidate(mappedFromExact, text, commit);
+                HandleCandidate(exact, text, commit);
                 return;
             }
 
-            var targetIfExact = MapToTargetSpecies(exact);
-            if (targetIfExact != null)
+            // Else fall back to the (form) mapping rules.
+            var mapped = MapToTargetSpecies(exact);
+            if (mapped != null)
             {
-                HandleCandidate(exact, text, commit);
+                HandleCandidate(mapped, text, commit);
                 return;
             }
 
@@ -1811,6 +1893,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         var target = MapToTargetSpecies(guess);
 
+        // Not part of this quiz
         if (target == null)
         {
             var key = GuessNormalizer.Key(originalText);
@@ -1820,76 +1903,60 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
         }
 
+        // Already solved path
         if (solved.Contains(target.id))
         {
-            var keyNorm = GuessNormalizer.Key(originalText);
-            var baseKey = StripDigits(keyNorm);
-            if (!string.IsNullOrEmpty(baseKey) && baseKey != keyNorm)
+            // Hard override reroute (if you kept the ExactNameOverrides helper)
+            var ov = ExactNameOverrides.TryGet(originalText);
+            if (
+                ov != null
+                && ov.id != target.id
+                && cardById.ContainsKey(ov.id)
+                && !solved.Contains(ov.id)
+            )
             {
-                var altGuess = FindByExactKey(baseKey);
-                if (altGuess != null)
-                {
-                    var altTarget = MapToTargetSpecies(altGuess);
-                    if (altTarget == null)
-                    {
-                        ShowNotInQuiz(altGuess.name);
-                        guessInput?.SetTextWithoutNotify(string.Empty);
-                        guessInput?.ActivateInputField();
-                        guessInput?.Select();
-                        return;
-                    }
-                    if (!solved.Contains(altTarget.id))
-                    {
-                        solved.Add(altTarget.id);
-                        if (cardById.TryGetValue(altTarget.id, out var altCard))
-                            altCard.Reveal();
-                        UpdateScore();
-                        guessInput?.SetTextWithoutNotify(string.Empty);
-                        guessInput?.ActivateInputField();
-                        guessInput?.Select();
-                        if (IsComplete())
-                        {
-                            running = false;
-                            if (guessInput)
-                                guessInput.interactable = false;
-                            if (finishedDialog)
-                                finishedDialog.Show(
-                                    solved.Count,
-                                    cardById.Count,
-                                    System.TimeSpan.FromSeconds(elapsed)
-                                );
-                        }
-                        return;
-                    }
-
-                    if (cardById.TryGetValue(altTarget.id, out var altAlready))
-                    {
-                        altAlready.FlashHighlight();
-                        guessInput.text = "";
-                    }
-                    guessInput?.SetTextWithoutNotify(string.Empty);
-                    guessInput?.ActivateInputField();
-                    guessInput?.Select();
-                    return;
-                }
+                HandleCandidate(ov, originalText, true);
+                return;
             }
 
+            // Exact-other reroute
+            var exactOther = FindByExactPreserveDigits(originalText);
+            if (
+                exactOther != null
+                && exactOther.id != target.id
+                && cardById.ContainsKey(exactOther.id)
+                && !solved.Contains(exactOther.id)
+            )
+            {
+                HandleCandidate(exactOther, originalText, true);
+                return;
+            }
+
+            // If not committed yet, do nothing — let user keep typing towards a longer name.
+            if (!commit)
+            {
+                // Optional: lightweight visual cue without clearing
+                if (cardById.TryGetValue(target.id, out var soft))
+                    soft.FlashHighlight();
+                return;
+            }
+
+            // Committed duplicate -> give feedback and clear
             if (cardById.TryGetValue(target.id, out var already))
             {
                 already.FlashHighlight();
-                guessInput.text = "";
+                PlayDuplicate();
                 MaybeScrollTo(target);
             }
-            if (!commit && HasInQuizContinuation(originalText))
-                return;
-            guessInput.SetTextWithoutNotify(string.Empty);
-            guessInput.ActivateInputField();
-            guessInput.Select();
+            guessInput?.SetTextWithoutNotify(string.Empty);
+            guessInput?.ActivateInputField();
+            guessInput?.Select();
             return;
         }
 
+        // If the text isn't an exact name/alias for this target and it's ambiguous,
+        // wait for commit (space/enter) before accepting.
         bool isExactForTarget = IsExactNameOrAlias(originalText, target);
-
         if (!isExactForTarget)
         {
             var ambKey = GuessNormalizer.Key(originalText);
@@ -1898,33 +1965,43 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return;
         }
 
+        // Accept guess
         solved.Add(target.id);
         if (cardById.TryGetValue(target.id, out var card))
         {
             card.Reveal();
             MaybeScrollTo(target);
         }
+        PlayCorrect();
 
+        // In FULL quiz, only auto-reveal same-base VARIANTS (forms), not evolutions
         if (generation == 0)
         {
             int baseKey = target.baseId != 0 ? target.baseId : target.id;
-            RevealAllVariantsForBase(baseKey);
+            // Only forms (mega/gmax/hisui/regional/expedition when desired)
+            RevealAllVariantsForBase(baseKey, includeExpeditions: false);
         }
 
-        int beiskey = target.baseId != 0 ? target.baseId : target.id;
-        RevealAllVariantsForBase(beiskey);
         UpdateScore();
 
-        guessInput.SetTextWithoutNotify(string.Empty);
-        guessInput.ActivateInputField();
-        guessInput.Select();
+        // Reset input focus for fast typing
+        guessInput?.SetTextWithoutNotify(string.Empty);
+        guessInput?.ActivateInputField();
+        guessInput?.Select();
 
+        // Finish condition
         if (IsComplete())
         {
             running = false;
             if (guessInput)
                 guessInput.interactable = false;
-            toast?.Show($"Finished in {TimeSpan.FromSeconds(elapsed):hh\\:mm\\:ss}", 2.5f);
+
+            finishedDialog?.Show(
+                guessed: solved.Count,
+                total: cardById.Count,
+                elapsed: TimeSpan.FromSeconds(elapsed),
+                gaveUp: false
+            );
         }
     }
 
@@ -2095,39 +2172,36 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void RevealAll()
     {
+        // 1) Snapshot what was actually guessed before giving up
+        var guessedIds = new HashSet<int>(solved);
+
+        // 2) Reveal visuals for all cards, but DON'T add to solved here
         foreach (var kv in cardById)
         {
             int id = kv.Key;
             var card = kv.Value;
 
-            if (!solved.Contains(id))
-                solved.Add(id);
+            // reveal picture/text, etc.
+            card.Reveal();
 
-            card.Reveal(); // your existing reveal
+            // 3) Paint end state using the snapshot
+            bool guessed = guessedIds.Contains(id);
+            card.ShowEndState(guessed);
         }
 
-        // markers
-        foreach (var kv in cardById)
-        {
-            bool guessed = solved.Contains(kv.Key);
-            kv.Value.ShowEndState(guessed);
-        }
-
+        // 4) Leave 'solved' as-is, score remains the real guessed count
         UpdateScore();
         running = false;
         if (guessInput)
             guessInput.interactable = false;
 
-        // modal instead of auto-dismissing toast
-        if (finishedDialog)
-        {
-            Debug.Log("[QuizManager] Calling FinishedDialog.Show");
-            finishedDialog.Show(solved.Count, cardById.Count, TimeSpan.FromSeconds(elapsed));
-        }
-        else
-        {
-            Debug.LogWarning("[QuizManager] finishedDialog reference is NULL");
-        }
+        // 5) Show the modal with correct numbers and “gave up” flag
+        finishedDialog?.Show(
+            guessed: guessedIds.Count,
+            total: cardById.Count,
+            elapsed: TimeSpan.FromSeconds(elapsed),
+            gaveUp: true
+        );
     }
 
     public IEnumerator BuildWithExternalProgress(Action<float> report, float from, float to)

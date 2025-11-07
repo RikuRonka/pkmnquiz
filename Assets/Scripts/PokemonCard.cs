@@ -54,10 +54,13 @@ public partial class PokemonCard : MonoBehaviour
     public bool IsRevealed { get; private set; }
 
     [SerializeField]
-    Image background; // the white tile Image
+    Image background;
 
     [SerializeField]
-    GameObject missRing; // the red circle child
+    GameObject redMiss;
+
+    [SerializeField]
+    GameObject greenBorder;
     Outline _outline;
 
     void Awake()
@@ -87,8 +90,6 @@ public partial class PokemonCard : MonoBehaviour
             _outline.effectDistance = new Vector2(4f, -4f); // nice crisp square
             _outline.enabled = false;
         }
-        if (missRing)
-            missRing.SetActive(false);
         if (spriteImage)
         {
             spriteImage.preserveAspect = true;
@@ -139,25 +140,30 @@ public partial class PokemonCard : MonoBehaviour
         ResizeArtToCell();
     }
 
-    public void ShowEndState(bool guessed)
-    {
-        if (_outline)
-        {
-            _outline.enabled = guessed;
-            if (guessed)
-                _outline.effectColor = new Color(0.30f, 0.95f, 0.30f, 1f); // green
-        }
-        if (missRing)
-            missRing.SetActive(!guessed); // red circle for missed
-    }
-
-    /// clear any markers when (re)starting a quiz
     public void ClearEndState()
     {
-        if (_outline)
-            _outline.enabled = false;
-        if (missRing)
-            missRing.SetActive(false);
+        if (greenBorder)
+            greenBorder.gameObject.SetActive(false);
+        if (redMiss)
+            redMiss.gameObject.SetActive(false);
+    }
+
+    public void ShowEndState(bool guessed)
+    {
+        if (guessed)
+        {
+            if (redMiss)
+                redMiss.SetActive(false);
+            if (greenBorder)
+                greenBorder.SetActive(true);
+        }
+        else
+        {
+            if (greenBorder)
+                greenBorder.SetActive(false);
+            if (redMiss)
+                redMiss.SetActive(true);
+        }
     }
 
     private static void FitImageAsCenteredSquare(Image img, float pad)
