@@ -2,7 +2,6 @@ TODO:
 - main menu hover buttons some effect
 - always scroll to pokemon (no matter is it guessed or not) checkbox for that
 - after pressing "give up" green square around the pokemon i have guessed. red circle around the ones that user didn't guess
-- pokeball icon in exe
 - after finishing show all in modal x button
 - background music volume in game, after correct guess. toggle on off
 
