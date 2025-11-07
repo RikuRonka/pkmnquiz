@@ -56,6 +56,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     public float testDelay = 0.02f; // seconds between entries
 
     [SerializeField]
+    Toggle alwaysScrollToggle;
+    Coroutine _scrollRoutine;
+    int _scrollToken;
+
+    [SerializeField]
     string selectedType;
     string TypeDisplay =>
         string.IsNullOrEmpty(selectedType)
@@ -487,7 +492,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (cardById.TryGetValue(target.id, out var card))
             {
                 card.Reveal();
-                ScrollToCard_FullQuiz(target);
+                MaybeScrollTo(target);
             }
 
             any = true;
@@ -517,6 +522,28 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             guessInput.SetTextWithoutNotify(string.Empty);
             guessInput.ActivateInputField();
             guessInput.Select();
+        }
+    }
+
+    void MaybeScrollTo(Pokemon p, float duration = 0.25f)
+    {
+        if (!scrollRect || !scrollRect.content || !scrollRect.viewport)
+            return;
+        if (p == null)
+            return;
+        if (!cardById.TryGetValue(p.id, out var card) || !card)
+            return;
+
+        if (alwaysScrollToggle.isOn)
+        {
+            if (_scrollRoutine != null)
+            {
+                StopCoroutine(_scrollRoutine);
+            }
+
+            _scrollRoutine = StartCoroutine(
+                CoSmartScrollTo(card.GetComponent<RectTransform>(), duration, ++_scrollToken)
+            );
         }
     }
 
@@ -1836,12 +1863,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (cardById.TryGetValue(target.id, out var already))
             {
                 already.FlashHighlight();
+                guessInput.text = "";
+                MaybeScrollTo(target);
             }
             if (!commit && HasInQuizContinuation(originalText))
                 return;
-            guessInput?.SetTextWithoutNotify(string.Empty);
-            guessInput?.ActivateInputField();
-            guessInput?.Select();
+            guessInput.SetTextWithoutNotify(string.Empty);
+            guessInput.ActivateInputField();
+            guessInput.Select();
             return;
         }
 
@@ -1859,7 +1888,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (cardById.TryGetValue(target.id, out var card))
         {
             card.Reveal();
-            ScrollToCard_FullQuiz(target);
+            MaybeScrollTo(target);
         }
 
         if (generation == 0)
@@ -1867,17 +1896,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             int baseKey = target.baseId != 0 ? target.baseId : target.id;
             RevealAllVariantsForBase(baseKey);
         }
-        if (generation == 0 && cardById.TryGetValue(target.id, out var _))
-            StartCoroutine(
-                CoScrollToCard_Debug(cardById[target.id].GetComponent<RectTransform>(), 0.25f)
-            );
+
         int beiskey = target.baseId != 0 ? target.baseId : target.id;
         RevealAllVariantsForBase(beiskey);
         UpdateScore();
 
-        guessInput?.SetTextWithoutNotify(string.Empty);
-        guessInput?.ActivateInputField();
-        guessInput?.Select();
+        guessInput.SetTextWithoutNotify(string.Empty);
+        guessInput.ActivateInputField();
+        guessInput.Select();
 
         if (IsComplete())
         {
@@ -1888,61 +1914,82 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
-    private void ScrollToCard_FullQuiz(Pokemon p, float duration = 0.25f)
+    IEnumerator CoSmartScrollTo(RectTransform target, float duration, int token)
     {
-        if (!scrollRect || !scrollRect.content || !scrollRect.viewport)
-            return;
-        if (!cardById.TryGetValue(p.id, out var card) || !card)
-            return;
-
-        var rt = card.GetComponent<RectTransform>();
-        if (!rt)
-            return;
-
-        StartCoroutine(CoScrollToCard_FullQuiz(rt, duration));
-    }
-
-    private IEnumerator CoScrollToCard_FullQuiz(RectTransform target, float duration)
-    {
-        yield return null;
-        Canvas.ForceUpdateCanvases();
-        yield return null;
-        Canvas.ForceUpdateCanvases();
-
-        var content = scrollRect.content;
-        var viewport = scrollRect.viewport;
-
-        float contentH = content.rect.height;
-        float viewH = viewport.rect.height;
-        if (contentH <= viewH)
+        if (!target)
             yield break;
 
-        Vector3[] targetCorners = new Vector3[4];
-        Vector3[] contentCorners = new Vector3[4];
-        target.GetWorldCorners(targetCorners);
-        content.GetWorldCorners(contentCorners);
+        // Let layout/content settle
+        for (int i = 0; i < 3; i++)
+        {
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+        }
+        if (token != _scrollToken)
+            yield break;
 
-        float targetTopY = targetCorners[1].y;
-        float contentTopY = contentCorners[1].y;
+        var sr = scrollRect;
+        float contentH = sr.content.rect.height;
+        float viewH = sr.viewport.rect.height;
+        if (contentH <= viewH)
+            yield break; // nothing to scroll
+
+        // Prevent inertia/user input from fighting the tween
+        bool oldInertia = sr.inertia;
+        Vector2 oldVel = sr.velocity;
+        sr.inertia = false;
+        sr.StopMovement();
+        sr.velocity = Vector2.zero;
+
+        float start = sr.verticalNormalizedPosition;
+        float t = 0f;
+
+        while (t < duration && token == _scrollToken)
+        {
+            t += Time.unscaledDeltaTime;
+            float targetNorm = CalcTargetNorm(sr, target);
+            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / duration));
+            sr.verticalNormalizedPosition = Mathf.Lerp(start, targetNorm, k);
+            yield return null;
+        }
+
+        if (token == _scrollToken)
+            sr.verticalNormalizedPosition = CalcTargetNorm(sr, target);
+
+        // restore
+        sr.inertia = oldInertia;
+        sr.velocity = oldVel;
+    }
+
+    // Pads a bit above the card and returns the desired normalized position.
+    static float CalcTargetNorm(ScrollRect sr, RectTransform target)
+    {
+        var viewport = sr.viewport;
+        var content = sr.content;
+
+        var contentBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+            viewport,
+            content
+        );
+        var targetBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+            viewport,
+            target
+        );
+
+        float contentH = contentBounds.size.y;
+        float viewH = viewport.rect.height;
+        float scrollable = Mathf.Max(1f, contentH - viewH);
+
+        float contentTopY = contentBounds.center.y + contentBounds.extents.y;
+        float targetTopY = targetBounds.center.y + targetBounds.extents.y;
 
         float fromTopPx = contentTopY - targetTopY;
 
-        float scrollable = Mathf.Max(1f, contentH - viewH);
-        float targetNorm = 1f - Mathf.Clamp01(fromTopPx / scrollable);
+        // keep a little headroom above the card (10% of viewport height)
+        float padPx = 0.10f * viewH;
+        fromTopPx = Mathf.Clamp(fromTopPx - padPx, 0f, scrollable);
 
-        float pad = 0.15f * (viewH / scrollable);
-        targetNorm = Mathf.Clamp01(targetNorm + pad);
-
-        float start = scrollRect.verticalNormalizedPosition;
-        float t = 0f;
-        while (t < 1f)
-        {
-            t += Time.unscaledDeltaTime / Mathf.Max(0.001f, duration);
-            float k = Mathf.SmoothStep(0f, 1f, t);
-            scrollRect.verticalNormalizedPosition = Mathf.Lerp(start, targetNorm, k);
-            yield return null;
-        }
-        scrollRect.verticalNormalizedPosition = targetNorm;
+        return 1f - (fromTopPx / scrollable);
     }
 
     private static string StripDigits(string key)

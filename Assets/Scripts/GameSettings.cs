@@ -1,3 +1,5 @@
+using UnityEngine;
+
 public static class GameSettings
 {
     public static int? Generation { get; set; } = null;
