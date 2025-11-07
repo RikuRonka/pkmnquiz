@@ -1,5 +1,4 @@
 TODO:
-- main menu hover buttons some effect
 - always scroll to pokemon (no matter is it guessed or not) checkbox for that
 - after pressing "give up" green square around the pokemon i have guessed. red circle around the ones that user didn't guess
 - after finishing show all in modal x button
