@@ -7,20 +7,40 @@ using UnityEngine.UI;
 public class PokemonTooltip : MonoBehaviour
 {
     [Header("Wiring")]
-    public TMP_Text nameLabel;
-    public Image type1Image;
-    public Image type2Image;
-    public TMP_Text descriptionText; // <— your notes text
-    public CanvasGroup cg;
-    public LayoutElement layoutElement; // <— add via Inspector
+    private TMP_Text nameLabel;
+
+    [SerializeField]
+    private Image type1Image;
+
+    [SerializeField]
+    private Image type2Image;
+
+    [SerializeField]
+    private TMP_Text descriptionText;
+
+    [SerializeField]
+    private CanvasGroup cg;
+
+    [SerializeField]
+    private LayoutElement layoutElement;
 
     [Header("Sizing")]
-    public float minWidth = 260f;
-    public float maxWidth = 560f;
-    public float contentPadding = 40f; // extra breathing room
+    [SerializeField]
+    private float minWidth = 260f;
 
+    [SerializeField]
+    private float maxWidth = 800f;
+
+    [SerializeField]
+    private float contentPadding = 40f;
     public bool IsVisible => cg && cg.alpha > 0.001f;
+    public float pokemonMaxWidth = 520f;
 
+    [SerializeField]
+    private RectTransform typesRow; // the row that holds the two type icons
+
+    [SerializeField]
+    private VerticalLayoutGroup vlg; // the inner VLG (optional, for padding)
     public Vector2 PreferredSize
     {
         get
@@ -35,6 +55,7 @@ public class PokemonTooltip : MonoBehaviour
 
     void Awake()
     {
+        AutoWire();
         if (!cg)
             cg = GetComponent<CanvasGroup>();
         if (cg)
@@ -48,25 +69,91 @@ public class PokemonTooltip : MonoBehaviour
         if (bg)
             bg.raycastTarget = false;
 
-        // Hide description by default (Pokémon mode)
         if (descriptionText)
             descriptionText.gameObject.SetActive(false);
     }
 
-    // Normal Pokémon mode (types visible, description hidden)
+    void AutoWire()
+    {
+        // Only fill if null, so your manual assignments win.
+        if (!nameLabel)
+            nameLabel = GetComponentInChildren<TMP_Text>(true);
+
+        var nrt = (RectTransform)nameLabel.transform;
+        nrt.anchorMin = new Vector2(0f, nrt.anchorMin.y);
+        nrt.anchorMax = new Vector2(1f, nrt.anchorMax.y);
+        nrt.offsetMin = new Vector2(0f, nrt.offsetMin.y);
+        nrt.offsetMax = new Vector2(0f, nrt.offsetMax.y);
+        nameLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        nameLabel.overflowMode = TextOverflowModes.Overflow; // let the container grow
+        nameLabel.alignment = TextAlignmentOptions.Center;
+        if (!type1Image || !type2Image)
+        {
+            var imgs = GetComponentsInChildren<Image>(true);
+            // crude: pick first two non-bg images by name
+            foreach (var img in imgs)
+            {
+                if (img == GetComponent<Image>())
+                    continue; // skip bg
+                if (!type1Image)
+                {
+                    type1Image = img;
+                    continue;
+                }
+                if (!type2Image)
+                {
+                    type2Image = img;
+                    break;
+                }
+            }
+        }
+        if (!descriptionText)
+        {
+            foreach (var t in GetComponentsInChildren<TMP_Text>(true))
+            {
+                if (t != nameLabel)
+                {
+                    descriptionText = t;
+                    break;
+                }
+            }
+        }
+        if (!layoutElement)
+            layoutElement = GetComponent<LayoutElement>();
+        if (!cg)
+            cg = GetComponent<CanvasGroup>();
+    }
+
     public void SetContent(string name, string type1, string type2)
     {
         ApplyPokemonContent(name, type1, type2);
-        ApplyWidth(-1); // reset preferred width
+
+        // Rebuild children first
+        LayoutRebuilder.ForceRebuildLayoutImmediate(nameLabel.rectTransform);
+        if (typesRow)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(typesRow);
+
+        // 1) Width needed for single-line title (no wrap)
+        float titleW = nameLabel.GetPreferredValues(nameLabel.text, pokemonMaxWidth, 0f).x;
+
+        // 2) Width needed for the icon row
+        float iconsW = typesRow ? LayoutUtility.GetPreferredWidth(typesRow) : 0f;
+
+        // 3) Add layout padding and your extra padding
+        int lp = vlg ? vlg.padding.left : 0;
+        int rp = vlg ? vlg.padding.right : 0;
+        float needed = Mathf.Max(titleW, iconsW) + lp + rp + contentPadding;
+
+        // 4) Clamp and apply
+        float w = Mathf.Clamp(needed, minWidth, pokemonMaxWidth);
+        ApplyWidth(w);
     }
 
-    // Update tooltip mode (description shown, left-aligned, types hidden)
     public void SetNotes(string title, string rawNotes)
     {
         if (nameLabel)
             nameLabel.text = title ?? "";
 
-        // Hide type icons in notes mode
         if (type1Image)
         {
             type1Image.enabled = false;
@@ -85,7 +172,6 @@ public class PokemonTooltip : MonoBehaviour
             descriptionText.text = FormatNotes(rawNotes);
         }
 
-        // Measure text and choose a good width (clamped)
         float targetWidth =
             MeasureNotesWidth(descriptionText, maxWidth - contentPadding) + contentPadding;
         targetWidth = Mathf.Clamp(targetWidth, minWidth, maxWidth);
@@ -115,8 +201,6 @@ public class PokemonTooltip : MonoBehaviour
         }
         cg.alpha = target;
     }
-
-    // ----------------- helpers -----------------
 
     void ApplyPokemonContent(string name, string type1, string type2)
     {
@@ -148,8 +232,6 @@ public class PokemonTooltip : MonoBehaviour
         if (string.IsNullOrWhiteSpace(notes))
             return "";
 
-        // Ensure bullets and line breaks:
-        // turn: "- foo - bar" or " - foo" into "\n• foo\n• bar"
         var s = notes.Replace("\r", "");
         s = System.Text.RegularExpressions.Regex.Replace(s, @"\s*-\s*", "\n• ");
         s = s.Trim();
@@ -162,7 +244,6 @@ public class PokemonTooltip : MonoBehaviour
     {
         if (t == null)
             return minWidth;
-        // Let TMP tell us the width needed for a single line up to hardMax
         var pref = t.GetPreferredValues(t.text, hardMax, 0);
         return Mathf.Min(pref.x, hardMax);
     }
@@ -171,7 +252,7 @@ public class PokemonTooltip : MonoBehaviour
     {
         if (!layoutElement)
             return;
-        layoutElement.preferredWidth = preferred; // -1 means “use layout”
+        layoutElement.preferredWidth = preferred;
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
     }
 }

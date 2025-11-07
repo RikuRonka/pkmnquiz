@@ -29,7 +29,7 @@ public class UpdateButtonController
     {
         if (!button)
             button = GetComponent<Button>();
-        currentVersionLabel?.SetText($"v{Application.version}");
+        currentVersionLabel.SetText($"v{Application.version}");
         button.onClick.AddListener(OnClick);
 
         checker.OnNoUpdate += () =>

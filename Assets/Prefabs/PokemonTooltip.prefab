@@ -110,9 +110,9 @@ MonoBehaviour:
     m_Right: 10
     m_Top: 15
     m_Bottom: 10
-  m_ChildAlignment: 0
+  m_ChildAlignment: 1
   m_Spacing: 49.98
-  m_ChildForceExpandWidth: 0
+  m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
   m_ChildControlHeight: 0
@@ -184,7 +184,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.HorizontalLayoutGroup
   m_Padding:
-    m_Left: 49
+    m_Left: 4
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
@@ -249,7 +249,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f37438c22b452f746a737d21fd8ec0e4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PokemonTooltip
-  nameLabel: {fileID: 4621056183806706558}
   type1Image: {fileID: 8863840350558703337}
   type2Image: {fileID: 9148875107792558331}
   descriptionText: {fileID: 4375269122442799033}
@@ -258,6 +257,9 @@ MonoBehaviour:
   minWidth: 260
   maxWidth: 560
   contentPadding: 40
+  pokemonMaxWidth: 520
+  typesRow: {fileID: 0}
+  vlg: {fileID: 0}
 --- !u!222 &4171893185443187809
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -534,8 +536,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 157.8474, y: -139.98}
-  m_SizeDelta: {x: 295.6948, y: 50}
+  m_AnchoredPosition: {x: 141.486, y: -139.98}
+  m_SizeDelta: {x: 262.973, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &3095114772635455012
 CanvasRenderer:
@@ -672,7 +674,7 @@ RectTransform:
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 50}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_Pivot: {x: 0.5, y: 1}
 --- !u!222 &5817953783187446124
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -766,7 +768,7 @@ MonoBehaviour:
   m_VertexBufferAutoSizeReduction: 0
   m_useMaxVisibleDescender: 1
   m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: 0, w: 0}
+  m_margin: {x: 0, y: 0, z: -0.6173096, w: 0}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
   m_hasFontAssetChanged: 0
