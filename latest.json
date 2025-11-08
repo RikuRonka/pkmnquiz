@@ -1,5 +1,5 @@
 {
   "version": "1.0.1",
   "notes": "- The game can now automatically check for and install updates - Added a toggle to always scroll to the entered Pokémon, regardless of whether it’s already guessed - After pressing Give Up, guessed Pokémon are marked with a green border and unguessed ones with a red circle - The final results dialog now includes a close (×) button and remains open until manually dismissed - Added toggle and volume slider for background music (with seamless carry over between scenes) - A sound plays when a correct guess is made, and a different one when guessing an already entered Pokémon - Buttons now react visually when hovered over with the mouse - The game executable now has a Poké Ball icon.",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build_1.0.1.zip"
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.1.zip"
 }
