@@ -8,8 +8,8 @@ public class TooltipManager : MonoBehaviour
 
     [Header("Wiring")]
     public Canvas uiCanvas;
-    public RectTransform tooltipLayer; // full-screen stretch under the UI canvas
-    public PokemonTooltip tooltipPrefab; // your tooltip prefab (with Layout Group)
+    public RectTransform tooltipLayer;
+    public PokemonTooltip tooltipPrefab;
 
     [Header("Behavior")]
     public Vector2 screenOffset = new(16f, 16f);
@@ -17,7 +17,7 @@ public class TooltipManager : MonoBehaviour
 
     PokemonTooltip _tip;
     RectTransform _tipRT;
-    bool _pinned; // when true, ignore MoveFollow
+    bool _pinned;
 
     void Awake()
     {
@@ -38,7 +38,7 @@ public class TooltipManager : MonoBehaviour
         _tip.SetVisible(false, immediate: true);
 
         _tipRT = (RectTransform)_tip.transform;
-        _tipRT.pivot = new Vector2(0f, 1f); // Top-Left
+        _tipRT.pivot = new Vector2(0f, 1f);
     }
 
     RectTransform EnsureLayer()
@@ -58,9 +58,6 @@ public class TooltipManager : MonoBehaviour
         return rt;
     }
 
-    // ---------- Public API ----------
-
-    // For Pokémon hover: follow the cursor
     public void ShowFollow(
         string title,
         string t1,
@@ -84,7 +81,6 @@ public class TooltipManager : MonoBehaviour
         PositionFollow(screenPos, eventCam);
     }
 
-    // For update notes: pin bottom-right (never off-screen)
     public void ShowUpdate(string version, string notes)
     {
         _pinned = true;
@@ -100,8 +96,6 @@ public class TooltipManager : MonoBehaviour
             return;
         _tip.SetVisible(false, fadeTime <= 0f, fadeTime);
     }
-
-    // ---------- Position helpers ----------
 
     void PlaceAtBottomRight()
     {
@@ -126,41 +120,34 @@ public class TooltipManager : MonoBehaviour
     {
         _pinned = true;
 
-        // Fill content (left-aligned notes inside your tooltip component)
         _tip.SetNotes($"Update {version}", notes);
         LayoutRebuilder.ForceRebuildLayoutImmediate(_tipRT);
         var size = _tip.PreferredSize;
 
-        // Get the anchor’s corners in the tooltipLayer’s local space
         Vector3[] corners = new Vector3[4];
         anchor.GetWorldCorners(corners);
-        Vector2 bl = tooltipLayer.InverseTransformPoint(corners[0]); // bottom-left
-        Vector2 br = tooltipLayer.InverseTransformPoint(corners[3]); // bottom-right
+        Vector2 bl = tooltipLayer.InverseTransformPoint(corners[0]);
+        Vector2 br = tooltipLayer.InverseTransformPoint(corners[3]);
 
-        // Start position: just under the anchor (our tooltip has Top-Left pivot)
-        float x = centerToAnchor
-            ? (bl.x + br.x - size.x) * 0.5f // centered under the button
-            : bl.x; // left-aligned to the button
+        float x = centerToAnchor ? (bl.x + br.x - size.x) * 0.5f : bl.x;
         float y = bl.y - gapY;
 
-        // Clamp inside the parent rect (with a small edge padding)
         const float EDGE = 150f;
         var r = tooltipLayer.rect;
 
-        // If it would go off the right edge, shift left.
         if (x + size.x > r.xMax - EDGE)
             x = r.xMax - size.x - EDGE;
-        // If it would go below, flip above the anchor.
         if (y - size.y < r.yMin + EDGE)
             y = bl.y + size.y + gapY;
 
-        // Final clamping
         x = Mathf.Clamp(x, r.xMin + EDGE, r.xMax - size.x - EDGE);
         y = Mathf.Clamp(y, r.yMin + size.y + EDGE, r.yMax - EDGE);
 
-        // Pixel snap
         float sf = uiCanvas ? uiCanvas.scaleFactor : 1f;
-        _tipRT.anchoredPosition = new Vector2(Mathf.Round(x * sf) / sf, Mathf.Round(y * sf) / sf);
+        _tipRT.anchoredPosition = new Vector2(
+            Mathf.Round(x * sf) / sf - 70f,
+            Mathf.Round(y * sf) / sf
+        );
 
         _tip.SetVisible(true, fadeTime <= 0f, fadeTime);
         _tipRT.SetAsLastSibling();
@@ -171,7 +158,6 @@ public class TooltipManager : MonoBehaviour
         if (!uiCanvas || !tooltipLayer || !_tipRT)
             return;
 
-        // choose camera
         Camera cam =
             (uiCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
                 ? null
@@ -190,20 +176,16 @@ public class TooltipManager : MonoBehaviour
         Vector2 pad = new(Mathf.Abs(screenOffset.x), Mathf.Abs(screenOffset.y));
         const float EDGE = 12f;
 
-        // start near cursor (Top-Left pivot)
         Vector2 pos = local + new Vector2(pad.x + 10, -pad.y);
 
-        // flip if overflowing
         if (pos.x + size.x > bounds.xMax - EDGE)
             pos.x = local.x - size.x - pad.x;
         if (pos.y - size.y < bounds.yMin + EDGE)
             pos.y = local.y + size.y + pad.y;
 
-        // clamp inside
         pos.x = Mathf.Clamp(pos.x, bounds.xMin + EDGE, bounds.xMax - size.x - EDGE);
         pos.y = Mathf.Clamp(pos.y, bounds.yMin + size.y + EDGE, bounds.yMax - EDGE);
 
-        // pixel snap
         float sf = uiCanvas ? uiCanvas.scaleFactor : 1f;
         pos = new Vector2(Mathf.Round(pos.x * sf) / sf, Mathf.Round(pos.y * sf) / sf);
 

@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(CanvasGroup))]
 public class FinishedDialog : MonoBehaviour
 {
     [SerializeField]
@@ -23,7 +24,7 @@ public class FinishedDialog : MonoBehaviour
             cg = GetComponent<CanvasGroup>();
         if (closeBtn)
             closeBtn.onClick.AddListener(Hide);
-        Hide(); // start hidden
+        Hide();
     }
 
     public void Show(int guessed, int total, TimeSpan elapsed, bool gaveUp)
@@ -46,11 +47,6 @@ public class FinishedDialog : MonoBehaviour
         cg.interactable = true;
     }
 
-    void Update()
-    {
-        Debug.Log(cg.alpha);
-    }
-
     public void Hide()
     {
         if (!cg)
@@ -58,17 +54,5 @@ public class FinishedDialog : MonoBehaviour
         cg.alpha = 0f;
         cg.blocksRaycasts = false;
         cg.interactable = false;
-    }
-
-    void EnsureOverlayCanvas()
-    {
-        // Optional but safe: create a local Canvas with high sorting order so nothing covers it.
-        var ownCanvas = GetComponent<Canvas>();
-        if (!ownCanvas)
-            ownCanvas = gameObject.AddComponent<Canvas>();
-        var scaler = GetComponent<CanvasScaler>() ?? gameObject.AddComponent<CanvasScaler>();
-        ownCanvas.overrideSorting = true;
-        ownCanvas.sortingOrder = 5000; // above everything else in this scene
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
     }
 }

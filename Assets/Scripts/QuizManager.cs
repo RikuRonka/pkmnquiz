@@ -128,7 +128,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             hintTypeBtn.onClick.AddListener(RevealTypeHintForOne);
 
         if (guessInput)
+        {
             guessInput.onValueChanged.AddListener(OnGuessChanged);
+            guessInput.onSubmit.AddListener(_ =>
+            {
+                var txt = guessInput.text ?? string.Empty;
+                OnGuessChanged(txt + " ");
+            });
+        }
 
         if (backToMenuBtn)
         {
@@ -272,7 +279,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         if (!string.IsNullOrEmpty(TypeDisplay))
         {
-            var icon = TypeIconLibrary.Instance.Get(selectedType); // e.g., "bug" -> bug.png
+            var icon = TypeIconLibrary.Instance.Get(selectedType);
             sec.SetTitle($"All {TypeDisplay} types", isMain: true, icon: icon);
             return;
         }
@@ -1903,10 +1910,44 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
         }
 
-        // Already solved path
         if (solved.Contains(target.id))
         {
-            // Hard override reroute (if you kept the ExactNameOverrides helper)
+            // ---------- non-commit path: allow continuing to longer names ----------
+            if (!commit)
+            {
+                if (IsExactNameOrAlias(originalText, target))
+                {
+                    // Exact hit while typing: scroll/flash, but DO NOT clear or play sound
+                    MaybeScrollTo(target);
+                    if (cardById.TryGetValue(target.id, out var soft))
+                        soft.FlashHighlight();
+                    return;
+                }
+
+                // If there's a valid in-quiz continuation (e.g., "mew" -> "mewtwo"), do nothing yet
+                if (HasInQuizContinuation(originalText))
+                    return;
+
+                // Otherwise just ignore quietly
+                return;
+            }
+
+            // ---------- commit path: treat as duplicate (sound + clear) if it's an exact hit ----------
+            if (IsExactNameOrAlias(originalText, target))
+            {
+                if (cardById.TryGetValue(target.id, out var dup))
+                {
+                    dup.FlashHighlight();
+                    PlayDuplicate();
+                    MaybeScrollTo(target);
+                }
+                guessInput?.SetTextWithoutNotify(string.Empty);
+                guessInput?.ActivateInputField();
+                guessInput?.Select();
+                return;
+            }
+
+            // Reroute to a different exact species if applicable (your existing logic)
             var ov = ExactNameOverrides.TryGet(originalText);
             if (
                 ov != null
@@ -1919,7 +1960,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return;
             }
 
-            // Exact-other reroute
             var exactOther = FindByExactPreserveDigits(originalText);
             if (
                 exactOther != null
@@ -1932,16 +1972,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return;
             }
 
-            // If not committed yet, do nothing — let user keep typing towards a longer name.
-            if (!commit)
-            {
-                // Optional: lightweight visual cue without clearing
-                if (cardById.TryGetValue(target.id, out var soft))
-                    soft.FlashHighlight();
-                return;
-            }
-
-            // Committed duplicate -> give feedback and clear
+            // Fallback: committed duplicate for the same target
             if (cardById.TryGetValue(target.id, out var already))
             {
                 already.FlashHighlight();
@@ -1954,8 +1985,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
         }
 
-        // If the text isn't an exact name/alias for this target and it's ambiguous,
-        // wait for commit (space/enter) before accepting.
         bool isExactForTarget = IsExactNameOrAlias(originalText, target);
         if (!isExactForTarget)
         {
@@ -1965,7 +1994,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return;
         }
 
-        // Accept guess
         solved.Add(target.id);
         if (cardById.TryGetValue(target.id, out var card))
         {
@@ -1985,9 +2013,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         UpdateScore();
 
         // Reset input focus for fast typing
-        guessInput?.SetTextWithoutNotify(string.Empty);
-        guessInput?.ActivateInputField();
-        guessInput?.Select();
+        guessInput.SetTextWithoutNotify(string.Empty);
+        guessInput.ActivateInputField();
+        guessInput.Select();
 
         // Finish condition
         if (IsComplete())
@@ -1996,7 +2024,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (guessInput)
                 guessInput.interactable = false;
 
-            finishedDialog?.Show(
+            finishedDialog.Show(
                 guessed: solved.Count,
                 total: cardById.Count,
                 elapsed: TimeSpan.FromSeconds(elapsed),
