@@ -1,4 +1,4 @@
-// MusicUIController.cs
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,26 +10,115 @@ public class MusicUIController : MonoBehaviour
     [SerializeField]
     Slider volumeSlider;
 
+    bool suppress;
+    bool bound;
+
     void OnEnable()
     {
+        TryBindOrWait();
+    }
+
+    void OnDisable()
+    {
+        Unbind();
+    }
+
+    void TryBindOrWait()
+    {
         var m = MusicManager.Instance;
-        if (!m)
+        if (m)
+        {
+            Bind(m);
+        }
+        else
+        {
+            // Manager not awake yet — try again next frame
+            StartCoroutine(BindNextFrame());
+        }
+    }
+
+    IEnumerator BindNextFrame()
+    {
+        yield return null;
+        var m = MusicManager.Instance;
+        if (m)
+            Bind(m);
+    }
+
+    void Bind(MusicManager m)
+    {
+        if (bound)
             return;
 
+        // initial reflect
+        suppress = true;
         if (musicToggle)
-        {
-            musicToggle.onValueChanged.RemoveAllListeners();
             musicToggle.isOn = m.IsOn;
-            musicToggle.onValueChanged.AddListener(m.SetEnabled);
+        if (volumeSlider)
+            volumeSlider.value = m.Volume;
+        suppress = false;
+
+        // UI -> Manager
+        if (musicToggle)
+            musicToggle.onValueChanged.AddListener(OnToggleChanged);
+        if (volumeSlider)
+            volumeSlider.onValueChanged.AddListener(OnSliderChanged);
+
+        // Manager -> UI
+        m.EnabledChanged += ReflectEnabled;
+        m.VolumeChanged += ReflectVolume;
+
+        bound = true;
+    }
+
+    void Unbind()
+    {
+        if (!bound)
+            return;
+
+        var m = MusicManager.Instance;
+
+        if (musicToggle)
+            musicToggle.onValueChanged.RemoveListener(OnToggleChanged);
+        if (volumeSlider)
+            volumeSlider.onValueChanged.RemoveListener(OnSliderChanged);
+
+        if (m)
+        {
+            m.EnabledChanged -= ReflectEnabled;
+            m.VolumeChanged -= ReflectVolume;
         }
 
-        if (volumeSlider)
-        {
-            volumeSlider.onValueChanged.RemoveAllListeners();
-            volumeSlider.minValue = 0f;
-            volumeSlider.maxValue = 1f;
-            volumeSlider.value = m.Volume;
-            volumeSlider.onValueChanged.AddListener(m.SetVolume);
-        }
+        bound = false;
+    }
+
+    void OnToggleChanged(bool on)
+    {
+        if (!suppress)
+            MusicManager.Instance?.SetEnabled(on);
+    }
+
+    void OnSliderChanged(float v)
+    {
+        if (!suppress)
+            MusicManager.Instance?.SetVolume(v);
+    }
+
+    void ReflectEnabled(bool on)
+    {
+        if (!musicToggle)
+            return;
+        suppress = true;
+        musicToggle.isOn = on;
+        suppress = false;
+    }
+
+    void ReflectVolume(float v)
+    {
+        if (!volumeSlider)
+            return;
+        suppress = true;
+        volumeSlider.value = v;
+        suppress = false;
     }
 }

@@ -1,16 +1,19 @@
-// MusicManager.cs
+using System;
 using UnityEngine;
 
+[RequireComponent(typeof(AudioSource))]
 public class MusicManager : MonoBehaviour
 {
     public static MusicManager Instance { get; private set; }
 
-    [Header("Music")]
     [SerializeField]
-    AudioClip musicClip; // assign your one background track
+    AudioClip musicClip;
 
     [SerializeField, Range(0f, 1f)]
     float defaultVolume = 0.6f;
+
+    public event Action<bool> EnabledChanged;
+    public event Action<float> VolumeChanged;
 
     AudioSource src;
     bool isOn;
@@ -29,19 +32,19 @@ public class MusicManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
 
-        src = gameObject.GetComponent<AudioSource>();
-        if (!src)
-            src = gameObject.AddComponent<AudioSource>();
+        src = GetComponent<AudioSource>();
         src.loop = true;
-        src.playOnAwake = false;
+        src.playOnAwake = false; // don't auto-play; we control Play/Stop
+        src.spatialBlend = 0f; // 2D
 
-        // Load prefs (comment these out if you DON'T want session persistence)
+        // Load prefs
         isOn = PlayerPrefs.GetInt(KEY_ON, 1) == 1;
         volume = PlayerPrefs.GetFloat(KEY_VOL, defaultVolume);
 
-        // Configure and maybe start playing
+        // Apply
         src.clip = musicClip;
         src.volume = volume;
+        src.mute = !isOn;
         if (isOn && src.clip)
             src.Play();
     }
@@ -51,26 +54,45 @@ public class MusicManager : MonoBehaviour
 
     public void SetEnabled(bool on)
     {
+        if (isOn == on)
+        { // still reflect/mute state & notify UIs
+            src.mute = !on;
+            EnabledChanged?.Invoke(isOn);
+            return;
+        }
         isOn = on;
         PlayerPrefs.SetInt(KEY_ON, on ? 1 : 0);
 
         if (on)
         {
+            src.mute = false;
             if (src.clip && !src.isPlaying)
                 src.Play();
-            src.mute = false;
         }
         else
         {
-            src.mute = true; // keeps time position in case you re-enable
-            // Or: src.Pause(); if you prefer pausing
+            src.mute = true; /* or src.Pause(); */
         }
+
+        EnabledChanged?.Invoke(isOn);
     }
 
     public void SetVolume(float v)
     {
-        volume = Mathf.Clamp01(v);
-        src.volume = volume;
-        PlayerPrefs.SetFloat(KEY_VOL, volume);
+        v = Mathf.Clamp01(v);
+        if (!Mathf.Approximately(volume, v))
+        {
+            volume = v;
+            PlayerPrefs.SetFloat(KEY_VOL, volume);
+        }
+        src.volume = volume; // always apply
+        VolumeChanged?.Invoke(volume); // always notify
+    }
+
+    // Handy when a UI appears and wants the current state immediately
+    public void SyncUI()
+    {
+        EnabledChanged?.Invoke(isOn);
+        VolumeChanged?.Invoke(volume);
     }
 }
