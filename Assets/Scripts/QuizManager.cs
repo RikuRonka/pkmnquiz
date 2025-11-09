@@ -17,6 +17,23 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     public TMP_Text timerText;
     public Button giveUpBtn;
 
+    [SerializeField]
+    private Slider cardSizeSlider;
+
+    [SerializeField]
+    private TMP_Text cardSizeLabel; // optional
+
+    // Zoom config
+    [SerializeField]
+    private int minColsLarge = 6; // few columns = big cards
+
+    [SerializeField]
+    private int maxColsSmall = 30; // many columns = small cards
+    private int currentCols;
+
+    // Keep references to the fits we create
+    private readonly List<GridAutoFit> _fits = new();
+    const string KEY_COLS = "card_cols";
     public FinishedDialog finishedDialog;
 
     [Header("Grid")]
@@ -375,6 +392,20 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         guessInput?.ActivateInputField();
         if (giveUpBtn)
             giveUpBtn.interactable = true;
+        currentCols = PlayerPrefs.GetInt(
+            KEY_COLS,
+            Mathf.RoundToInt((minColsLarge + maxColsSmall) * 0.5f)
+        );
+
+        if (cardSizeSlider)
+        {
+            // Map columns -> [0..1] slider value (inverse because more columns = smaller)
+            float t = Mathf.InverseLerp(maxColsSmall, minColsLarge, currentCols);
+            cardSizeSlider.SetValueWithoutNotify(t);
+            cardSizeSlider.onValueChanged.AddListener(OnCardSizeSliderChanged);
+        }
+
+        ApplyColumnsToAllSections();
     }
 
     IEnumerator LocalBuildWithOverlay()
@@ -777,6 +808,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void RebuildGrid()
     {
+        _fits.Clear();
         _buildToken++; // invalidate older coroutines
         StopAllCoroutines(); // cancel any CoRecalc/scroll coroutines from the previous build
         if (!scrollRect || !scrollRect.viewport)
@@ -1494,10 +1526,46 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         fit.OuterMarginX = 16;
         fit.OuterMarginY = 16;
         fit.Spacing = 16;
-        fit.MinCols = 6;
-        fit.MaxCols = 30;
+
+        // We’ll control columns via slider (lock min == max)
+        fit.MinCols = currentCols;
+        fit.MaxCols = currentCols;
+
+        // Track this fit so the slider can update it later
+        _fits.Add(fit);
 
         StartCoroutine(CoRecalcSafe(fit, _buildToken));
+    }
+
+    private void OnCardSizeSliderChanged(float t)
+    {
+        // t=0 -> small cards (many cols), t=1 -> big cards (few cols)
+        int cols = Mathf.Clamp(
+            Mathf.RoundToInt(Mathf.Lerp(maxColsSmall, minColsLarge, t)),
+            Mathf.Min(minColsLarge, maxColsSmall),
+            Mathf.Max(minColsLarge, maxColsSmall)
+        );
+
+        if (cols == currentCols)
+            return;
+        currentCols = cols;
+        PlayerPrefs.SetInt(KEY_COLS, currentCols);
+        ApplyColumnsToAllSections();
+    }
+
+    private void ApplyColumnsToAllSections()
+    {
+        if (cardSizeLabel)
+            cardSizeLabel.text = $"{currentCols} cols"; // optional
+
+        foreach (var fit in _fits)
+        {
+            if (!fit)
+                continue;
+            fit.MinCols = currentCols;
+            fit.MaxCols = currentCols;
+            fit.Recalculate();
+        }
     }
 
     void UpdateTypeHintButtonVisibility()
