@@ -1,9 +1,3 @@
-TODO:
-- after pressing "give up" green square around the pokemon i have guessed. red circle around the ones that user didn't guess
-- after finishing show all in modal x button
-- background music volume in game, after correct guess. toggle on off
-
-
 # 🧠 Pokémon Quiz  
 A fast-paced name guessing quiz for all 9 Pokémon generations and 18 types — built in Unity.
 
