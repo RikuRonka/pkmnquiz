@@ -57,38 +57,51 @@ public partial class PokemonCard : MonoBehaviour
     Image background;
 
     [SerializeField]
-    GameObject redMiss;
+    float borderThickness = 8f;
 
     [SerializeField]
-    GameObject greenBorder;
-    Outline _outline;
+    Outline endStateOutline; // assign in prefab OR let Awake() add it
+
+    [SerializeField, Range(0f, 0.15f)]
+    float borderPctOfSide = 0.06f; // ~6% of the shortest side
+
+    [SerializeField, Range(1f, 12f)]
+    float borderMinPx = 3f; // clamps for tiny cells
+
+    [SerializeField, Range(1f, 24f)]
+    float borderMaxPx = 10f;
+
+    static readonly Color BorderGreen = new(0f, 1f, 0f, 1f);
+    static readonly Color BorderRed = new(1f, 0f, 0f, 1f);
 
     void Awake()
     {
         if (!TryGetComponent<PokemonCardHover>(out _))
             gameObject.AddComponent<PokemonCardHover>();
         if (!spriteImage)
-            spriteImage = transform.Find("Sprite")?.GetComponent<Image>();
+            spriteImage = transform.Find("Sprite").GetComponent<Image>();
         if (!placeholderImage)
-            placeholderImage = transform.Find("Placeholder")?.GetComponent<Image>();
+            placeholderImage = transform.Find("Placeholder").GetComponent<Image>();
         if (!typeIconL)
-            typeIconL = transform.Find("TypeIconL")?.GetComponent<Image>();
+            typeIconL = transform.Find("TypeIconL").GetComponent<Image>();
         if (!typeIconR)
-            typeIconR = transform.Find("TypeIconR")?.GetComponent<Image>();
+            typeIconR = transform.Find("TypeIconR").GetComponent<Image>();
         if (!highlight)
-            highlight = transform.Find("Highlight")?.GetComponent<Image>();
+            highlight = transform.Find("Highlight").GetComponent<Image>();
 
         rt = (RectTransform)transform;
         if (!background)
             background = GetComponent<Image>();
-        if (!_outline && background)
+        if (!endStateOutline)
+            endStateOutline = background ? background.GetComponent<Outline>() : null;
+        if (!endStateOutline && background)
+            endStateOutline = background.gameObject.AddComponent<Outline>();
+
+        if (endStateOutline)
         {
-            _outline = background.GetComponent<Outline>();
-            if (!_outline)
-                _outline = background.gameObject.AddComponent<Outline>();
-            _outline.useGraphicAlpha = false;
-            _outline.effectDistance = new Vector2(4f, -4f); // nice crisp square
-            _outline.enabled = false;
+            endStateOutline.useGraphicAlpha = false;
+            endStateOutline.enabled = false;
+            endStateOutline.effectColor = Color.clear;
         }
         if (spriteImage)
         {
@@ -142,27 +155,23 @@ public partial class PokemonCard : MonoBehaviour
 
     public void ClearEndState()
     {
-        if (greenBorder)
-            greenBorder.gameObject.SetActive(false);
-        if (redMiss)
-            redMiss.gameObject.SetActive(false);
+        if (endStateOutline)
+            endStateOutline.enabled = false;
+        if (background)
+            background.color = Color.white; // or whatever your normal card fill is
     }
 
     public void ShowEndState(bool guessed)
     {
-        if (guessed)
+        // Keep the card’s background tint if you want, or remove these two lines for border-only:
+        if (background)
+            background.color = guessed ? new Color(1, 1, 1, 1) : new Color(1, 1, 1, 1);
+
+        if (endStateOutline)
         {
-            if (redMiss)
-                redMiss.SetActive(false);
-            if (greenBorder)
-                greenBorder.SetActive(true);
-        }
-        else
-        {
-            if (greenBorder)
-                greenBorder.SetActive(false);
-            if (redMiss)
-                redMiss.SetActive(true);
+            UpdateBorderThickness(); // size may have just changed
+            endStateOutline.effectColor = guessed ? BorderGreen : BorderRed;
+            endStateOutline.enabled = true;
         }
     }
 
@@ -322,6 +331,20 @@ public partial class PokemonCard : MonoBehaviour
         FitImageAsCenteredSquare(spriteImage, spritePadding);
         FitImageAsCenteredSquare(placeholderImage, spritePadding);
         FitArtToCell();
+        UpdateBorderThickness();
+    }
+
+    void UpdateBorderThickness()
+    {
+        if (!endStateOutline || !rt)
+            return;
+
+        float side = Mathf.Min(rt.rect.width, rt.rect.height);
+        if (side <= 0f)
+            return;
+
+        float px = Mathf.Clamp(Mathf.Round(side * borderPctOfSide), borderMinPx, borderMaxPx);
+        endStateOutline.effectDistance = new Vector2(px, -px);
     }
 
     public void FlashHighlight(float durationOverride = -1f)

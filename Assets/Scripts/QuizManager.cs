@@ -2292,12 +2292,24 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             guessInput.interactable = false;
 
         // 5) Show the modal with correct numbers and “gave up” flag
-        finishedDialog?.Show(
+        finishedDialog.Show(
             guessed: guessedIds.Count,
             total: cardById.Count,
             elapsed: TimeSpan.FromSeconds(elapsed),
             gaveUp: true
         );
+        Canvas.ForceUpdateCanvases();
+        StartCoroutine(RecalculateAfterLayout());
+    }
+
+    IEnumerator RecalculateAfterLayout()
+    {
+        yield return null;
+        foreach (var fit in _fits)
+        {
+            if (fit)
+                fit.Recalculate();
+        }
     }
 
     public IEnumerator BuildWithExternalProgress(Action<float> report, float from, float to)
