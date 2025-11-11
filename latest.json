@@ -1,5 +1,5 @@
 {
   "version": "1.0.3",
-  "notes": "- When typing Pokémon name again it clears input and plays the duplicate sound -  Added Pause Menu, pressing Esc (or pause button) pauses the quiz, hides the grid, and shows total elapsed time with a Resume button - Fixed bug where colored outlines (green/red) after giving up didn't correctly scale with different grid sizes",
+  "notes": "- When typing Pokémon name again it clears input and plays the duplicate sound - Added Pause Menu, pressing Esc (or pause button) pauses the quiz, hides the grid, and shows total elapsed time with a Resume button - Fixed bug where colored outlines (green/red) after giving up didn't correctly scale with different grid sizes",
   "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.3.zip"
 }
