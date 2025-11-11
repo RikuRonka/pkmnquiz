@@ -2069,76 +2069,42 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (solved.Contains(target.id))
         {
-            // ---------- non-commit path: allow continuing to longer names ----------
+            bool exact = IsExactNameOrAlias(originalText, target);
+
             if (!commit)
             {
-                if (IsExactNameOrAlias(originalText, target))
+                // if it's an exact duplicate AND there's no different-species continuation,
+                // clear + sfx. Otherwise let user keep typing (for mewtwo/parasect cases).
+                if (exact && !HasDifferentSpeciesContinuation(originalText, target))
                 {
-                    // Exact hit while typing: scroll/flash, but DO NOT clear or play sound
-                    MaybeScrollTo(target);
-                    if (cardById.TryGetValue(target.id, out var soft))
-                        soft.FlashHighlight();
-                    return;
-                }
-
-                // If there's a valid in-quiz continuation (e.g., "mew" -> "mewtwo"), do nothing yet
-                if (HasInQuizContinuation(originalText))
-                    return;
-
-                // Otherwise just ignore quietly
-                return;
-            }
-
-            // ---------- commit path: treat as duplicate (sound + clear) if it's an exact hit ----------
-            if (IsExactNameOrAlias(originalText, target))
-            {
-                if (cardById.TryGetValue(target.id, out var dup))
-                {
-                    dup.FlashHighlight();
+                    if (cardById.TryGetValue(target.id, out var c))
+                    {
+                        c.FlashHighlight();
+                        MaybeScrollTo(target);
+                    }
                     PlayDuplicate();
-                    MaybeScrollTo(target);
+                    guessInput.SetTextWithoutNotify(string.Empty);
+                    guessInput.ActivateInputField();
+                    guessInput.Select();
+                    return;
                 }
-                guessInput?.SetTextWithoutNotify(string.Empty);
-                guessInput?.ActivateInputField();
-                guessInput?.Select();
+
+                // allow continuing to a longer different species; optional soft feedback
+                if (cardById.TryGetValue(target.id, out var soft))
+                    soft.FlashHighlight();
                 return;
             }
 
-            // Reroute to a different exact species if applicable (your existing logic)
-            var ov = ExactNameOverrides.TryGet(originalText);
-            if (
-                ov != null
-                && ov.id != target.id
-                && cardById.ContainsKey(ov.id)
-                && !solved.Contains(ov.id)
-            )
-            {
-                HandleCandidate(ov, originalText, true);
-                return;
-            }
-
-            var exactOther = FindByExactPreserveDigits(originalText);
-            if (
-                exactOther != null
-                && exactOther.id != target.id
-                && cardById.ContainsKey(exactOther.id)
-                && !solved.Contains(exactOther.id)
-            )
-            {
-                HandleCandidate(exactOther, originalText, true);
-                return;
-            }
-
-            // Fallback: committed duplicate for the same target
+            // committed duplicate (space/enter) -> always clear + sfx
             if (cardById.TryGetValue(target.id, out var already))
             {
                 already.FlashHighlight();
-                PlayDuplicate();
                 MaybeScrollTo(target);
             }
-            guessInput?.SetTextWithoutNotify(string.Empty);
-            guessInput?.ActivateInputField();
-            guessInput?.Select();
+            PlayDuplicate();
+            guessInput.SetTextWithoutNotify(string.Empty);
+            guessInput.ActivateInputField();
+            guessInput.Select();
             return;
         }
 
@@ -2188,6 +2154,37 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 gaveUp: false
             );
         }
+    }
+
+    bool HasDifferentSpeciesContinuation(string text, Pokemon currentTarget)
+    {
+        var typed = KeyKeepDigits(text);
+        if (string.IsNullOrEmpty(typed))
+            return false;
+
+        int targetBase = currentTarget.baseId != 0 ? currentTarget.baseId : currentTarget.id;
+
+        foreach (var p in targetList)
+        {
+            // skip the same card
+            if (p.id == currentTarget.id)
+                continue;
+
+            var nk = KeyKeepDigits(p.name);
+            if (nk.Length <= typed.Length)
+                continue;
+            if (!nk.StartsWith(typed))
+                continue;
+
+            // treat forms/variants with the SAME base as NOT a real continuation
+            int pBase = p.baseId != 0 ? p.baseId : p.id;
+            if (pBase == targetBase)
+                continue;
+
+            // different species continuation exists (e.g., paras -> parasect, mew -> mewtwo)
+            return true;
+        }
+        return false;
     }
 
     IEnumerator CoSmartScrollTo(RectTransform target, float duration, int token)
