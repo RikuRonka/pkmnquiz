@@ -123,6 +123,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     [SerializeField, Range(0f, 1f)]
     float sfxVolume = 1f;
 
+    [Header("Pause UI")]
+    [SerializeField]
+    PauseMenu pauseMenu;
+
+    [SerializeField]
+    CanvasGroup gridGroup; // assign to the ScrollRect's root container (or the ScrollRect itself)
+
+    [SerializeField]
+    Button pauseBtn; // optional top-bar "Pause" button
+
     private void Awake()
     {
         PokemonDatabase.Instance.LoadIfNeeded();
@@ -187,6 +197,18 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     _testCancel = true; // pressing again cancels
             });
         }
+        if (pauseBtn)
+        {
+            pauseBtn.onClick.RemoveAllListeners();
+            pauseBtn.onClick.AddListener(TogglePause);
+        }
+
+        if (pauseMenu)
+        {
+            pauseMenu.OnResume = ResumeFromPause;
+            pauseMenu.OnRestart = OnResetClicked;
+            pauseMenu.OnBackToMenu = OnBackToMenuClicked;
+        }
         EnsureUIContracts();
     }
 
@@ -207,6 +229,62 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         if (sfx && duplicateSfx)
             sfx.PlayOneShot(duplicateSfx, sfxVolume);
+    }
+
+    void SetGridVisible(bool visible)
+    {
+        if (!gridGroup)
+        {
+            if (scrollRect)
+                scrollRect.gameObject.SetActive(visible);
+            return;
+        }
+        gridGroup.alpha = visible ? 1f : 0f;
+        gridGroup.blocksRaycasts = visible;
+        gridGroup.interactable = visible;
+    }
+
+    void PauseGame()
+    {
+        if (pauseMenu && pauseMenu.IsShowing)
+            return;
+        if (!running)
+            return;
+
+        running = false;
+        guessInput.DeactivateInputField();
+        if (guessInput)
+            guessInput.interactable = false;
+
+        pauseMenu.SetElapsed(System.TimeSpan.FromSeconds(elapsed));
+
+        SetGridVisible(false);
+        pauseMenu.Show();
+    }
+
+    void ResumeFromPause()
+    {
+        pauseMenu.Hide();
+        SetGridVisible(true);
+
+        if (!IsComplete())
+            running = true;
+        if (guessInput)
+        {
+            guessInput.interactable = true;
+            guessInput.ActivateInputField();
+            guessInput.Select();
+        }
+    }
+
+    public void TogglePause()
+    {
+        if (!pauseMenu)
+            return;
+        if (pauseMenu.IsShowing)
+            ResumeFromPause();
+        else
+            PauseGame();
     }
 
     IEnumerator CoAutoTypeAll()
@@ -522,10 +600,21 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
         var kb = Keyboard.current;
         if (kb != null && kb.escapeKey.wasPressedThisFrame)
-            OnBackToMenuClicked();
+        {
+            // If a confirm dialog is open, keep your current behavior
+            if (IsDialogOpen())
+                return;
+
+            // Prefer pause over instant back-to-menu
+            TogglePause();
+        }
 #else
         if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
-            OnBackToMenuClicked();
+        {
+            if (IsDialogOpen())
+                return;
+            TogglePause();
+        }
 #endif
 
         if (!IsDialogOpen())
