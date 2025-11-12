@@ -37,11 +37,9 @@ public class MusicManager : MonoBehaviour
         src.playOnAwake = false; // don't auto-play; we control Play/Stop
         src.spatialBlend = 0f; // 2D
 
-        // Load prefs
         isOn = PlayerPrefs.GetInt(KEY_ON, 1) == 1;
         volume = PlayerPrefs.GetFloat(KEY_VOL, defaultVolume);
 
-        // Apply
         src.clip = musicClip;
         src.volume = volume;
         src.mute = !isOn;
@@ -89,7 +87,6 @@ public class MusicManager : MonoBehaviour
         VolumeChanged?.Invoke(volume); // always notify
     }
 
-    // Handy when a UI appears and wants the current state immediately
     public void SyncUI()
     {
         EnabledChanged?.Invoke(isOn);

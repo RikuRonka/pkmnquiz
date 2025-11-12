@@ -50,11 +50,9 @@ public static class Helpers
         if (p == null)
             return false;
 
-        // Existing regional checks you already have:
         if (IsAlola(p) || IsGalarForm(p) || IsHisui(p))
             return true;
 
-        // Paldea regional forms (e.g., Tauros-Paldea). Adjust if your DB uses a different key.
         if (HasForm(p, "paldea") || NameHas(p, "(Paldea") || NameHas(p, "Paldean"))
             return true;
 

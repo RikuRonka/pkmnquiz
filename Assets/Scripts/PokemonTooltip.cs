@@ -75,7 +75,6 @@ public class PokemonTooltip : MonoBehaviour
 
     void AutoWire()
     {
-        // Only fill if null, so your manual assignments win.
         if (!nameLabel)
             nameLabel = GetComponentInChildren<TMP_Text>(true);
 
@@ -90,7 +89,7 @@ public class PokemonTooltip : MonoBehaviour
         if (!type1Image || !type2Image)
         {
             var imgs = GetComponentsInChildren<Image>(true);
-            // crude: pick first two non-bg images by name
+
             foreach (var img in imgs)
             {
                 if (img == GetComponent<Image>())
@@ -128,23 +127,18 @@ public class PokemonTooltip : MonoBehaviour
     {
         ApplyPokemonContent(name, type1, type2);
 
-        // Rebuild children first
         LayoutRebuilder.ForceRebuildLayoutImmediate(nameLabel.rectTransform);
         if (typesRow)
             LayoutRebuilder.ForceRebuildLayoutImmediate(typesRow);
 
-        // 1) Width needed for single-line title (no wrap)
         float titleW = nameLabel.GetPreferredValues(nameLabel.text, pokemonMaxWidth, 0f).x;
 
-        // 2) Width needed for the icon row
         float iconsW = typesRow ? LayoutUtility.GetPreferredWidth(typesRow) : 0f;
 
-        // 3) Add layout padding and your extra padding
         int lp = vlg ? vlg.padding.left : 0;
         int rp = vlg ? vlg.padding.right : 0;
         float needed = Mathf.Max(titleW, iconsW) + lp + rp + contentPadding;
 
-        // 4) Clamp and apply
         float w = Mathf.Clamp(needed, minWidth, pokemonMaxWidth);
         ApplyWidth(w);
     }

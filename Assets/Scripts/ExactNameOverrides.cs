@@ -3,22 +3,16 @@ using System.Linq;
 
 public static class ExactNameOverrides
 {
-    // Normalized keys (letters+digits only, lowercase; same as your KeyKeepDigits behavior)
     private static readonly Dictionary<string, int> Map = new()
     {
-        // MEW family
         ["mew"] = 151,
         ["mewtwo"] = 150,
 
-        // PORYGON family
         ["porygon"] = 137,
         ["porygon2"] = 233,
         ["porygonz"] = 474, // also matches "porygon-z" after normalization
-        // Add more here if you find other problem cases:
-        // ["mrmime"] = <id>, ["mimejr"] = <id>, etc.
     };
 
-    // 1) Try find by exact normalized key -> Pokemon
     public static Pokemon TryGet(string rawText)
     {
         if (string.IsNullOrWhiteSpace(rawText))
@@ -32,7 +26,6 @@ public static class ExactNameOverrides
         return null;
     }
 
-    // Use same normalization style as your KeyKeepDigits: keep letters+digits only, lowercase, 'é' -> 'e'
     private static string Normalize(string s)
     {
         s = s.Trim().ToLowerInvariant().Replace("é", "e");

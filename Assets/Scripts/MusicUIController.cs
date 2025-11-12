@@ -32,7 +32,6 @@ public class MusicUIController : MonoBehaviour
         }
         else
         {
-            // Manager not awake yet — try again next frame
             StartCoroutine(BindNextFrame());
         }
     }
@@ -50,7 +49,6 @@ public class MusicUIController : MonoBehaviour
         if (bound)
             return;
 
-        // initial reflect
         suppress = true;
         if (musicToggle)
             musicToggle.isOn = m.IsOn;
@@ -58,13 +56,11 @@ public class MusicUIController : MonoBehaviour
             volumeSlider.value = m.Volume;
         suppress = false;
 
-        // UI -> Manager
         if (musicToggle)
             musicToggle.onValueChanged.AddListener(OnToggleChanged);
         if (volumeSlider)
             volumeSlider.onValueChanged.AddListener(OnSliderChanged);
 
-        // Manager -> UI
         m.EnabledChanged += ReflectEnabled;
         m.VolumeChanged += ReflectVolume;
 

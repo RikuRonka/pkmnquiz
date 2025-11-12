@@ -83,7 +83,6 @@ public class UpdaterRunner : MonoBehaviour
     {
         OnStatus?.Invoke("Downloading update…");
 
-        // Download to temp
         string tempZip = Path.Combine(
             Path.GetTempPath(),
             $"pkmnquiz_update_{Guid.NewGuid():N}.zip"
@@ -106,12 +105,9 @@ public class UpdaterRunner : MonoBehaviour
             }
         }
 
-        // Launch Updater.exe
         string gameDir = Path.GetDirectoryName(Application.dataPath)!; // for IL2CPP it’s …/_Data/.., but the exe dir is one up
         if (Application.platform == RuntimePlatform.WindowsPlayer)
         {
-            // In a Windows Player, Application.dataPath ends with _Data
-            // We want the folder where the exe lives.
             var maybeExeDir = Directory.GetParent(Application.dataPath)?.FullName;
             if (!string.IsNullOrEmpty(maybeExeDir))
                 gameDir = maybeExeDir;
@@ -124,8 +120,6 @@ public class UpdaterRunner : MonoBehaviour
             yield break;
         }
 
-        // Arguments your Updater.exe expects (from your code screenshot):
-        // --zip "<path>" --target "<dir>" --exe "<Game.exe>" --waitms 800
         var args =
             $"--zip \"{tempZip}\" --target \"{gameDir}\" --exe \"{gameExeName}\" --waitms {updaterWaitMs}";
 
@@ -149,7 +143,6 @@ public class UpdaterRunner : MonoBehaviour
             yield break;
         }
 
-        // Quit game, Updater will take over and relaunch
         Application.Quit();
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;

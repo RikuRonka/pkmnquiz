@@ -57,9 +57,6 @@ public partial class PokemonCard : MonoBehaviour
     Image background;
 
     [SerializeField]
-    float borderThickness = 8f;
-
-    [SerializeField]
     Outline endStateOutline; // assign in prefab OR let Awake() add it
 
     [SerializeField, Range(0f, 0.15f)]
@@ -163,7 +160,6 @@ public partial class PokemonCard : MonoBehaviour
 
     public void ShowEndState(bool guessed)
     {
-        // Keep the card’s background tint if you want, or remove these two lines for border-only:
         if (background)
             background.color = guessed ? new Color(1, 1, 1, 1) : new Color(1, 1, 1, 1);
 
