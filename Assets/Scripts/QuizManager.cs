@@ -23,7 +23,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     [SerializeField]
     private TMP_Text cardSizeLabel; // optional
 
-    // Zoom config
     [SerializeField]
     private int minColsLarge = 6; // few columns = big cards
 
@@ -31,7 +30,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private int maxColsSmall = 30; // many columns = small cards
     private int currentCols;
 
-    // Keep references to the fits we create
     private readonly List<GridAutoFit> _fits = new();
     const string KEY_COLS = "card_cols";
     public FinishedDialog finishedDialog;
@@ -104,6 +102,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<int, Pokemon> hisuiPickByBase = new();
     private readonly Dictionary<int, PokemonCard> hisuiCardByBase = new();
     private readonly Dictionary<string, int> hisuiByBaseName = new();
+    private readonly Dictionary<int, Pokemon> regionalPickByBase = new();
+    private readonly Dictionary<int, PokemonCard> regionalCardByBase = new();
+    private readonly Dictionary<string, int> regionalByBaseName = new();
+
     private bool _testRunning;
     private bool _testCancel;
 
@@ -206,8 +208,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (pauseMenu)
         {
             pauseMenu.OnResume = ResumeFromPause;
-            pauseMenu.OnRestart = OnResetClicked;
-            pauseMenu.OnBackToMenu = OnBackToMenuClicked;
         }
         EnsureUIContracts();
     }
@@ -277,6 +277,17 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
+    void RefocusGuess()
+    {
+        if (!guessInput)
+            return;
+        guessInput.SetTextWithoutNotify(string.Empty);
+        if (!guessInput.interactable)
+            guessInput.interactable = true;
+        guessInput.ActivateInputField();
+        guessInput.Select();
+    }
+
     public void TogglePause()
     {
         if (!pauseMenu)
@@ -306,9 +317,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             giveUpBtn.interactable = true;
         guessInput.interactable = true;
 
-        guessInput.text = string.Empty;
-        guessInput.ActivateInputField();
-        guessInput.Select();
+        RefocusGuess();
 
         var testList = pokemonById
             .Values.Distinct()
@@ -477,7 +486,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (cardSizeSlider)
         {
-            // Map columns -> [0..1] slider value (inverse because more columns = smaller)
             float t = Mathf.InverseLerp(maxColsSmall, minColsLarge, currentCols);
             cardSizeSlider.SetValueWithoutNotify(t);
             cardSizeSlider.onValueChanged.AddListener(OnCardSizeSliderChanged);
@@ -679,13 +687,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void ShowNotInQuiz(string name)
     {
-        toast?.Show($"{name} is not part of this quiz", 2f);
+        toast.Show($"{name} is not part of this quiz", 2f);
 
         if (guessInput)
         {
-            guessInput.SetTextWithoutNotify(string.Empty);
-            guessInput.ActivateInputField();
-            guessInput.Select();
+            RefocusGuess();
         }
     }
 
@@ -698,7 +704,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!cardById.TryGetValue(p.id, out var card) || !card)
             return;
 
-        if (alwaysScrollToggle.isOn)
+        if (alwaysScrollToggle && alwaysScrollToggle.isOn)
         {
             if (_scrollRoutine != null)
             {
@@ -734,11 +740,42 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (guess == null)
             return null;
 
-        // If this exact species has a card in the current quiz, use it.
         if (cardById.ContainsKey(guess.id))
             return guess;
+        {
+            int baseId = guess.baseId != 0 ? guess.baseId : guess.id;
 
-        // Only consider base redirection for true *forms*, not separate species.
+            if (generation == 6 && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
+                return megaPick;
+            if (
+                (generation == 8 || generation == 0)
+                && gmaxPickByBase.TryGetValue(baseId, out var gmaxPick)
+            )
+                return gmaxPick;
+            if (
+                (generation == 8 || generation == 0)
+                && hisuiPickByBase.TryGetValue(baseId, out var hisuiPick)
+            )
+                return hisuiPick;
+            if (
+                (generation == 9 || generation == 0)
+                && expeditionPickByBase.TryGetValue(baseId, out var expPick)
+            )
+                return expPick;
+
+            var regional = targetList.FirstOrDefault(p =>
+                Helpers.IsRegionalForm(p) && ((p.baseId != 0 ? p.baseId : p.id) == baseId)
+            );
+            if (regional != null && cardById.ContainsKey(regional.id))
+                return regional;
+
+            var baseEntry = targetList.FirstOrDefault(p =>
+                !Helpers.IsMega(p) && ((p.baseId != 0 ? p.baseId : p.id) == baseId)
+            );
+            if (baseEntry != null && cardById.ContainsKey(baseEntry.id))
+                return baseEntry;
+        }
+
         bool isForm =
             Helpers.IsMega(guess)
             || Helpers.IsGmax(guess)
@@ -752,18 +789,15 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         {
             int baseId = guess.baseId != 0 ? guess.baseId : guess.id;
 
-            // If this quiz shows a single picked Mega slot per base, route to that card.
             if (generation == 6 && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
                 return megaPick;
 
-            // Route to Expedition card when applicable (Full or Gen9 quiz).
             if (
                 (generation == 9 || generation == 0)
                 && expeditionPickByBase.TryGetValue(baseId, out var expPick)
             )
                 return expPick;
 
-            // Otherwise, if the base species itself is in this quiz, target it.
             var baseEntry = targetList.FirstOrDefault(p =>
                 !Helpers.IsMega(p) && ((p.baseId != 0 ? p.baseId : p.id) == baseId)
             );
@@ -772,7 +806,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return baseEntry;
         }
 
-        // No mapping possible.
         return null;
     }
 
@@ -945,7 +978,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         hisuiPickByBase.Clear();
         hisuiCardByBase.Clear();
         hisuiByBaseName.Clear();
-
+        regionalPickByBase.Clear();
+        regionalCardByBase.Clear();
+        regionalByBaseName.Clear();
         var ordered = targetList;
 
         var main = Instantiate(sectionGroupPrefab, content);
@@ -1056,6 +1091,28 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 card.Bind(p);
                 cardById[p.id] = card;
                 pokemonById[p.id] = p;
+                if (Helpers.IsRegionalForm(p))
+                {
+                    int baseId = p.baseId != 0 ? p.baseId : p.id;
+                    regionalPickByBase[baseId] = p;
+                    regionalCardByBase[baseId] = card;
+
+                    var all = PokemonDatabase.Instance.All();
+                    var baseMon = all.FirstOrDefault(x => x.id == baseId);
+                    void AddKey(string s)
+                    {
+                        var k = GuessNormalizer.Key(s);
+                        if (!string.IsNullOrEmpty(k))
+                            regionalByBaseName[k] = baseId;
+                    }
+                    if (baseMon != null)
+                    {
+                        AddKey(baseMon.name);
+                        if (baseMon.aliases != null)
+                            foreach (var a in baseMon.aliases)
+                                AddKey(a);
+                    }
+                }
             }
 
             if (gen6Megas != null && megaFormsByBase.Count > 0)
@@ -1478,7 +1535,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (pokeBase != baseKey)
                 continue;
 
-            // treat only forms as siblings (NOT evolutions)
             bool isVariantForm =
                 Helpers.IsMega(poke)
                 || Helpers.IsGmax(poke)
@@ -1616,11 +1672,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         fit.OuterMarginY = 16;
         fit.Spacing = 16;
 
-        // We’ll control columns via slider (lock min == max)
         fit.MinCols = currentCols;
         fit.MaxCols = currentCols;
 
-        // Track this fit so the slider can update it later
         _fits.Add(fit);
 
         StartCoroutine(CoRecalcSafe(fit, _buildToken));
@@ -1628,7 +1682,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void OnCardSizeSliderChanged(float t)
     {
-        // t=0 -> small cards (many cols), t=1 -> big cards (few cols)
         int cols = Mathf.Clamp(
             Mathf.RoundToInt(Mathf.Lerp(maxColsSmall, minColsLarge, t)),
             Mathf.Min(minColsLarge, maxColsSmall),
@@ -1848,9 +1901,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         ResetTimerOnly();
         if (guessInput)
         {
-            guessInput.text = string.Empty;
-            guessInput.interactable = true;
-            guessInput.ActivateInputField();
+            RefocusGuess();
         }
         running = true;
         finishedDialog.Hide();
@@ -1865,19 +1916,26 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void OnGuessChanged(string currentText)
     {
-        if (generation == 8 || generation == 0)
+        if (!running || IsDialogOpen())
+            return;
+        if (string.IsNullOrWhiteSpace(currentText))
+            return;
+
+        bool commit = char.IsWhiteSpace(currentText[^1]);
+        string raw = commit ? currentText.TrimEnd() : currentText;
+        if (generation == 8 || generation == 0 && commit)
         {
             if (TryAcceptGmaxByBaseName(currentText.Trim(), commit: true))
                 return;
             if (TryAcceptHisuiByBaseName(currentText.Trim(), commit: true))
                 return;
         }
-        if (!running || IsDialogOpen())
-            return;
-        if (string.IsNullOrWhiteSpace(currentText))
-            return;
 
-        if (generation == 9 && TryAcceptExpeditionByBaseName(currentText.Trim(), commit: true))
+        if (
+            generation == 9
+            && commit
+            && TryAcceptExpeditionByBaseName(currentText.Trim(), commit: true)
+        )
             return;
 
         if (generation == 6)
@@ -1936,8 +1994,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
         }
 
-        bool commit = char.IsWhiteSpace(currentText[^1]);
-        string raw = commit ? currentText.TrimEnd() : currentText;
         if (commit)
         {
             var ov = ExactNameOverrides.TryGet(raw);
@@ -2013,14 +2069,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         var exact = FindByExactPreserveDigits(text);
         if (exact != null)
         {
-            // If that exact species has a card, just use it — no base folding.
             if (cardById.ContainsKey(exact.id))
             {
                 HandleCandidate(exact, text, commit);
                 return;
             }
 
-            // Else fall back to the (form) mapping rules.
             var mapped = MapToTargetSpecies(exact);
             if (mapped != null)
             {
@@ -2057,7 +2111,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         var target = MapToTargetSpecies(guess);
 
-        // Not part of this quiz
         if (target == null)
         {
             var key = GuessNormalizer.Key(originalText);
@@ -2073,8 +2126,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
             if (!commit)
             {
-                // if it's an exact duplicate AND there's no different-species continuation,
-                // clear + sfx. Otherwise let user keep typing (for mewtwo/parasect cases).
                 if (exact && !HasDifferentSpeciesContinuation(originalText, target))
                 {
                     if (cardById.TryGetValue(target.id, out var c))
@@ -2083,28 +2134,22 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                         MaybeScrollTo(target);
                     }
                     PlayDuplicate();
-                    guessInput.SetTextWithoutNotify(string.Empty);
-                    guessInput.ActivateInputField();
-                    guessInput.Select();
+                    RefocusGuess();
                     return;
                 }
 
-                // allow continuing to a longer different species; optional soft feedback
                 if (cardById.TryGetValue(target.id, out var soft))
                     soft.FlashHighlight();
                 return;
             }
 
-            // committed duplicate (space/enter) -> always clear + sfx
             if (cardById.TryGetValue(target.id, out var already))
             {
                 already.FlashHighlight();
                 MaybeScrollTo(target);
             }
             PlayDuplicate();
-            guessInput.SetTextWithoutNotify(string.Empty);
-            guessInput.ActivateInputField();
-            guessInput.Select();
+            RefocusGuess();
             return;
         }
 
@@ -2125,22 +2170,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
         PlayCorrect();
 
-        // In FULL quiz, only auto-reveal same-base VARIANTS (forms), not evolutions
         if (generation == 0)
         {
             int baseKey = target.baseId != 0 ? target.baseId : target.id;
-            // Only forms (mega/gmax/hisui/regional/expedition when desired)
+
             RevealAllVariantsForBase(baseKey, includeExpeditions: false);
         }
 
         UpdateScore();
+        RefocusGuess();
 
-        // Reset input focus for fast typing
-        guessInput.SetTextWithoutNotify(string.Empty);
-        guessInput.ActivateInputField();
-        guessInput.Select();
-
-        // Finish condition
         if (IsComplete())
         {
             running = false;
@@ -2166,7 +2205,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         foreach (var p in targetList)
         {
-            // skip the same card
             if (p.id == currentTarget.id)
                 continue;
 
@@ -2176,12 +2214,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (!nk.StartsWith(typed))
                 continue;
 
-            // treat forms/variants with the SAME base as NOT a real continuation
             int pBase = p.baseId != 0 ? p.baseId : p.id;
             if (pBase == targetBase)
                 continue;
 
-            // different species continuation exists (e.g., paras -> parasect, mew -> mewtwo)
             return true;
         }
         return false;
@@ -2192,7 +2228,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!target)
             yield break;
 
-        // Let layout/content settle
         for (int i = 0; i < 3; i++)
         {
             yield return null;
@@ -2207,7 +2242,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (contentH <= viewH)
             yield break; // nothing to scroll
 
-        // Prevent inertia/user input from fighting the tween
         bool oldInertia = sr.inertia;
         Vector2 oldVel = sr.velocity;
         sr.inertia = false;
@@ -2229,12 +2263,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (token == _scrollToken)
             sr.verticalNormalizedPosition = CalcTargetNorm(sr, target);
 
-        // restore
         sr.inertia = oldInertia;
         sr.velocity = oldVel;
     }
 
-    // Pads a bit above the card and returns the desired normalized position.
     static float CalcTargetNorm(ScrollRect sr, RectTransform target)
     {
         var viewport = sr.viewport;
@@ -2258,7 +2290,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         float fromTopPx = contentTopY - targetTopY;
 
-        // keep a little headroom above the card (10% of viewport height)
         float padPx = 0.10f * viewH;
         fromTopPx = Mathf.Clamp(fromTopPx - padPx, 0f, scrollable);
 
@@ -2354,30 +2385,24 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void RevealAll()
     {
-        // 1) Snapshot what was actually guessed before giving up
         var guessedIds = new HashSet<int>(solved);
 
-        // 2) Reveal visuals for all cards, but DON'T add to solved here
         foreach (var kv in cardById)
         {
             int id = kv.Key;
             var card = kv.Value;
 
-            // reveal picture/text, etc.
             card.Reveal();
 
-            // 3) Paint end state using the snapshot
             bool guessed = guessedIds.Contains(id);
             card.ShowEndState(guessed);
         }
 
-        // 4) Leave 'solved' as-is, score remains the real guessed count
         UpdateScore();
         running = false;
         if (guessInput)
             guessInput.interactable = false;
 
-        // 5) Show the modal with correct numbers and “gave up” flag
         finishedDialog.Show(
             guessed: guessedIds.Count,
             total: cardById.Count,
@@ -2413,6 +2438,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         RebuildGrid();
         Step(0.90f);
         yield return null;
+
+        ApplyColumnsToAllSections();
+        Canvas.ForceUpdateCanvases();
 
         UpdateScore();
         Step(1.00f);
