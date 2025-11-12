@@ -602,9 +602,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void Update()
     {
-        if (!running)
-            return;
-
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
         var kb = Keyboard.current;
         if (kb != null && kb.escapeKey.wasPressedThisFrame)
@@ -625,7 +622,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 #endif
 
-        if (!IsDialogOpen())
+        if (!IsDialogOpen() && running)
         {
             elapsed += Time.deltaTime;
             if (timerText)
