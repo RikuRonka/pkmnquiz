@@ -19,8 +19,20 @@ public static class Helpers
     public static bool IsGmax(Pokemon p) =>
         HasForm(p, "gmax") || HasForm(p, "gigantamax") || NameHas(p, "Gigantamax");
 
-    public static bool IsHisui(Pokemon p) =>
-        HasForm(p, "hisui") || NameHas(p, "(Hisui") || NameHas(p, "Hisuian");
+    public static bool IsHisui(Pokemon p)
+    {
+        if (p == null)
+            return false;
+
+        var baseId = p.baseId != 0 ? p.baseId : p.id;
+
+        // Count both Hisuian regional forms and Hisui-native species
+        bool isHisuianForm =
+            !string.IsNullOrEmpty(p.formKey)
+            && p.formKey.IndexOf("hisui", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        return isHisuianForm || HisuiSpecies.Contains(baseId);
+    }
 
     public static bool IsAlola(Pokemon p) =>
         HasForm(p, "alola") || NameHas(p, "(Alola") || NameHas(p, "Alolan");
@@ -31,6 +43,17 @@ public static class Helpers
     public static bool IsPaldeaTauros(Pokemon p) => p.formKey == "paldea" && p.baseId == 128;
 
     public static int IdOrBase(Pokemon p) => p.baseId != 0 ? p.baseId : p.id;
+
+    static readonly HashSet<int> HisuiSpecies = new()
+    {
+        899, // Wyrdeer
+        900, // Kleavor
+        901, // Ursaluna
+        902, // Basculegion
+        903, // Sneasler
+        904, // Overqwil
+        905, // Enamorus
+    };
 
     public static bool IsPaldeaExpedition(Pokemon p)
     {
