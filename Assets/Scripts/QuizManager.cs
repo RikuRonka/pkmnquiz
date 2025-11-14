@@ -105,6 +105,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<int, Pokemon> regionalPickByBase = new();
     private readonly Dictionary<int, PokemonCard> regionalCardByBase = new();
     private readonly Dictionary<string, int> regionalByBaseName = new();
+    private readonly Dictionary<int, Pokemon> lumiosePickByBase = new();
+    private readonly Dictionary<int, PokemonCard> lumioseCardByBase = new();
+    private readonly Dictionary<string, int> lumioseByBaseName = new();
 
     private bool _testRunning;
     private bool _testCancel;
@@ -759,6 +762,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 && expeditionPickByBase.TryGetValue(baseId, out var expPick)
             )
                 return expPick;
+            if (
+                (generation == 9 || generation == 0)
+                && lumiosePickByBase.TryGetValue(baseId, out var lumiosePick)
+            )
+                return lumiosePick;
 
             var regional = targetList.FirstOrDefault(p =>
                 Helpers.IsRegionalForm(p) && ((p.baseId != 0 ? p.baseId : p.id) == baseId)
@@ -780,7 +788,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             || (
                 typeof(Helpers).GetMethod("IsRegionalForm") != null && Helpers.IsRegionalForm(guess)
             )
-            || Helpers.IsPaldeaExpeditionOrBloodmoon(guess);
+            || Helpers.IsPaldeaExpeditionOrBloodmoon(guess)
+            || Helpers.IsLumioseMega(guess);
 
         if (isForm)
         {
@@ -978,6 +987,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         regionalPickByBase.Clear();
         regionalCardByBase.Clear();
         regionalByBaseName.Clear();
+        lumiosePickByBase.Clear();
+        lumioseCardByBase.Clear();
+        lumioseByBaseName.Clear();
+
         var ordered = targetList;
 
         var main = Instantiate(sectionGroupPrefab, content);
@@ -987,7 +1000,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         SectionGroup megas = null,
             paldeaExpeditions = null,
             gmaxSec = null,
-            hisuiSec = null;
+            hisuiSec = null,
+            lumioseMegasSec = null;
 
         var allDb = PokemonDatabase.Instance.All();
 
@@ -1303,11 +1317,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             paldeaExpeditions = Instantiate(sectionGroupPrefab, content);
             paldeaExpeditions.EnsureLayout();
             paldeaExpeditions.SetTitle("Paldea Expeditions", false);
+
+            lumioseMegasSec = Instantiate(sectionGroupPrefab, content);
+            lumioseMegasSec.EnsureLayout();
+            lumioseMegasSec.SetTitle("Mega Evolution - Lumiose", false);
         }
 
         var expeditionPool = new List<Pokemon>();
         var gmaxPoolGen = new List<Pokemon>();
         var hisuiPoolGen = new List<Pokemon>();
+        var lumioseMegaPool = new List<Pokemon>();
 
         foreach (var p in ordered)
         {
@@ -1333,6 +1352,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (generation == 9 && Helpers.IsPaldeaExpeditionOrBloodmoon(p))
             {
                 expeditionPool.Add(p);
+                continue;
+            }
+
+            if (generation == 9 && Helpers.IsLumioseMega(p))
+            {
+                lumioseMegaPool.Add(p);
                 continue;
             }
 
@@ -1508,7 +1533,48 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             hisuiSec.SetCardCount(hisuiSec.gridRoot.childCount);
             FitSection(hisuiSec);
         }
+        if (lumioseMegasSec != null)
+        {
+            foreach (var p in lumioseMegaPool.OrderBy(x => x.id))
+            {
+                var c = Instantiate(cardPrefab, lumioseMegasSec.gridRoot);
+                c.ClearEndState();
+                c.Bind(p);
+                cardById[p.id] = c;
+                pokemonById[p.id] = p;
 
+                int baseId = p.baseId != 0 ? p.baseId : p.id;
+                lumiosePickByBase[baseId] = p;
+                lumioseCardByBase[baseId] = c;
+
+                // Build name → baseId map
+                var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
+                var baseName = baseMon?.name ?? BaseNameFrom(p.name);
+
+                AddKey(lumioseByBaseName, p.name, baseId);
+                if (p.aliases != null)
+                    foreach (var a in p.aliases)
+                        AddKey(lumioseByBaseName, a, baseId);
+
+                if (!string.IsNullOrEmpty(baseName))
+                {
+                    AddKey(lumioseByBaseName, baseName, baseId);
+                    AddKey(lumioseByBaseName, $"{baseName} mega", baseId);
+                    AddKey(lumioseByBaseName, $"mega {baseName}", baseId);
+                }
+
+                if (baseMon?.aliases != null)
+                    foreach (var a in baseMon.aliases)
+                    {
+                        AddKey(lumioseByBaseName, a, baseId);
+                        AddKey(lumioseByBaseName, $"{a} mega", baseId);
+                        AddKey(lumioseByBaseName, $"mega {a}", baseId);
+                    }
+            }
+
+            lumioseMegasSec.SetCardCount(lumioseMegasSec.gridRoot.childCount);
+            FitSection(lumioseMegasSec);
+        }
         UpdateScore();
         bool noSubSections =
             generation > 0
@@ -1790,7 +1856,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             }
             else if (generation == 9)
             {
-                extras = all.Where(p => Helpers.IsPaldeaExpedition(p));
+                extras = all.Where(p => Helpers.IsPaldeaExpedition(p) || Helpers.IsLumioseMega(p));
             }
 
             all = genSet.Concat(extras).Distinct();

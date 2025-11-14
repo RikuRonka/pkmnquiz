@@ -7816,371 +7816,370 @@
       "aliases": ["Palkia Origin"],
       "sprite": "Sprites/hisui/palkia_origin_hisui"
     },
-    [
-      {
-        "id": 700036,
-        "name": "Clefable (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Fairy", "Flying"],
-        "baseId": 36,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Clefable",
-          "Clefable Mega",
-          "Lumiose Mega Clefable",
-          "Clefable (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700071,
-        "name": "Victreebel (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Grass", "Poison"],
-        "baseId": 71,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Victreebel",
-          "Victreebel Mega",
-          "Lumiose Mega Victreebel",
-          "Victreebel (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700121,
-        "name": "Starmie (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Water", "Psychic"],
-        "baseId": 121,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Starmie",
-          "Starmie Mega",
-          "Lumiose Mega Starmie",
-          "Starmie (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700149,
-        "name": "Dragonite (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Dragon", "Flying"],
-        "baseId": 149,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Dragonite",
-          "Dragonite Mega",
-          "Lumiose Mega Dragonite",
-          "Dragonite (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700154,
-        "name": "Meganium (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Grass", "Fairy"],
-        "baseId": 154,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Meganium",
-          "Meganium Mega",
-          "Lumiose Mega Meganium",
-          "Meganium (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700160,
-        "name": "Feraligatr (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Water", "Dragon"],
-        "baseId": 160,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Feraligatr",
-          "Feraligatr Mega",
-          "Lumiose Mega Feraligatr",
-          "Feraligatr (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700227,
-        "name": "Skarmory (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Steel", "Flying"],
-        "baseId": 227,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Skarmory",
-          "Skarmory Mega",
-          "Lumiose Mega Skarmory",
-          "Skarmory (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700478,
-        "name": "Froslass (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Ice", "Ghost"],
-        "baseId": 478,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Froslass",
-          "Froslass Mega",
-          "Lumiose Mega Froslass",
-          "Froslass (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700500,
-        "name": "Emboar (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Fire", "Fighting"],
-        "baseId": 500,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Emboar",
-          "Emboar Mega",
-          "Lumiose Mega Emboar",
-          "Emboar (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700530,
-        "name": "Excadrill (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Ground", "Steel"],
-        "baseId": 530,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Excadrill",
-          "Excadrill Mega",
-          "Lumiose Mega Excadrill",
-          "Excadrill (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700545,
-        "name": "Scolipede (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Bug", "Poison"],
-        "baseId": 545,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Scolipede",
-          "Scolipede Mega",
-          "Lumiose Mega Scolipede",
-          "Scolipede (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700560,
-        "name": "Scrafty (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Dark", "Fighting"],
-        "baseId": 560,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Scrafty",
-          "Scrafty Mega",
-          "Lumiose Mega Scrafty",
-          "Scrafty (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700604,
-        "name": "Eelektross (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Electric"],
-        "baseId": 604,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Eelektross",
-          "Eelektross Mega",
-          "Lumiose Mega Eelektross",
-          "Eelektross (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700609,
-        "name": "Chandelure (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Ghost", "Fire"],
-        "baseId": 609,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Chandelure",
-          "Chandelure Mega",
-          "Lumiose Mega Chandelure",
-          "Chandelure (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700652,
-        "name": "Chesnaught (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Grass", "Fighting"],
-        "baseId": 652,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Chesnaught",
-          "Chesnaught Mega",
-          "Lumiose Mega Chesnaught",
-          "Chesnaught (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700655,
-        "name": "Delphox (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Fire", "Psychic"],
-        "baseId": 655,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Delphox",
-          "Delphox Mega",
-          "Lumiose Mega Delphox",
-          "Delphox (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700658,
-        "name": "Greninja (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Water", "Dark"],
-        "baseId": 658,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Greninja",
-          "Greninja Mega",
-          "Lumiose Mega Greninja",
-          "Greninja (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700668,
-        "name": "Pyroar (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Fire", "Normal"],
-        "baseId": 668,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Pyroar",
-          "Pyroar Mega",
-          "Lumiose Mega Pyroar",
-          "Pyroar (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700670,
-        "name": "Floette (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Fairy"],
-        "baseId": 670,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Floette",
-          "Floette Mega",
-          "Lumiose Mega Floette",
-          "Floette (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700687,
-        "name": "Malamar (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Dark", "Psychic"],
-        "baseId": 687,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Malamar",
-          "Malamar Mega",
-          "Lumiose Mega Malamar",
-          "Malamar (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700689,
-        "name": "Barbaracle (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Rock", "Water"],
-        "baseId": 689,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Barbaracle",
-          "Barbaracle Mega",
-          "Lumiose Mega Barbaracle",
-          "Barbaracle (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700691,
-        "name": "Dragalge (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Poison", "Dragon"],
-        "baseId": 691,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Dragalge",
-          "Dragalge Mega",
-          "Lumiose Mega Dragalge",
-          "Dragalge (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700701,
-        "name": "Hawlucha (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Fighting", "Flying"],
-        "baseId": 701,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Hawlucha",
-          "Hawlucha Mega",
-          "Lumiose Mega Hawlucha",
-          "Hawlucha (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700718,
-        "name": "Zygarde (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Dragon", "Ground"],
-        "baseId": 718,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Zygarde",
-          "Zygarde Mega",
-          "Lumiose Mega Zygarde",
-          "Zygarde (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700780,
-        "name": "Drampa (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Normal", "Dragon"],
-        "baseId": 780,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Drampa",
-          "Drampa Mega",
-          "Lumiose Mega Drampa",
-          "Drampa (Lumiose Mega)"
-        ]
-      },
-      {
-        "id": 700870,
-        "name": "Falinks (Mega Lumiose)",
-        "generation": 9,
-        "types": ["Fighting"],
-        "baseId": 870,
-        "formKey": "mega_lumiose",
-        "aliases": [
-          "Mega Falinks",
-          "Falinks Mega",
-          "Lumiose Mega Falinks",
-          "Falinks (Lumiose Mega)"
-        ]
-      }
-    ]
+
+    {
+      "id": 700036,
+      "name": "Clefable (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Fairy", "Flying"],
+      "baseId": 36,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Clefable",
+        "Clefable Mega",
+        "Lumiose Mega Clefable",
+        "Clefable (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700071,
+      "name": "Victreebel (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Grass", "Poison"],
+      "baseId": 71,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Victreebel",
+        "Victreebel Mega",
+        "Lumiose Mega Victreebel",
+        "Victreebel (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700121,
+      "name": "Starmie (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Water", "Psychic"],
+      "baseId": 121,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Starmie",
+        "Starmie Mega",
+        "Lumiose Mega Starmie",
+        "Starmie (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700149,
+      "name": "Dragonite (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Dragon", "Flying"],
+      "baseId": 149,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Dragonite",
+        "Dragonite Mega",
+        "Lumiose Mega Dragonite",
+        "Dragonite (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700154,
+      "name": "Meganium (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Grass", "Fairy"],
+      "baseId": 154,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Meganium",
+        "Meganium Mega",
+        "Lumiose Mega Meganium",
+        "Meganium (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700160,
+      "name": "Feraligatr (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Water", "Dragon"],
+      "baseId": 160,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Feraligatr",
+        "Feraligatr Mega",
+        "Lumiose Mega Feraligatr",
+        "Feraligatr (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700227,
+      "name": "Skarmory (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Steel", "Flying"],
+      "baseId": 227,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Skarmory",
+        "Skarmory Mega",
+        "Lumiose Mega Skarmory",
+        "Skarmory (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700478,
+      "name": "Froslass (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Ice", "Ghost"],
+      "baseId": 478,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Froslass",
+        "Froslass Mega",
+        "Lumiose Mega Froslass",
+        "Froslass (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700500,
+      "name": "Emboar (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Fire", "Fighting"],
+      "baseId": 500,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Emboar",
+        "Emboar Mega",
+        "Lumiose Mega Emboar",
+        "Emboar (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700530,
+      "name": "Excadrill (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Ground", "Steel"],
+      "baseId": 530,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Excadrill",
+        "Excadrill Mega",
+        "Lumiose Mega Excadrill",
+        "Excadrill (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700545,
+      "name": "Scolipede (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Bug", "Poison"],
+      "baseId": 545,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Scolipede",
+        "Scolipede Mega",
+        "Lumiose Mega Scolipede",
+        "Scolipede (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700560,
+      "name": "Scrafty (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Dark", "Fighting"],
+      "baseId": 560,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Scrafty",
+        "Scrafty Mega",
+        "Lumiose Mega Scrafty",
+        "Scrafty (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700604,
+      "name": "Eelektross (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Electric"],
+      "baseId": 604,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Eelektross",
+        "Eelektross Mega",
+        "Lumiose Mega Eelektross",
+        "Eelektross (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700609,
+      "name": "Chandelure (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Ghost", "Fire"],
+      "baseId": 609,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Chandelure",
+        "Chandelure Mega",
+        "Lumiose Mega Chandelure",
+        "Chandelure (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700652,
+      "name": "Chesnaught (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Grass", "Fighting"],
+      "baseId": 652,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Chesnaught",
+        "Chesnaught Mega",
+        "Lumiose Mega Chesnaught",
+        "Chesnaught (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700655,
+      "name": "Delphox (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Fire", "Psychic"],
+      "baseId": 655,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Delphox",
+        "Delphox Mega",
+        "Lumiose Mega Delphox",
+        "Delphox (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700658,
+      "name": "Greninja (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Water", "Dark"],
+      "baseId": 658,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Greninja",
+        "Greninja Mega",
+        "Lumiose Mega Greninja",
+        "Greninja (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700668,
+      "name": "Pyroar (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Fire", "Normal"],
+      "baseId": 668,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Pyroar",
+        "Pyroar Mega",
+        "Lumiose Mega Pyroar",
+        "Pyroar (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700670,
+      "name": "Floette (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Fairy"],
+      "baseId": 670,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Floette",
+        "Floette Mega",
+        "Lumiose Mega Floette",
+        "Floette (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700687,
+      "name": "Malamar (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Dark", "Psychic"],
+      "baseId": 687,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Malamar",
+        "Malamar Mega",
+        "Lumiose Mega Malamar",
+        "Malamar (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700689,
+      "name": "Barbaracle (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Rock", "Water"],
+      "baseId": 689,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Barbaracle",
+        "Barbaracle Mega",
+        "Lumiose Mega Barbaracle",
+        "Barbaracle (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700691,
+      "name": "Dragalge (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Poison", "Dragon"],
+      "baseId": 691,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Dragalge",
+        "Dragalge Mega",
+        "Lumiose Mega Dragalge",
+        "Dragalge (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700701,
+      "name": "Hawlucha (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Fighting", "Flying"],
+      "baseId": 701,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Hawlucha",
+        "Hawlucha Mega",
+        "Lumiose Mega Hawlucha",
+        "Hawlucha (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700718,
+      "name": "Zygarde (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Dragon", "Ground"],
+      "baseId": 718,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Zygarde",
+        "Zygarde Mega",
+        "Lumiose Mega Zygarde",
+        "Zygarde (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700780,
+      "name": "Drampa (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Normal", "Dragon"],
+      "baseId": 780,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Drampa",
+        "Drampa Mega",
+        "Lumiose Mega Drampa",
+        "Drampa (Lumiose Mega)"
+      ]
+    },
+    {
+      "id": 700870,
+      "name": "Falinks (Mega Lumiose)",
+      "generation": 9,
+      "types": ["Fighting"],
+      "baseId": 870,
+      "formKey": "mega_lumiose",
+      "aliases": [
+        "Mega Falinks",
+        "Falinks Mega",
+        "Lumiose Mega Falinks",
+        "Falinks (Lumiose Mega)"
+      ]
+    }
   ]
 }

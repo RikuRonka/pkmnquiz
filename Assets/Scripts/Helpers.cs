@@ -44,6 +44,11 @@ public static class Helpers
 
     public static int IdOrBase(Pokemon p) => p.baseId != 0 ? p.baseId : p.id;
 
+    public static bool IsLumioseMega(Pokemon p) =>
+        p != null
+        && !string.IsNullOrEmpty(p.formKey)
+        && p.formKey.Equals("mega_lumiose", StringComparison.OrdinalIgnoreCase);
+
     static readonly HashSet<int> HisuiSpecies = new()
     {
         899, // Wyrdeer
