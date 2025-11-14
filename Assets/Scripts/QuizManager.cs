@@ -997,7 +997,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         main.EnsureLayout();
         SetMainTitle(main);
 
-        SectionGroup megas = null,
+        SectionGroup megaKalosGen = null,
+            megaHoennGen = null,
             paldeaExpeditions = null,
             gmaxSec = null,
             hisuiSec = null,
@@ -1008,6 +1009,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         foreach (var m in allDb.Where(Helpers.IsMega).Where(MatchesType))
         {
+            if (Helpers.IsLumioseMega(m))
+                continue;
             int baseKey = BaseIdOf(m);
             if (!megaFormsByBase.TryGetValue(baseKey, out var list))
                 megaFormsByBase[baseKey] = list = new List<Pokemon>();
@@ -1054,7 +1057,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (generation == 0)
         {
             var mainByGen = new Dictionary<int, SectionGroup>();
-            SectionGroup gen6Megas = null;
+            SectionGroup megaKalos = null;
+            SectionGroup megaHoenn = null;
             SectionGroup gen9Expeditions = null;
             SectionGroup fullGmax = null;
             SectionGroup fullHisui = null;
@@ -1071,13 +1075,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
                 if (g == 6)
                 {
-                    gen6Megas = Instantiate(sectionGroupPrefab, content);
-                    gen6Megas.EnsureLayout();
-                    gen6Megas.SetTitle("Mega Evolutions (Gen 6)", false);
+                    megaKalos = Instantiate(sectionGroupPrefab, content);
+                    megaKalos.EnsureLayout();
+                    megaKalos.SetTitle("Mega Evolution - Kalos", false);
+
+                    megaHoenn = Instantiate(sectionGroupPrefab, content);
+                    megaHoenn.EnsureLayout();
+                    megaHoenn.SetTitle("Mega Evolution - Hoenn", false);
                 }
                 if (g == 7)
                 {
-                    // Unknown section lives directly under Alola
                     unknownSec = Instantiate(sectionGroupPrefab, content);
                     unknownSec.EnsureLayout();
                     unknownSec.SetTitle("Unknown", false);
@@ -1144,18 +1151,37 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     }
                 }
             }
-
-            if (gen6Megas != null && megaFormsByBase.Count > 0)
+            if ((megaKalos != null || megaHoenn != null) && megaFormsByBase.Count > 0)
             {
                 var rng = new System.Random();
+
                 foreach (var kv in megaFormsByBase)
                 {
-                    var pick = kv.Value[rng.Next(kv.Value.Count)];
-                    var c = Instantiate(cardPrefab, gen6Megas.gridRoot);
+                    int baseId = kv.Key;
+                    var forms = kv.Value;
+                    var pick = forms[rng.Next(forms.Count)];
+
+                    // Figure out which region this mega belongs to.
+                    var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
+                    int baseGen = baseMon?.generation ?? pick.generation;
+
+                    SectionGroup targetSec;
+
+                    // Hoenn-dex species → Hoenn section, everything else → Kalos.
+                    if (baseGen == 3)
+                        targetSec = megaHoenn;
+                    else
+                        targetSec = megaKalos;
+
+                    if (targetSec == null)
+                        continue;
+
+                    var c = Instantiate(cardPrefab, targetSec.gridRoot);
                     c.ClearEndState();
                     c.Bind(pick);
-                    megaSlotPickByBase[kv.Key] = pick;
-                    megaCardByBase[kv.Key] = c;
+
+                    megaSlotPickByBase[baseId] = pick;
+                    megaCardByBase[baseId] = c;
                     cardById[pick.id] = c;
                     pokemonById[pick.id] = pick;
                 }
@@ -1351,10 +1377,15 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 sec.SetCardCount(sec.gridRoot.childCount);
                 FitSection(sec);
             }
-            if (gen6Megas != null)
+            if (megaKalos != null)
             {
-                gen6Megas.SetCardCount(gen6Megas.gridRoot.childCount);
-                FitSection(gen6Megas);
+                megaKalos.SetCardCount(megaKalos.gridRoot.childCount);
+                FitSection(megaKalos);
+            }
+            if (megaHoenn != null)
+            {
+                megaHoenn.SetCardCount(megaHoenn.gridRoot.childCount);
+                FitSection(megaHoenn);
             }
             if (gen9Expeditions != null)
             {
@@ -1385,9 +1416,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (generation == 6)
         {
-            megas = Instantiate(sectionGroupPrefab, content);
-            megas.EnsureLayout();
-            megas.SetTitle("Mega Evolutions", false);
+            megaKalosGen = Instantiate(sectionGroupPrefab, content);
+            megaKalosGen.EnsureLayout();
+            megaKalosGen.SetTitle("Mega Evolution - Kalos", false);
+
+            megaHoennGen = Instantiate(sectionGroupPrefab, content);
+            megaHoennGen.EnsureLayout();
+            megaHoennGen.SetTitle("Mega Evolution - Hoenn", false);
         }
         if (generation == 7)
         {
@@ -1467,17 +1502,33 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             pokemonById[p.id] = p;
         }
 
-        if (generation == 6 && megas != null)
+        if (generation == 6 && (megaKalosGen != null || megaHoennGen != null))
         {
             var rng = new System.Random();
+
             foreach (var kv in megaFormsByBase)
             {
-                var pick = kv.Value[rng.Next(kv.Value.Count)];
-                var card = Instantiate(cardPrefab, megas.gridRoot);
+                int baseId = kv.Key;
+                var forms = kv.Value;
+                var pick = forms[rng.Next(forms.Count)];
+
+                var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
+                int baseGen = baseMon?.generation ?? pick.generation;
+
+                SectionGroup targetSec;
+                if (baseGen == 3)
+                    targetSec = megaHoennGen;
+                else
+                    targetSec = megaKalosGen;
+
+                if (targetSec == null)
+                    continue;
+
+                var card = Instantiate(cardPrefab, targetSec.gridRoot);
                 card.ClearEndState();
                 card.Bind(pick);
-                megaSlotPickByBase[kv.Key] = pick;
-                megaCardByBase[kv.Key] = card;
+                megaSlotPickByBase[baseId] = pick;
+                megaCardByBase[baseId] = card;
                 cardById[pick.id] = card;
                 pokemonById[pick.id] = pick;
             }
@@ -1612,10 +1663,15 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         main.SetCardCount(main.gridRoot.childCount);
         FitSection(main);
-        if (megas != null)
+        if (megaKalosGen != null)
         {
-            megas.SetCardCount(megas.gridRoot.childCount);
-            FitSection(megas);
+            megaKalosGen.SetCardCount(megaKalosGen.gridRoot.childCount);
+            FitSection(megaKalosGen);
+        }
+        if (megaHoennGen != null)
+        {
+            megaHoennGen.SetCardCount(megaHoennGen.gridRoot.childCount);
+            FitSection(megaHoennGen);
         }
         if (alolaUnknown != null)
         {
@@ -1691,7 +1747,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         UpdateScore();
         bool noSubSections =
             generation > 0
-            && megas == null
+            && megaHoennGen == null
+            && megaKalosGen == null
             && gmaxSec == null
             && hisuiSec == null
             && paldeaExpeditions == null;
@@ -1956,7 +2013,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
             if (generation == 6)
             {
-                var megasDistinctByBase = all.Where(Helpers.IsMega)
+                var megasDistinctByBase = all.Where(p =>
+                        Helpers.IsMega(p) && !Helpers.IsLumioseMega(p)
+                    )
                     .GroupBy(p => p.baseId != 0 ? p.baseId : p.id)
                     .Select(g => g.First());
                 extras = megasDistinctByBase;
