@@ -1326,7 +1326,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             }
             if (generation == 8 && Helpers.IsHisui(p))
             {
-                hisuiPoolGen.Add(p);
+                if (!Helpers.IsPaldeaExpeditionOrBloodmoon(p))
+                    hisuiPoolGen.Add(p);
                 continue;
             }
             if (generation == 9 && Helpers.IsPaldeaExpeditionOrBloodmoon(p))
@@ -1782,7 +1783,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             }
             else if (generation == 8)
             {
-                extras = all.Where(p => Helpers.IsGmax(p) || Helpers.IsHisui(p));
+                extras = all.Where(p =>
+                    Helpers.IsGmax(p)
+                    || (Helpers.IsHisui(p) && !Helpers.IsPaldeaExpeditionOrBloodmoon(p))
+                );
             }
             else if (generation == 9)
             {
@@ -1809,8 +1813,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 p.types != null && p.types.Any(t => allowed.Contains(t.ToLowerInvariant()))
             );
         }
-
-        DexOrder.LoadForGeneration(generation);
 
         var ordered = all.OrderBy(p => DexOrder.GetIndex(p)).ToList();
 
@@ -1845,6 +1847,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 iGra = ordered.FindIndex(p => GuessNormalizer.Key(p.name) == "grafaiai");
                 ordered.Insert(Math.Min(ordered.Count, iGra + 1), t);
             }
+        }
+        if (generation == 8)
+        {
+            Debug.Log("---- Galar order (BuildTargetList) ----");
+            foreach (
+                var p in ordered.Where(x =>
+                    x.generation == 8 && !Helpers.IsGmax(x) && !Helpers.IsHisui(x)
+                )
+            )
+                Debug.Log($"{p.id} {p.name} -> idx {DexOrder.GetIndex(p)}");
         }
 
         targetList = ordered.ToList();
@@ -1894,6 +1906,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         if (giveUpBtn)
             giveUpBtn.interactable = true;
+        BuildTargetList();
         RebuildGrid();
         ResetTimerOnly();
         if (guessInput)

@@ -8382,6 +8382,21 @@
       "baseId": 901
     },
     {
+      "id": 55000,
+      "name": "Basculin (White-Striped)",
+      "baseId": 550,             
+      "generation": 8,          
+      "types": ["water"],          
+      "region": "Hisui",           
+      "formKey": "hisui",     
+      "isRegional": true,       
+      "aliases": [
+        "Basculin White",
+        "White-Striped Basculin"
+      ],
+      "sprite": "Sprites/hisui/basculin_hisui"
+    },
+    {
       "id": 902,
       "name": "Basculegion",
       "generation": 8,
@@ -11075,7 +11090,7 @@
         "Dragon"
       ],
       "baseId": 890,
-      "formKey": "eternamax",
+      "formKey": "gmax",
       "aliases": [
         "Eternamax Eternatus"
       ],
@@ -11346,11 +11361,11 @@
         "Dragon"
       ],
       "baseId": 483,
-      "formKey": "origin",
+      "formKey": "hisui",
       "aliases": [
         "Dialga Origin"
       ],
-      "sprite": "Sprites/hisui/dialga_origin"
+      "sprite": "Sprites/hisui/dialga_origin_hisui"
     },
     {
       "id": 210484,
@@ -11361,11 +11376,11 @@
         "Dragon"
       ],
       "baseId": 484,
-      "formKey": "origin",
+      "formKey": "hisui",
       "aliases": [
         "Palkia Origin"
       ],
-      "sprite": "Sprites/hisui/palkia_origin"
+      "sprite": "Sprites/hisui/palkia_origin_hisui"
     }
   ]
 }
