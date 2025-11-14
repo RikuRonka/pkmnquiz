@@ -95,7 +95,6 @@ public static class Helpers
 
     private static readonly HashSet<int> PaldeaExpeditionBaseIds = new()
     {
-        1009,
         1010,
         1011,
         1012,
@@ -134,7 +133,6 @@ public static class Helpers
         "ironcrown",
         "terapagos",
         "pecharunt",
-        "ursaluna",
         "ursalunabloodmoon",
         "ursalunabm",
     };
