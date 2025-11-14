@@ -1075,6 +1075,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     gen6Megas.EnsureLayout();
                     gen6Megas.SetTitle("Mega Evolutions (Gen 6)", false);
                 }
+                if (g == 7)
+                {
+                    // Unknown section lives directly under Alola
+                    unknownSec = Instantiate(sectionGroupPrefab, content);
+                    unknownSec.EnsureLayout();
+                    unknownSec.SetTitle("Unknown", false);
+                }
                 if (g == 8)
                 {
                     if (gmaxPoolF.Count > 0)
@@ -1102,13 +1109,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     fullLumioseMegas.EnsureLayout();
                     fullLumioseMegas.SetTitle("Mega Evolution - Lumiose", false);
                 }
-                unknownSec = Instantiate(sectionGroupPrefab, content);
-                unknownSec.EnsureLayout();
-                unknownSec.SetTitle("Unknown", false);
             }
 
             foreach (var p in ordered)
             {
+                if (p.id == 808 || p.id == 809)
+                    continue;
                 var sec = mainByGen[p.generation];
                 var card = Instantiate(cardPrefab, sec.gridRoot);
                 card.ClearEndState();
@@ -1321,6 +1327,25 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 fullLumioseMegas.SetCardCount(fullLumioseMegas.gridRoot.childCount);
                 FitSection(fullLumioseMegas);
             }
+            if (unknownSec != null)
+            {
+                var unknowns = allDb
+                    .Where(p => p.id == 808 || p.id == 809)
+                    .Where(MatchesType)
+                    .ToList();
+
+                foreach (var p in unknowns)
+                {
+                    var c = Instantiate(cardPrefab, unknownSec.gridRoot);
+                    c.ClearEndState();
+                    c.Bind(p);
+                    cardById[p.id] = c;
+                    pokemonById[p.id] = p;
+                }
+
+                unknownSec.SetCardCount(unknownSec.gridRoot.childCount);
+                FitSection(unknownSec);
+            }
             foreach (var sec in mainByGen.Values)
             {
                 sec.SetCardCount(sec.gridRoot.childCount);
@@ -1350,19 +1375,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             {
                 fullLumioseMegas.SetCardCount(fullLumioseMegas.gridRoot.childCount);
                 FitSection(fullLumioseMegas);
-            }
-            var unknownMons = allDb
-                .Where(p => p.id == 808 || p.id == 809)
-                .Where(MatchesType)
-                .ToList();
-
-            foreach (var p in unknownMons)
-            {
-                var c = Instantiate(cardPrefab, unknownSec.gridRoot);
-                c.ClearEndState();
-                c.Bind(p);
-                cardById[p.id] = c;
-                pokemonById[p.id] = p;
             }
 
             unknownSec.SetCardCount(unknownSec.gridRoot.childCount);
