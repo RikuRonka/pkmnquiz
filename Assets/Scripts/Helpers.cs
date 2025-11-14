@@ -37,6 +37,14 @@ public static class Helpers
         return isHisuianForm || HisuiSpecies.Contains(baseId);
     }
 
+    public static bool IsAlolaUnknown(Pokemon p)
+    {
+        if (p == null)
+            return false;
+        // adjust if you ever change their ids
+        return p.id == 808 || p.id == 809; // Meltan, Melmetal
+    }
+
     public static bool IsAlola(Pokemon p) =>
         HasForm(p, "alola") || NameHas(p, "(Alola") || NameHas(p, "Alolan");
 

@@ -1001,7 +1001,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             paldeaExpeditions = null,
             gmaxSec = null,
             hisuiSec = null,
-            lumioseMegasSec = null;
+            lumioseMegasSec = null,
+            alolaUnknown = null;
 
         var allDb = PokemonDatabase.Instance.All();
 
@@ -1356,6 +1357,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             megas.EnsureLayout();
             megas.SetTitle("Mega Evolutions", false);
         }
+        if (generation == 7)
+        {
+            alolaUnknown = Instantiate(sectionGroupPrefab, content);
+            alolaUnknown.EnsureLayout();
+            alolaUnknown.SetTitle("Unknown", false);
+        }
         if (generation == 8)
         {
             gmaxSec = Instantiate(sectionGroupPrefab, content);
@@ -1380,6 +1387,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         var gmaxPoolGen = new List<Pokemon>();
         var hisuiPoolGen = new List<Pokemon>();
         var lumioseMegaPool = new List<Pokemon>();
+        var alolaUnknownPool = new List<Pokemon>();
 
         foreach (var p in ordered)
         {
@@ -1391,6 +1399,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 list.Add(p);
                 continue;
             }
+            if (generation == 7 && Helpers.IsAlolaUnknown(p))
+            {
+                alolaUnknownPool.Add(p);
+                continue;
+            }
+
             if (generation == 8 && Helpers.IsGmax(p))
             {
                 gmaxPoolGen.Add(p);
@@ -1570,6 +1584,20 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         {
             megas.SetCardCount(megas.gridRoot.childCount);
             FitSection(megas);
+        }
+        if (alolaUnknown != null)
+        {
+            foreach (var p in alolaUnknownPool.OrderBy(x => DexOrder.GetIndex(x)))
+            {
+                var c = Instantiate(cardPrefab, alolaUnknown.gridRoot);
+                c.ClearEndState();
+                c.Bind(p);
+                cardById[p.id] = c;
+                pokemonById[p.id] = p;
+            }
+
+            alolaUnknown.SetCardCount(alolaUnknown.gridRoot.childCount);
+            FitSection(alolaUnknown);
         }
         if (paldeaExpeditions != null)
         {
