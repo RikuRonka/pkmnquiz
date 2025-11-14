@@ -457,8 +457,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (GameSettings.Generation.HasValue)
             generation = GameSettings.Generation.Value;
 
-        Debug.Log(GameSettings.TypeFilter);
-
         if (GameSettings.TypeFilter != null && GameSettings.TypeFilter.Length > 0)
         {
             selectedType = GameSettings.TypeFilter[0].Trim().ToLowerInvariant();
