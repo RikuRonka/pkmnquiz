@@ -39,34 +39,63 @@ public class UpdaterRunner : MonoBehaviour
 
     IEnumerator CheckCo()
     {
-        string url = $"{manifestUrl}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
-
-        using var req = UnityWebRequest.Get(url);
-        req.timeout = 15;
-        req.SetRequestHeader("User-Agent", "pkmnquiz-updater");
-        req.SetRequestHeader("Accept", "application/json");
-        yield return req.SendWebRequest();
-
-        if (req.result != UnityWebRequest.Result.Success)
+#if UNITY_EDITOR
+        // Project root (one level up from Assets)
+        string local = Path.Combine(
+            Directory.GetParent(Application.dataPath)!.FullName,
+            "latest.json"
+        );
+        if (File.Exists(local))
         {
-            UnityEngine.Debug.LogWarning(
-                $"Update check failed [{req.responseCode}] {req.error} URL: {url}"
-            );
-            yield break;
+            string json = File.ReadAllText(local);
+            var info = JsonUtility.FromJson<UpdateInfo>(json);
+            if (info != null && !string.IsNullOrEmpty(info.version))
+            {
+                _pending = info;
+
+                var current = new Version(Application.version);
+                var latest = new Version(info.version);
+
+                if (latest > current)
+                    OnUpdateFound?.Invoke(info);
+                else
+                    OnNoUpdate?.Invoke();
+
+                yield break; // don’t hit the network while in Editor
+            }
+            // fall through to web check if parse failed
         }
+#endif
+        {
+            string url = $"{manifestUrl}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
 
-        var info = JsonUtility.FromJson<UpdateInfo>(req.downloadHandler.text);
-        if (info == null || string.IsNullOrEmpty(info.version))
-            yield break;
-        _pending = info;
+            using var req = UnityWebRequest.Get(url);
+            req.timeout = 15;
+            req.SetRequestHeader("User-Agent", "pkmnquiz-updater");
+            req.SetRequestHeader("Accept", "application/json");
+            yield return req.SendWebRequest();
 
-        var current = new Version(Application.version);
-        var latest = new Version(info.version);
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                UnityEngine.Debug.LogWarning(
+                    $"Update check failed [{req.responseCode}] {req.error} URL: {url}"
+                );
+                yield break;
+            }
 
-        if (latest > current)
-            OnUpdateFound?.Invoke(info);
-        else
-            OnNoUpdate?.Invoke();
+            var info = JsonUtility.FromJson<UpdateInfo>(req.downloadHandler.text);
+            if (info == null || string.IsNullOrEmpty(info.version))
+                yield break;
+            _pending = info;
+
+            var current = new Version(Application.version);
+            var latest = new Version(info.version);
+
+            if (latest > current)
+                OnUpdateFound?.Invoke(info);
+            else
+                OnNoUpdate?.Invoke();
+        }
     }
 
     public void StartUpdate()
