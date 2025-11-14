@@ -29,7 +29,7 @@ public class PokemonTooltip : MonoBehaviour
     private float minWidth = 260f;
 
     [SerializeField]
-    private float maxWidth = 800f; // hard cap for notes
+    private float maxWidth = 800f;
 
     [SerializeField]
     private float contentPadding = 40f;
@@ -39,10 +39,10 @@ public class PokemonTooltip : MonoBehaviour
     public float pokemonMaxWidth = 520f;
 
     [SerializeField]
-    private RectTransform typesRow; // the row that holds the two type icons
+    private RectTransform typesRow;
 
     [SerializeField]
-    private VerticalLayoutGroup vlg; // the inner VLG (optional, for padding)
+    private VerticalLayoutGroup vlg;
 
     public Vector2 PreferredSize
     {
@@ -86,7 +86,6 @@ public class PokemonTooltip : MonoBehaviour
         if (rt == null)
             return maxWidth;
 
-        // return width minus small margin
         return Mathf.Max(200f, rt.rect.width - 50f);
     }
 
@@ -112,7 +111,7 @@ public class PokemonTooltip : MonoBehaviour
         nrt.offsetMin = new Vector2(0f, nrt.offsetMin.y);
         nrt.offsetMax = new Vector2(0f, nrt.offsetMax.y);
         nameLabel.textWrappingMode = TextWrappingModes.NoWrap;
-        nameLabel.overflowMode = TextOverflowModes.Overflow; // let the container grow
+        nameLabel.overflowMode = TextOverflowModes.Overflow;
         nameLabel.alignment = TextAlignmentOptions.Center;
 
         if (!type1Image || !type2Image)
@@ -122,7 +121,7 @@ public class PokemonTooltip : MonoBehaviour
             foreach (var img in imgs)
             {
                 if (img == GetComponent<Image>())
-                    continue; // skip bg
+                    continue;
                 if (!type1Image)
                 {
                     type1Image = img;
@@ -151,8 +150,6 @@ public class PokemonTooltip : MonoBehaviour
             cg = GetComponent<CanvasGroup>();
     }
 
-    // ---------- Pokémon tooltips (unchanged behaviour) ----------
-
     public void SetContent(string name, string type1, string type2)
     {
         ApplyPokemonContent(name, type1, type2);
@@ -171,8 +168,6 @@ public class PokemonTooltip : MonoBehaviour
         float w = Mathf.Clamp(needed, minWidth, pokemonMaxWidth);
         ApplyWidth(w);
     }
-
-    // ---------- UPDATE / NOTES TOOLTIP (clamped to screen) ----------
 
     public void SetNotes(string title, string rawNotes)
     {
@@ -206,8 +201,6 @@ public class PokemonTooltip : MonoBehaviour
         );
         ApplyWidth(targetWidth);
     }
-
-    // -------------------------------------------------------------
 
     public void SetVisible(bool visible, bool immediate, float duration = 0.1f)
     {
@@ -271,22 +264,12 @@ public class PokemonTooltip : MonoBehaviour
         return s;
     }
 
-    float MeasureNotesWidth(TMP_Text t, float hardMax)
-    {
-        if (t == null)
-            return minWidth;
-
-        var pref = t.GetPreferredValues(t.text, hardMax, 0);
-        return Mathf.Min(pref.x, hardMax);
-    }
-
     void ApplyWidth(float preferred)
     {
         if (!layoutElement)
             return;
 
         layoutElement.preferredWidth = preferred;
-        // we can also set min width to keep it from collapsing smaller than this
         layoutElement.minWidth = Mathf.Min(preferred, maxWidth);
 
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);

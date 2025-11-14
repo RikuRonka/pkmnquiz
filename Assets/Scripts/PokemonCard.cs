@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 [RequireComponent(typeof(Graphic))]
 [RequireComponent(typeof(Image))]
-public partial class PokemonCard : MonoBehaviour
+public class PokemonCard : MonoBehaviour
 {
     [Header("Refs")]
     [SerializeField]

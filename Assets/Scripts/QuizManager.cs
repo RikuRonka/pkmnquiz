@@ -12,6 +12,8 @@ using UnityEngine.UI;
 public class QuizManager : MonoBehaviour, IQuizProgress
 {
     [Header("UI")]
+    [SerializeField]
+    private Image backgroundImage;
     public TMP_InputField guessInput;
     public TMP_Text scoreText;
     public TMP_Text timerText;
@@ -455,10 +457,15 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (GameSettings.Generation.HasValue)
             generation = GameSettings.Generation.Value;
 
+        Debug.Log(GameSettings.TypeFilter);
+
         if (GameSettings.TypeFilter != null && GameSettings.TypeFilter.Length > 0)
         {
             selectedType = GameSettings.TypeFilter[0].Trim().ToLowerInvariant();
             generation = 0;
+
+            if (backgroundImage && GameSettings.TypeBgColor.HasValue)
+                backgroundImage.color = GameSettings.TypeBgColor.Value;
         }
         else
         {
@@ -522,85 +529,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             guessInput.DeactivateInputField();
 
         EventSystem.current?.SetSelectedGameObject(null);
-    }
-
-    private IEnumerator CoScrollToCard_Debug(RectTransform target, float duration)
-    {
-        if (!scrollRect || !scrollRect.content || !scrollRect.viewport)
-        {
-            Debug.LogWarning("[ScrollDbg] Missing ScrollRect/Content/Viewport refs");
-            yield break;
-        }
-        if (!target)
-        {
-            Debug.LogWarning("[ScrollDbg] Target RT is null");
-            yield break;
-        }
-
-        if (!target.IsChildOf(scrollRect.content))
-            Debug.LogWarning("[ScrollDbg] Target is NOT a child of scrollRect.content.");
-
-        yield return null;
-        Canvas.ForceUpdateCanvases();
-        yield return null;
-        Canvas.ForceUpdateCanvases();
-
-        var content = scrollRect.content;
-        var viewport = scrollRect.viewport;
-
-        var contentBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
-            viewport,
-            content
-        );
-        var targetBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
-            viewport,
-            target
-        );
-
-        float contentH = contentBounds.size.y;
-        float viewH = viewport.rect.height;
-
-        float contentTopY = contentBounds.center.y + contentBounds.extents.y;
-        float targetTopY = targetBounds.center.y + targetBounds.extents.y;
-        float fromTopPx = contentTopY - targetTopY;
-
-        float scrollable = Mathf.Max(1f, contentH - viewH);
-        float targetNorm = 1f - Mathf.Clamp01(fromTopPx / scrollable);
-
-        float pad = 0.12f * (viewH / scrollable);
-        targetNorm = Mathf.Clamp01(targetNorm + pad);
-
-        var hi = AddTempOutline(target, Color.yellow);
-        Destroy(hi, 1.0f);
-
-        float start = scrollRect.verticalNormalizedPosition;
-        float t = 0f;
-        while (t < 1f)
-        {
-            t += Time.unscaledDeltaTime / Mathf.Max(0.001f, duration);
-            scrollRect.verticalNormalizedPosition = Mathf.Lerp(
-                start,
-                targetNorm,
-                Mathf.SmoothStep(0, 1, t)
-            );
-            yield return null;
-        }
-        scrollRect.verticalNormalizedPosition = targetNorm;
-    }
-
-    private Graphic AddTempOutline(RectTransform rt, Color c)
-    {
-        var go = new GameObject("ScrollDbgHi", typeof(Image));
-        go.transform.SetParent(rt, false);
-        var img = go.GetComponent<Image>();
-        img.color = new Color(c.r, c.g, c.b, 0.25f);
-        var r = go.GetComponent<RectTransform>();
-        r.anchorMin = Vector2.zero;
-        r.anchorMax = Vector2.one;
-        r.offsetMin = new Vector2(-4, -4);
-        r.offsetMax = new Vector2(4, 4);
-        go.transform.SetAsFirstSibling();
-        return img;
     }
 
     private void Update()

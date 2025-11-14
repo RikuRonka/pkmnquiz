@@ -3,11 +3,12 @@ using UnityEngine;
 using UnityEngine.UI;
 
 [RequireComponent(typeof(Button))]
+[RequireComponent(typeof(Image))]
 public class TypeFilterButton : MonoBehaviour
 {
     [Header("Config")]
     [SerializeField]
-    string typeName; // "bug", "water", ...
+    string typeName;
 
     [Header("UI")]
     [SerializeField]
@@ -17,10 +18,10 @@ public class TypeFilterButton : MonoBehaviour
     TMP_Text label;
 
     [SerializeField]
-    Image icon; // <-- drag your Icon image here in the prefab
+    Image icon;
 
     [SerializeField]
-    Image icon2; // <-- drag your Icon image here in the prefab
+    Image icon2;
 
     void Awake()
     {

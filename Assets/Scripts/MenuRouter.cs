@@ -1,4 +1,6 @@
+using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class MenuRouter : MonoBehaviour
 {
@@ -29,17 +31,27 @@ public class MenuRouter : MonoBehaviour
     public void PlayFullQuiz()
     {
         EnsureLoader();
+        GameSettings.Generation = 0;
+        GameSettings.TypeFilter = null;
         LoadingManager.Instance.LoadQuiz(0, null);
     }
 
     public void PlayTypeQuiz(string typeKey)
     {
+        GameSettings.TypeBgColor = GameObject
+            .Find(typeKey.FirstCharacterToUpper())
+            .GetComponent<Button>()
+            .colors.normalColor;
+        GameSettings.Generation = null;
+        GameSettings.TypeFilter = new[] { typeKey };
         EnsureLoader();
         LoadingManager.Instance.LoadQuiz(0, typeKey);
     }
 
     public void PlayGenQuiz(int gen)
     {
+        GameSettings.Generation = gen;
+        GameSettings.TypeFilter = null;
         EnsureLoader();
         LoadingManager.Instance.LoadQuiz(gen, null);
     }

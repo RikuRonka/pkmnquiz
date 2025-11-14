@@ -1,4 +1,3 @@
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -29,33 +28,17 @@ public class TooltipManager : MonoBehaviour
         Instance = this;
 
         if (!uiCanvas)
-            uiCanvas = FindFirstObjectByType<Canvas>();
+            uiCanvas = GetComponentInParent<Canvas>();
+
         if (!tooltipLayer)
-            tooltipLayer = EnsureLayer();
+            tooltipLayer = uiCanvas.transform.Find("TooltipLayer") as RectTransform;
 
         _tip = Instantiate(tooltipPrefab, tooltipLayer);
         _tip.gameObject.SetActive(true);
         _tip.SetVisible(false, immediate: true);
 
         _tipRT = (RectTransform)_tip.transform;
-        _tipRT.pivot = new Vector2(0f, 1f);
-    }
-
-    RectTransform EnsureLayer()
-    {
-        var go = new GameObject("TooltipLayer", typeof(RectTransform));
-        go.transform.SetParent(uiCanvas.transform, false);
-        var rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = Vector2.zero;
-        rt.anchorMax = Vector2.one;
-        rt.offsetMin = Vector2.zero;
-        rt.offsetMax = Vector2.zero;
-        rt.pivot = new Vector2(0f, 1f);
-        var img = go.AddComponent<Image>();
-        img.color = new Color(0, 0, 0, 0);
-        img.raycastTarget = false;
-        go.transform.SetAsLastSibling();
-        return rt;
+        _tipRT.pivot = new Vector2(0.5f, 0.5f); // top-left
     }
 
     public void ShowFollow(
@@ -70,7 +53,9 @@ public class TooltipManager : MonoBehaviour
         _pinned = false;
         _tip.SetContent(title, t1, t2);
         LayoutRebuilder.ForceRebuildLayoutImmediate(_tipRT);
-        PositionFollow(screenPos, eventCam);
+
+        // ignore eventCam, just use screen position for overlay canvas
+        PositionFollow(screenPos);
         _tip.SetVisible(true, fadeTime <= 0f, fadeTime);
     }
 
@@ -78,7 +63,8 @@ public class TooltipManager : MonoBehaviour
     {
         if (_pinned || !_tip || !_tip.IsVisible)
             return;
-        PositionFollow(screenPos, eventCam);
+
+        PositionFollow(screenPos);
     }
 
     public void ShowUpdate(string version, string notes)
@@ -153,43 +139,66 @@ public class TooltipManager : MonoBehaviour
         _tipRT.SetAsLastSibling();
     }
 
-    void PositionFollow(Vector2 screenPos, Camera eventCam)
+    void PositionFollow(Vector2 screenPos)
     {
-        if (!uiCanvas || !tooltipLayer || !_tipRT)
+        if (!uiCanvas || !_tipRT || !_tip)
             return;
 
-        Camera cam =
-            (uiCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
-                ? null
-                : (eventCam ? eventCam : uiCanvas.worldCamera);
+        const float EDGE = 8f; // margin to screen edge
+        Vector2 offset = new Vector2(screenOffset.x, -screenOffset.y);
 
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            tooltipLayer,
-            screenPos,
-            cam,
-            out var local
-        );
+        // 1) Start at mouse + offset in screen space
+        Vector2 pos = screenPos + offset;
+        _tipRT.position = pos;
 
-        LayoutRebuilder.ForceRebuildLayoutImmediate(_tipRT);
-        Vector2 size = _tip.PreferredSize;
-        Rect bounds = tooltipLayer.rect;
-        Vector2 pad = new(Mathf.Abs(screenOffset.x), Mathf.Abs(screenOffset.y));
-        const float EDGE = 12f;
+        // 2) Make sure layout is up to date
+        Canvas.ForceUpdateCanvases();
 
-        Vector2 pos = local + new Vector2(pad.x + 10, -pad.y);
+        // 3) Get tooltip corners in screen space
+        Rect screenRect = uiCanvas.pixelRect;
+        Vector3[] corners = new Vector3[4];
+        _tipRT.GetWorldCorners(corners);
 
-        if (pos.x + size.x > bounds.xMax - EDGE)
-            pos.x = local.x - size.x - pad.x;
-        if (pos.y - size.y < bounds.yMin + EDGE)
-            pos.y = local.y + size.y + pad.y;
+        // for Screen Space Overlay there's no camera
+        Camera cam = null;
 
-        pos.x = Mathf.Clamp(pos.x, bounds.xMin + EDGE, bounds.xMax - size.x - EDGE);
-        pos.y = Mathf.Clamp(pos.y, bounds.yMin + size.y + EDGE, bounds.yMax - EDGE);
+        float minX = float.PositiveInfinity;
+        float maxX = float.NegativeInfinity;
+        float minY = float.PositiveInfinity;
+        float maxY = float.NegativeInfinity;
 
-        float sf = uiCanvas ? uiCanvas.scaleFactor : 1f;
-        pos = new Vector2(Mathf.Round(pos.x * sf) / sf, Mathf.Round(pos.y * sf) / sf);
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3 sp = RectTransformUtility.WorldToScreenPoint(cam, corners[i]);
+            if (sp.x < minX)
+                minX = sp.x;
+            if (sp.x > maxX)
+                maxX = sp.x;
+            if (sp.y < minY)
+                minY = sp.y;
+            if (sp.y > maxY)
+                maxY = sp.y;
+        }
 
-        _tipRT.anchoredPosition = pos;
+        // 4) Compute how much we need to move to stay inside the screen
+        float dx = 0f;
+        float dy = 0f;
+
+        if (minX < screenRect.xMin + EDGE)
+            dx += screenRect.xMin + EDGE - minX;
+
+        if (maxX > screenRect.xMax - EDGE)
+            dx += screenRect.xMax - EDGE - maxX;
+
+        if (minY < screenRect.yMin + EDGE)
+            dy += screenRect.yMin + EDGE - minY;
+
+        if (maxY > screenRect.yMax - EDGE)
+            dy += screenRect.yMax - EDGE - maxY;
+
+        // 5) Apply correction
+        pos += new Vector2(dx, dy);
+        _tipRT.position = pos;
         _tipRT.SetAsLastSibling();
     }
 }
