@@ -31,6 +31,9 @@ public static class Helpers
             !string.IsNullOrEmpty(p.formKey)
             && p.formKey.IndexOf("hisui", StringComparison.OrdinalIgnoreCase) >= 0;
 
+        if (p.formKey == "bloodmoon" || p.formKey == "bloodmoonursaluna")
+            return false;
+
         return isHisuianForm || HisuiSpecies.Contains(baseId);
     }
 
