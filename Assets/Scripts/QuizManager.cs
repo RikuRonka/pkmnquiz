@@ -1048,6 +1048,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             .Where(MatchesType)
             .OrderBy(p => DexOrder.GetIndex(p))
             .ToList();
+        var lumiosePoolF = allDb.Where(Helpers.IsLumioseMega).Where(MatchesType).ToList();
 
         if (generation == 0)
         {
@@ -1056,6 +1057,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             SectionGroup gen9Expeditions = null;
             SectionGroup fullGmax = null;
             SectionGroup fullHisui = null;
+            SectionGroup fullLumioseMegas = null;
 
             foreach (var g in ordered.Select(p => p.generation).Distinct().OrderBy(x => x))
             {
@@ -1091,6 +1093,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     gen9Expeditions = Instantiate(sectionGroupPrefab, content);
                     gen9Expeditions.EnsureLayout();
                     gen9Expeditions.SetTitle("Paldea Expeditions", false);
+                }
+                if (g == 9 && lumiosePoolF.Count > 0)
+                {
+                    fullLumioseMegas = Instantiate(sectionGroupPrefab, content);
+                    fullLumioseMegas.EnsureLayout();
+                    fullLumioseMegas.SetTitle("Mega Evolution - Lumiose", false);
                 }
             }
 
@@ -1267,6 +1275,47 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 }
             }
 
+            if (fullLumioseMegas != null)
+            {
+                foreach (var p in lumiosePoolF.OrderBy(x => x.id))
+                {
+                    var c = Instantiate(cardPrefab, fullLumioseMegas.gridRoot);
+                    c.ClearEndState();
+                    c.Bind(p);
+                    cardById[p.id] = c;
+                    pokemonById[p.id] = p;
+
+                    int baseId = p.baseId != 0 ? p.baseId : p.id;
+                    lumiosePickByBase[baseId] = p;
+                    lumioseCardByBase[baseId] = c;
+
+                    var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
+                    var baseName = baseMon?.name ?? BaseNameFrom(p.name);
+
+                    AddKey(lumioseByBaseName, p.name, baseId);
+                    if (p.aliases != null)
+                        foreach (var a in p.aliases)
+                            AddKey(lumioseByBaseName, a, baseId);
+
+                    if (!string.IsNullOrEmpty(baseName))
+                    {
+                        AddKey(lumioseByBaseName, baseName, baseId);
+                        AddKey(lumioseByBaseName, $"{baseName} mega", baseId);
+                        AddKey(lumioseByBaseName, $"mega {baseName}", baseId);
+                    }
+
+                    if (baseMon?.aliases != null)
+                        foreach (var a in baseMon.aliases)
+                        {
+                            AddKey(lumioseByBaseName, a, baseId);
+                            AddKey(lumioseByBaseName, $"{a} mega", baseId);
+                            AddKey(lumioseByBaseName, $"mega {a}", baseId);
+                        }
+                }
+
+                fullLumioseMegas.SetCardCount(fullLumioseMegas.gridRoot.childCount);
+                FitSection(fullLumioseMegas);
+            }
             foreach (var sec in mainByGen.Values)
             {
                 sec.SetCardCount(sec.gridRoot.childCount);
@@ -1292,7 +1341,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 fullHisui.SetCardCount(fullHisui.gridRoot.childCount);
                 FitSection(fullHisui);
             }
-
+            if (fullLumioseMegas != null)
+            {
+                fullLumioseMegas.SetCardCount(fullLumioseMegas.gridRoot.childCount);
+                FitSection(fullLumioseMegas);
+            }
             UpdateScore();
             return;
         }
@@ -1833,6 +1886,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 && !Helpers.IsGmax(p)
                 && !Helpers.IsHisui(p)
                 && !Helpers.IsPaldeaExpedition(p)
+                && !Helpers.IsLumioseMega(p)
             );
         }
         else if (generation > 0)
@@ -1913,16 +1967,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 iGra = ordered.FindIndex(p => GuessNormalizer.Key(p.name) == "grafaiai");
                 ordered.Insert(Math.Min(ordered.Count, iGra + 1), t);
             }
-        }
-        if (generation == 8)
-        {
-            Debug.Log("---- Galar order (BuildTargetList) ----");
-            foreach (
-                var p in ordered.Where(x =>
-                    x.generation == 8 && !Helpers.IsGmax(x) && !Helpers.IsHisui(x)
-                )
-            )
-                Debug.Log($"{p.id} {p.name} -> idx {DexOrder.GetIndex(p)}");
         }
 
         targetList = ordered.ToList();
