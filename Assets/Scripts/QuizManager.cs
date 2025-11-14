@@ -1059,6 +1059,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             SectionGroup fullGmax = null;
             SectionGroup fullHisui = null;
             SectionGroup fullLumioseMegas = null;
+            SectionGroup unknownSec = null;
 
             foreach (var g in ordered.Select(p => p.generation).Distinct().OrderBy(x => x))
             {
@@ -1101,6 +1102,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     fullLumioseMegas.EnsureLayout();
                     fullLumioseMegas.SetTitle("Mega Evolution - Lumiose", false);
                 }
+                unknownSec = Instantiate(sectionGroupPrefab, content);
+                unknownSec.EnsureLayout();
+                unknownSec.SetTitle("Unknown", false);
             }
 
             foreach (var p in ordered)
@@ -1347,6 +1351,22 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 fullLumioseMegas.SetCardCount(fullLumioseMegas.gridRoot.childCount);
                 FitSection(fullLumioseMegas);
             }
+            var unknownMons = allDb
+                .Where(p => p.id == 808 || p.id == 809)
+                .Where(MatchesType)
+                .ToList();
+
+            foreach (var p in unknownMons)
+            {
+                var c = Instantiate(cardPrefab, unknownSec.gridRoot);
+                c.ClearEndState();
+                c.Bind(p);
+                cardById[p.id] = c;
+                pokemonById[p.id] = p;
+            }
+
+            unknownSec.SetCardCount(unknownSec.gridRoot.childCount);
+            FitSection(unknownSec);
             UpdateScore();
             return;
         }

@@ -146,6 +146,163 @@ public static class DexOrder
         210483, // Dialga (Origin Forme)
         210484, // Palkia (Origin Forme)
     };
+
+    static readonly int[] AlolaOrder = new int[]
+    {
+        // Rowlet line
+        722,
+        723,
+        724,
+        // Litten line
+        725,
+        726,
+        727,
+        // Popplio line
+        728,
+        729,
+        730,
+        // Pikipek line
+        731,
+        732,
+        733,
+        // Yungoos line
+        734,
+        735,
+        // --- INSERT ALOLAN VARIANTS (Rattata-A, Raticate-A) HERE ---
+        1901,
+        2001,
+        // --- INSERT ALOLAN VARIANTS (Raichu-A) HERE ---
+        2601,
+        // Grubbin line
+        736,
+        737,
+        738,
+        5201,
+        5301,
+        8801,
+        8901,
+        // Crabrawler
+        739,
+        740,
+        5001,
+        5101,
+        // Oricorio forms are SAME ID (741) → no variants needed
+        741,
+        // Cutiefly line
+        742,
+        743,
+        // Rockruff → Lycanroc (3 forms share IDs 745)
+        744,
+        745,
+        // Wishiwashi
+        746,
+        // Mareanie line
+        747,
+        748,
+        // Mudbray line
+        749,
+        750,
+        // Dewpider line
+        751,
+        752,
+        // Fomantis line
+        753,
+        754,
+        // Morelull line
+        755,
+        756,
+        // Salandit line
+        757,
+        758,
+        10501,
+        // Stufful line
+        759,
+        760,
+        // Bounsweet line
+        761,
+        762,
+        763,
+        // Comfey
+        764,
+        // Oranguru
+        765,
+        // Passimian
+        766,
+        // Wimpod line
+        767,
+        768,
+        // Sandygast line
+        769,
+        770,
+        // Pyukumuku
+        771,
+        // Type: Null → Silvally
+        772,
+        773,
+        // Minior
+        774,
+        // Komala
+        775,
+        // Turtonator
+        776,
+        // Togedemaru
+        777,
+        7401,
+        7501,
+        7601,
+        // Mimikyu
+        778,
+        // Bruxish
+        779,
+        // Drampa
+        780,
+        2701,
+        2801,
+        3701,
+        3801,
+        // Dhelmise
+        781,
+        10301,
+        // Jangmo-o line
+        782,
+        783,
+        784,
+        // Tapu guardians
+        785,
+        786,
+        787,
+        788,
+        // Cosmog line
+        789,
+        790,
+        791,
+        792,
+        793,
+        794,
+        795,
+        796,
+        797,
+        798,
+        799,
+        // Necrozma
+        800,
+        // Magearna
+        801,
+        // Marshadow
+        802,
+        // Poipole line
+        803,
+        804,
+        // Naganadel
+        // (same as above)
+
+        // Stakataka
+        805,
+        // Blacephalon
+        806,
+        // Zeraora
+        807,
+    };
     static readonly Dictionary<int, int> HisuiIndex = BuildIndex(HisuiOrder);
 
     public static int GetIndex(Pokemon p)
@@ -165,9 +322,19 @@ public static class DexOrder
                 return 10000 + idx;
             return 19999;
         }
-
+        if (p.generation == 7)
+            return GetAlolaIndex(p.id);
         // everything else
         return 30000 + p.id;
+    }
+
+    static int GetAlolaIndex(int id)
+    {
+        for (int i = 0; i < AlolaOrder.Length; i++)
+            if (AlolaOrder[i] == id)
+                return i;
+
+        return 99999; // anything missing goes to the end
     }
 
     static bool IsHisuiRelated(Pokemon p)
