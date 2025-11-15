@@ -39,7 +39,7 @@ Test your knowledge across:
 ---
 
 ## 🚀 Download & Play
-**[⬇️ Download latest release]([https://www.mediafire.com/file/n9z8r3t0bja8xfd/pkmnquiz_build.zip/file](https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.4.zip))**  
+**[⬇️ Download latest release](https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.4.zip)**  
 No install required — unzip & run `PokemonQuiz.exe`
 
 ---
