@@ -27,9 +27,27 @@ public class SectionGroup : MonoBehaviour
     float mainOnlyGap = 64f;
     public int CardCount { get; private set; }
 
+    [Header("Scaling")]
+    [SerializeField]
+    float fontSizeLarge = 40f; // big cards (few cols)
+
+    [SerializeField]
+    float fontSizeSmall = 22f; // tiny cards (many cols)
+
     public void SetCardCount(int n)
     {
         CardCount = Mathf.Max(0, n);
+    }
+
+    public void UpdateHeaderForCols(int cols, int minCols, int maxCols)
+    {
+        if (!titleText)
+            return;
+
+        float t = Mathf.InverseLerp(minCols, maxCols, cols);
+
+        float size = Mathf.Lerp(fontSizeLarge, fontSizeSmall, t);
+        titleText.fontSize = size;
     }
 
     public void EnsureLayout()
@@ -109,9 +127,6 @@ public class SectionGroup : MonoBehaviour
     {
         if (titleText)
         {
-            titleText.alignment = isMain
-                ? TextAlignmentOptions.Midline // or Center
-                : TextAlignmentOptions.MidlineLeft;
             titleText.enableAutoSizing = false;
             if (isMain)
             {

@@ -78,6 +78,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     Toggle alwaysScrollToggle;
     Coroutine _scrollRoutine;
     int _scrollToken;
+    private readonly List<SectionGroup> _sections = new();
 
     [SerializeField]
     string selectedType;
@@ -863,8 +864,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private void RebuildGrid()
     {
         _fits.Clear();
-        _buildToken++; // invalidate older coroutines
-        StopAllCoroutines(); // cancel any CoRecalc/scroll coroutines from the previous build
+        _sections.Clear();
+        _buildToken++;
+        StopAllCoroutines();
         if (!scrollRect || !scrollRect.viewport)
         {
             Debug.LogError("ScrollRect/Viewport missing");
@@ -922,6 +924,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         var main = Instantiate(sectionGroupPrefab, content);
         main.EnsureLayout();
         SetMainTitle(main);
+        _sections.Add(main);
 
         SectionGroup megaKalosGen = null,
             megaHoennGen = null,
@@ -998,22 +1001,26 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 string baseTitle = GenTitles.TryGetValue(g, out var t) ? t : $"Gen {g}";
                 sec.SetTitle(baseTitle, false);
                 mainByGen[g] = sec;
+                _sections.Add(sec);
 
                 if (g == 6)
                 {
                     megaKalos = Instantiate(sectionGroupPrefab, content);
                     megaKalos.EnsureLayout();
                     megaKalos.SetTitle("Mega Evolution - Kalos", false);
+                    _sections.Add(megaKalos);
 
                     megaHoenn = Instantiate(sectionGroupPrefab, content);
                     megaHoenn.EnsureLayout();
                     megaHoenn.SetTitle("Mega Evolution - Hoenn", false);
+                    _sections.Add(megaHoenn);
                 }
                 if (g == 7)
                 {
                     unknownSec = Instantiate(sectionGroupPrefab, content);
                     unknownSec.EnsureLayout();
                     unknownSec.SetTitle("Unknown", false);
+                    _sections.Add(unknownSec);
                 }
                 if (g == 8)
                 {
@@ -1022,12 +1029,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                         fullGmax = Instantiate(sectionGroupPrefab, content);
                         fullGmax.EnsureLayout();
                         fullGmax.SetTitle("Gigantamax (Gen 8)", false);
+                        _sections.Add(fullGmax);
                     }
                     if (hisuiPoolF.Count > 0)
                     {
                         fullHisui = Instantiate(sectionGroupPrefab, content);
                         fullHisui.EnsureLayout();
                         fullHisui.SetTitle("Hisui (Gen 8)", false);
+                        _sections.Add(fullHisui);
                     }
                 }
                 if (g == 9 & g9ExpPoolF.Count > 0)
@@ -1035,12 +1044,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     gen9Expeditions = Instantiate(sectionGroupPrefab, content);
                     gen9Expeditions.EnsureLayout();
                     gen9Expeditions.SetTitle("Paldea Expeditions", false);
+                    _sections.Add(gen9Expeditions);
                 }
                 if (g == 9 && lumiosePoolF.Count > 0)
                 {
                     fullLumioseMegas = Instantiate(sectionGroupPrefab, content);
                     fullLumioseMegas.EnsureLayout();
                     fullLumioseMegas.SetTitle("Mega Evolution - Lumiose", false);
+                    _sections.Add(fullLumioseMegas);
                 }
             }
 
@@ -1867,6 +1878,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             fit.MinCols = currentCols;
             fit.MaxCols = currentCols;
             fit.Recalculate();
+        }
+
+        foreach (var sec in _sections)
+        {
+            if (!sec)
+                continue;
+            sec.UpdateHeaderForCols(currentCols, minColsLarge, maxColsSmall);
         }
     }
 
