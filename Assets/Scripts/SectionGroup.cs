@@ -9,19 +9,16 @@ public class SectionGroup : MonoBehaviour
     public RectTransform gridRoot;
 
     [SerializeField]
-    Image typeIcon; // small square image prefab
+    Image typeIcon;
 
     [SerializeField]
     TMP_Text titleText;
 
     [SerializeField]
-    RectTransform headerSpacer; // <- assign the spacer
+    RectTransform headerSpacer;
 
     [SerializeField]
     float normalGap = 16f;
-
-    [SerializeField]
-    Vector2 mainIconSize = new(48, 48);
 
     [SerializeField]
     float mainOnlyGap = 64f;
@@ -29,10 +26,24 @@ public class SectionGroup : MonoBehaviour
 
     [Header("Scaling")]
     [SerializeField]
-    float fontSizeLarge = 40f; // big cards (few cols)
+    float fontSizeLarge = 40f;
 
     [SerializeField]
-    float fontSizeSmall = 22f; // tiny cards (many cols)
+    float fontSizeSmall = 22f;
+    const float LEFT_MARGIN = 0f;
+
+    [SerializeField]
+    float baseFontSize = 36f;
+
+    [SerializeField]
+    float minFontSize = 20f;
+
+    [SerializeField]
+    float maxFontSize = 32f;
+    private bool _isMainHeader;
+
+    [SerializeField]
+    float mainHeaderIconSpacing = 24f;
 
     public void SetCardCount(int n)
     {
@@ -42,6 +53,9 @@ public class SectionGroup : MonoBehaviour
     public void UpdateHeaderForCols(int cols, int minCols, int maxCols)
     {
         if (!titleText)
+            return;
+
+        if (_isMainHeader)
             return;
 
         float t = Mathf.InverseLerp(minCols, maxCols, cols);
@@ -125,31 +139,77 @@ public class SectionGroup : MonoBehaviour
 
     public void SetTitle(string text, bool isMain, Sprite icon = null)
     {
-        if (titleText)
-        {
-            titleText.enableAutoSizing = false;
-            if (isMain)
-            {
-                titleText.fontSize = 55;
-            }
-
-            titleText.text = text;
-        }
-
-        if (!typeIcon)
+        if (!titleText)
             return;
 
-        if (icon)
+        _isMainHeader = isMain;
+        titleText.enableAutoSizing = false;
+        titleText.text = text ?? "";
+
+        var titleRT = titleText.rectTransform;
+
+        if (isMain)
+        {
+            // Center the *pair* [icon][title] in the header
+            titleText.alignment = TextAlignmentOptions.Center;
+
+            // Center anchors/pivots for both
+            titleRT.anchorMin = titleRT.anchorMax = new Vector2(0.5f, 0.5f);
+            titleRT.pivot = new Vector2(0.5f, 0.5f);
+
+            RectTransform iconRT = null;
+            float iconW = 0f;
+
+            if (typeIcon)
+            {
+                typeIcon.sprite = icon;
+                typeIcon.enabled = icon != null;
+
+                iconRT = typeIcon.rectTransform;
+                iconRT.anchorMin = iconRT.anchorMax = new Vector2(0.5f, 0.5f);
+                iconRT.pivot = new Vector2(0.5f, 0.5f);
+                iconW = iconRT.rect.width;
+            }
+
+            // Measure text width
+            LayoutRebuilder.ForceRebuildLayoutImmediate(titleRT);
+            float textW = titleText.preferredWidth;
+
+            float spacing = (iconW > 0f && textW > 0f) ? mainHeaderIconSpacing : 0f;
+            float totalW = iconW + spacing + textW;
+
+            // Left edge of the combined pair (relative to center)
+            float left = -totalW * 0.5f;
+
+            // Position icon
+            if (iconRT && iconW > 0f)
+            {
+                float iconCenterX = left + iconW * 0.5f;
+                iconRT.anchoredPosition = new Vector2(iconCenterX, 0f);
+            }
+
+            // Position title
+            float titleCenterX = left + iconW + spacing + textW * 0.5f;
+            titleRT.anchoredPosition = new Vector2(titleCenterX, 0f);
+
+            // Fixed font size for main header
+            titleText.fontSize = baseFontSize;
+
+            return; // important so non-main code below doesn't run
+        }
+
+        // ----- non-main headers (gens) stay left-aligned as before -----
+        titleText.alignment = TextAlignmentOptions.MidlineLeft;
+
+        titleRT.anchorMin = new Vector2(0f, 0.5f);
+        titleRT.anchorMax = new Vector2(0f, 0.5f);
+        titleRT.pivot = new Vector2(0f, 0.5f);
+        titleRT.anchoredPosition = new Vector2(LEFT_MARGIN, 0f);
+
+        if (typeIcon)
         {
             typeIcon.sprite = icon;
-            typeIcon.preserveAspect = true;
-            var rt = (RectTransform)typeIcon.transform;
-            rt.sizeDelta = mainIconSize;
-            typeIcon.enabled = true; // show
-        }
-        else
-        {
-            typeIcon.enabled = false; // hide when not a type quiz
+            typeIcon.enabled = icon != null;
         }
     }
 
