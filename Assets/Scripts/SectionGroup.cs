@@ -45,7 +45,7 @@ public class SectionGroup : MonoBehaviour
         vlg.childForceExpandHeight = false;
 
         var csf = GetComponent<ContentSizeFitter>() ?? gameObject.AddComponent<ContentSizeFitter>();
-        csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
         csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         if (!headerRect)
@@ -109,6 +109,9 @@ public class SectionGroup : MonoBehaviour
     {
         if (titleText)
         {
+            titleText.alignment = isMain
+                ? TextAlignmentOptions.Midline // or Center
+                : TextAlignmentOptions.MidlineLeft;
             titleText.enableAutoSizing = false;
             if (isMain)
             {
