@@ -1347,6 +1347,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
             unknownSec.SetCardCount(unknownSec.gridRoot.childCount);
             FitSection(unknownSec);
+            foreach (var sec in mainByGen.Values)
+                FinalizeSection(sec);
+
+            FinalizeSection(megaKalos);
+            FinalizeSection(megaHoenn);
+            FinalizeSection(gen9Expeditions);
+            FinalizeSection(fullGmax);
+            FinalizeSection(fullHisui);
+            FinalizeSection(fullLumioseMegas);
+            FinalizeSection(unknownSec);
             UpdateScore();
             return;
         }
@@ -1864,6 +1874,22 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         currentCols = cols;
         PlayerPrefs.SetInt(KEY_COLS, currentCols);
         ApplyColumnsToAllSections();
+    }
+
+    void FinalizeSection(SectionGroup sec)
+    {
+        if (!sec)
+            return;
+
+        int count = sec.gridRoot.childCount;
+        if (count <= 0)
+        {
+            Destroy(sec.gameObject);
+            return;
+        }
+
+        sec.SetCardCount(count);
+        FitSection(sec);
     }
 
     private void ApplyColumnsToAllSections()
