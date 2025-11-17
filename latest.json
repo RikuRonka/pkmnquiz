@@ -1,5 +1,5 @@
 {
   "version": "1.0.5",
-  "notes": "- Improved quiz layout: all section titles are now left-aligned and automatically scale with the grid size for better readability - Added Patch Notes History, accessible from the main menu - Added Pokémon silhouette mode (“Shadows”), allowing players to reveal shadow versions of all Pokémon",
+  "notes": "- Improved quiz layout: all section titles are now left aligned and automatically scale with the grid size for better readability - Added Patch Notes History, accessible from the main menu - Added Pokémon silhouette mode (“Shadows”), allowing players to reveal shadow versions of all Pokémon",
   "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.5.zip"
 }
