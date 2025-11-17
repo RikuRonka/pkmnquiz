@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 0bc115b86110fe040948426b88898a96
+guid: c1e1867fd8b085d42b9084cf50d0a8c8
 TextureImporter:
   internalIDToNameTable:
   - first:
@@ -72,12 +72,12 @@ TextureImporter:
   platformSettings:
   - serializedVersion: 4
     buildTarget: DefaultTexturePlatform
-    maxTextureSize: 512
+    maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
     textureCompression: 1
     compressionQuality: 50
-    crunchedCompression: 1
+    crunchedCompression: 0
     allowsAlphaSplitting: 0
     overridden: 0
     ignorePlatformSupport: 0
@@ -126,7 +126,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: ursaluna_paldea_bloodmoon_0
+      name: ursaluna_bloodmoon_0
       rect:
         serializedVersion: 2
         x: 78
@@ -134,7 +134,7 @@ TextureImporter:
         width: 1125
         height: 1280
       alignment: 0
-      pivot: {x: 0.5, y: 0.5}
+      pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -151,7 +151,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 5b3e78a50fef610469c96e84d691eee9
+    spriteID: 
     internalID: 0
     vertices: []
     indices: 
@@ -161,7 +161,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      ursaluna_paldea_bloodmoon_0: -7620202333391272236
+      ursaluna_bloodmoon_0: -7620202333391272236
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

@@ -7,6 +7,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(RectTransform))]
 [RequireComponent(typeof(Image))]
 [RequireComponent(typeof(Shadow))]
+[RequireComponent(typeof(Button))]
 public class UiButtonHover
     : MonoBehaviour,
         IPointerEnterHandler,
@@ -22,6 +23,10 @@ public class UiButtonHover
     public Image background;
     public TMP_Text label;
     public Shadow shadow;
+
+    [Header("State")]
+    [SerializeField]
+    Button button;
 
     [Header("Scale")]
     public float hoverScale = 1.06f;
@@ -54,37 +59,75 @@ public class UiButtonHover
         background = GetComponent<Image>();
         label = GetComponentInChildren<TMP_Text>();
         shadow = GetComponent<Shadow>();
+        button = GetComponent<Button>();
     }
 
     void Awake()
     {
         if (!target)
             target = (RectTransform)transform;
+        if (!button)
+            button = GetComponent<Button>();
         _baseScale = target.localScale;
         ApplyColors(bgNormal, textNormal);
         ApplyShadow(shadowNormal);
     }
 
-    public void OnPointerEnter(PointerEventData _) => SetHover(true, playSound: true);
+    public void OnPointerEnter(PointerEventData _)
+    {
+        if (!IsInteractable())
+            return;
+        SetHover(true, playSound: true);
+    }
 
-    public void OnPointerExit(PointerEventData _) => SetHover(false);
+    public void OnPointerExit(PointerEventData _)
+    {
+        SetHover(false);
+    }
 
-    public void OnPointerDown(PointerEventData _) => TweenScale(pressScale);
+    public void OnPointerDown(PointerEventData _)
+    {
+        if (!IsInteractable())
+            return;
+        TweenScale(pressScale);
+    }
 
-    public void OnPointerUp(PointerEventData _) => TweenScale(_hovered ? hoverScale : 1f);
+    public void OnPointerUp(PointerEventData _)
+    {
+        if (!IsInteractable())
+            return;
+        TweenScale(_hovered ? hoverScale : 1f);
+    }
 
-    public void OnSelect(BaseEventData _) => SetHover(true);
+    public void OnSelect(BaseEventData _)
+    {
+        if (!IsInteractable())
+            return;
+        SetHover(true);
+    }
 
-    public void OnDeselect(BaseEventData _) => SetHover(false);
+    public void OnDeselect(BaseEventData _)
+    {
+        SetHover(false);
+    }
 
     public void OnSubmit(BaseEventData _)
     {
+        if (!IsInteractable())
+            return;
         Play(clickClip);
         TweenBump();
     }
 
+    bool IsInteractable()
+    {
+        return !button || button.interactable;
+    }
+
     void SetHover(bool on, bool playSound = false)
     {
+        if (on && !IsInteractable())
+            return;
         _hovered = on;
         TweenScale(on ? hoverScale : 1f);
         ApplyColors(on ? bgHover : bgNormal, on ? textHover : textNormal);
@@ -113,6 +156,24 @@ public class UiButtonHover
             yield return null;
         }
         target.localScale = end;
+    }
+
+    public void RefreshDisabledVisual()
+    {
+        if (!background)
+            return;
+
+        if (IsInteractable())
+            ApplyColors(bgNormal, textNormal);
+        else
+        {
+            // simple greyed-out look
+            var c = bgNormal * 0.7f;
+            c.a = bgNormal.a;
+            ApplyColors(c, textNormal * 0.7f);
+            target.localScale = _baseScale;
+            _hovered = false;
+        }
     }
 
     void TweenBump() => StartCoroutine(BumpCo());

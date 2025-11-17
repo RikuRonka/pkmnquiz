@@ -70,6 +70,8 @@ public class PokemonCard : MonoBehaviour
 
     static readonly Color BorderGreen = new(0f, 1f, 0f, 1f);
     static readonly Color BorderRed = new(1f, 0f, 0f, 1f);
+    Color _normalColor = Color.white;
+    Color _shadowColor = new Color(0f, 0f, 0f, 1f);
 
     void Awake()
     {
@@ -200,6 +202,7 @@ public class PokemonCard : MonoBehaviour
     {
         Bound = p;
         IsRevealed = false;
+        spriteImage.sprite = null;
         data = p;
         revealed = false;
         hintVisible = false;
@@ -245,17 +248,48 @@ public class PokemonCard : MonoBehaviour
         Size(placeholderImage);
     }
 
-    public void Reveal()
+    public void SetShadowMode(bool enabled)
+    {
+        if (!spriteImage)
+            return;
+
+        if (IsRevealed)
+            return;
+
+        if (enabled)
+        {
+            if (!spriteImage.sprite && loadedSprite != null)
+                spriteImage.sprite = loadedSprite;
+
+            spriteImage.enabled = true;
+            spriteImage.color = _shadowColor;
+
+            if (placeholderImage)
+                placeholderImage.enabled = false;
+        }
+        else
+        {
+            spriteImage.color = _normalColor;
+
+            if (spriteImage)
+                spriteImage.enabled = false;
+            if (placeholderImage)
+                placeholderImage.enabled = true;
+        }
+    }
+
+    public void Reveal(Sprite sprite)
     {
         if (IsRevealed || Bound == null)
             return;
         IsRevealed = true;
-
+        spriteImage.sprite = sprite;
+        spriteImage.color = _normalColor;
         if (placeholderImage)
         {
-            placeholderImage.enabled = true; // keep white tile visible
-            placeholderImage.color = Color.white; // make sure it's plain white
-            placeholderImage.transform.SetAsFirstSibling(); // stay behind sprite
+            placeholderImage.enabled = false;
+            placeholderImage.color = Color.white;
+            placeholderImage.transform.SetAsFirstSibling();
         }
         if (spriteImage)
         {
@@ -263,6 +297,14 @@ public class PokemonCard : MonoBehaviour
             spriteImage.transform.SetAsLastSibling();
         }
         HideTypeIcons();
+    }
+
+    public void Reveal()
+    {
+        if (loadedSprite == null && spriteImage != null)
+            loadedSprite = spriteImage.sprite;
+
+        Reveal(loadedSprite);
     }
 
     public void ShowTypeHint(string[] types)

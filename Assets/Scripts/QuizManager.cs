@@ -111,7 +111,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<int, Pokemon> lumiosePickByBase = new();
     private readonly Dictionary<int, PokemonCard> lumioseCardByBase = new();
     private readonly Dictionary<string, int> lumioseByBaseName = new();
-
+    bool _shadowMode;
     private bool _testRunning;
     private bool _testCancel;
 
@@ -140,6 +140,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     [SerializeField]
     Button pauseBtn; // optional top-bar "Pause" button
+
+    [SerializeField]
+    Button shadowsBtn;
 
     private void Awake()
     {
@@ -235,6 +238,32 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         if (sfx && duplicateSfx)
             sfx.PlayOneShot(duplicateSfx, sfxVolume);
+    }
+
+    public void OnShadowsButtonClicked()
+    {
+        // Don't open another dialog on top of an existing one
+        if (IsDialogOpen())
+            return;
+
+        // Turning ON shadows → ask for confirmation
+        if (!_shadowMode)
+        {
+            if (!confirmDialog)
+            {
+                // Fallback: no dialog prefab wired, just toggle
+                ApplyShadowMode(true);
+                return;
+            }
+
+            confirmDialog.Show(
+                title: "Enable shadows?",
+                message: "This will turn all Pokémon into black silhouettes until you guess them.",
+                confirmLabel: "Enable",
+                cancelLabel: "Cancel",
+                confirmAction: () => ApplyShadowMode(true, lockButton: true)
+            );
+        }
     }
 
     void SetGridVisible(bool visible)
@@ -1736,6 +1765,23 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
+    void ApplyShadowMode(bool enable, bool lockButton = false)
+    {
+        _shadowMode = enable;
+
+        foreach (var card in cardById.Values)
+        {
+            if (card)
+                card.SetShadowMode(enable);
+        }
+
+        if (shadowsBtn && lockButton)
+        {
+            shadowsBtn.interactable = false;
+            shadowsBtn.GetComponent<UiButtonHover>()?.RefreshDisabledVisual();
+        }
+    }
+
     bool MatchesType(Pokemon p)
     {
         if (!HasTypeFilter)
@@ -2105,6 +2151,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         if (giveUpBtn)
             giveUpBtn.interactable = true;
+
+        if (shadowsBtn)
+            shadowsBtn.interactable = true;
         BuildTargetList();
         RebuildGrid();
         ResetTimerOnly();
