@@ -1,5 +1,5 @@
 {
-  "version": "1.0.4",
-  "notes": "- [BUG fixed] Patch notes tooltip doesn't overflow from right side of the screen anymore with long text. - [BUG fixed] No need to write anymore 'alolan', 'galarian' or 'hisui' in gen 7/8 if base form exists in previous generations. - [BUG fixed] All Pokémon 'should' be in correct order in every quiz now. - [NEW] Type quizzes has same background color as their buttons. - [NEW] Added Lumiose Mega Evolutions. - [NEW] Meltan and Melmetal are in Unknown section under Alola like in original quiz - [NEW] Mega evolutions split to Mega Evolutions - Kalos, Mega Evolutions - Hoenn",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.4.zip"
+  "version": "1.0.5",
+  "notes": "- Improved quiz layout: all section titles are now left-aligned and automatically scale with the grid size for better readability - Added Patch Notes History, accessible from the main menu - Added Pokémon silhouette mode (“Shadows”), allowing players to reveal shadow versions of all Pokémon",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.5.zip"
 }
