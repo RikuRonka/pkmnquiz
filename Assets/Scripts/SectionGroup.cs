@@ -150,10 +150,8 @@ public class SectionGroup : MonoBehaviour
 
         if (isMain)
         {
-            // Center the *pair* [icon][title] in the header
             titleText.alignment = TextAlignmentOptions.Center;
 
-            // Center anchors/pivots for both
             titleRT.anchorMin = titleRT.anchorMax = new Vector2(0.5f, 0.5f);
             titleRT.pivot = new Vector2(0.5f, 0.5f);
 
@@ -171,34 +169,28 @@ public class SectionGroup : MonoBehaviour
                 iconW = iconRT.rect.width;
             }
 
-            // Measure text width
             LayoutRebuilder.ForceRebuildLayoutImmediate(titleRT);
             float textW = titleText.preferredWidth;
 
             float spacing = (iconW > 0f && textW > 0f) ? mainHeaderIconSpacing : 0f;
             float totalW = iconW + spacing + textW;
 
-            // Left edge of the combined pair (relative to center)
             float left = -totalW * 0.5f;
 
-            // Position icon
             if (iconRT && iconW > 0f)
             {
                 float iconCenterX = left + iconW * 0.5f;
                 iconRT.anchoredPosition = new Vector2(iconCenterX, 0f);
             }
 
-            // Position title
             float titleCenterX = left + iconW + spacing + textW * 0.5f;
             titleRT.anchoredPosition = new Vector2(titleCenterX, 0f);
 
-            // Fixed font size for main header
             titleText.fontSize = baseFontSize;
 
             return; // important so non-main code below doesn't run
         }
 
-        // ----- non-main headers (gens) stay left-aligned as before -----
         titleText.alignment = TextAlignmentOptions.MidlineLeft;
 
         titleRT.anchorMin = new Vector2(0f, 0.5f);

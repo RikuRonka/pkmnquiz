@@ -26,7 +26,6 @@ public static class Helpers
 
         var baseId = p.baseId != 0 ? p.baseId : p.id;
 
-        // Count both Hisuian regional forms and Hisui-native species
         bool isHisuianForm =
             !string.IsNullOrEmpty(p.formKey)
             && p.formKey.IndexOf("hisui", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -41,7 +40,7 @@ public static class Helpers
     {
         if (p == null)
             return false;
-        // adjust if you ever change their ids
+
         return p.id == 808 || p.id == 809; // Meltan, Melmetal
     }
 

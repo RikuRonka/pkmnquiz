@@ -253,6 +253,10 @@ public class PokemonCard : MonoBehaviour
         if (!spriteImage)
             return;
 
+        if (enabled)
+        {
+            HideTypeIcons();
+        }
         if (IsRevealed)
             return;
 

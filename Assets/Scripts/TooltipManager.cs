@@ -54,7 +54,6 @@ public class TooltipManager : MonoBehaviour
         _tip.SetContent(title, t1, t2);
         LayoutRebuilder.ForceRebuildLayoutImmediate(_tipRT);
 
-        // ignore eventCam, just use screen position for overlay canvas
         PositionFollow(screenPos);
         _tip.SetVisible(true, fadeTime <= 0f, fadeTime);
     }
@@ -147,19 +146,15 @@ public class TooltipManager : MonoBehaviour
         const float EDGE = 8f; // margin to screen edge
         Vector2 offset = new Vector2(screenOffset.x, -screenOffset.y);
 
-        // 1) Start at mouse + offset in screen space
         Vector2 pos = screenPos + offset;
         _tipRT.position = pos;
 
-        // 2) Make sure layout is up to date
         Canvas.ForceUpdateCanvases();
 
-        // 3) Get tooltip corners in screen space
         Rect screenRect = uiCanvas.pixelRect;
         Vector3[] corners = new Vector3[4];
         _tipRT.GetWorldCorners(corners);
 
-        // for Screen Space Overlay there's no camera
         Camera cam = null;
 
         float minX = float.PositiveInfinity;
@@ -180,7 +175,6 @@ public class TooltipManager : MonoBehaviour
                 maxY = sp.y;
         }
 
-        // 4) Compute how much we need to move to stay inside the screen
         float dx = 0f;
         float dy = 0f;
 
@@ -196,7 +190,6 @@ public class TooltipManager : MonoBehaviour
         if (maxY > screenRect.yMax - EDGE)
             dy += screenRect.yMax - EDGE - maxY;
 
-        // 5) Apply correction
         pos += new Vector2(dx, dy);
         _tipRT.position = pos;
         _tipRT.SetAsLastSibling();

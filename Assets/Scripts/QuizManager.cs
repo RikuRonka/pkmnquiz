@@ -242,16 +242,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     public void OnShadowsButtonClicked()
     {
-        // Don't open another dialog on top of an existing one
         if (IsDialogOpen())
             return;
 
-        // Turning ON shadows → ask for confirmation
         if (!_shadowMode)
         {
             if (!confirmDialog)
             {
-                // Fallback: no dialog prefab wired, just toggle
                 ApplyShadowMode(true);
                 return;
             }
@@ -565,11 +562,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         var kb = Keyboard.current;
         if (kb != null && kb.escapeKey.wasPressedThisFrame)
         {
-            // If a confirm dialog is open, keep your current behavior
             if (IsDialogOpen())
                 return;
 
-            // Prefer pause over instant back-to-menu
             TogglePause();
         }
 #else
@@ -1127,13 +1122,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     var forms = kv.Value;
                     var pick = forms[rng.Next(forms.Count)];
 
-                    // Figure out which region this mega belongs to.
                     var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
                     int baseGen = baseMon?.generation ?? pick.generation;
 
                     SectionGroup targetSec;
 
-                    // Hoenn-dex species → Hoenn section, everything else → Kalos.
                     if (baseGen == 3)
                         targetSec = megaHoenn;
                     else
@@ -1692,7 +1685,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 lumiosePickByBase[baseId] = p;
                 lumioseCardByBase[baseId] = c;
 
-                // Build name → baseId map
                 var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
                 var baseName = baseMon?.name ?? BaseNameFrom(p.name);
 
@@ -1734,37 +1726,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     bool HasTypeFilter => !string.IsNullOrEmpty(selectedType);
 
-    private void RevealSiblingFormsForBase(int baseKey, bool includeExpeditions = false)
-    {
-        foreach (var kv in cardById)
-        {
-            if (!pokemonById.TryGetValue(kv.Key, out var poke))
-                continue;
-
-            int pokeBase = poke.baseId != 0 ? poke.baseId : poke.id;
-            if (pokeBase != baseKey)
-                continue;
-
-            bool isVariantForm =
-                Helpers.IsMega(poke)
-                || Helpers.IsGmax(poke)
-                || Helpers.IsHisui(poke)
-                || Helpers.IsRegionalForm(poke)
-                || // add this helper if you have it
-                (!string.IsNullOrEmpty(poke.formKey) && poke.baseId != 0 && poke.baseId != poke.id)
-                || (includeExpeditions && Helpers.IsPaldeaExpeditionOrBloodmoon(poke));
-
-            if (!isVariantForm)
-                continue;
-
-            if (!solved.Contains(kv.Key))
-            {
-                solved.Add(kv.Key);
-                kv.Value.Reveal();
-            }
-        }
-    }
-
     void ApplyShadowMode(bool enable, bool lockButton = false)
     {
         _shadowMode = enable;
@@ -1774,11 +1735,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (card)
                 card.SetShadowMode(enable);
         }
+        if (hintTypeBtn)
+            hintTypeBtn.interactable = !enable;
 
         if (shadowsBtn && lockButton)
         {
             shadowsBtn.interactable = false;
-            shadowsBtn.GetComponent<UiButtonHover>()?.RefreshDisabledVisual();
+            shadowsBtn.GetComponent<UiButtonHover>().RefreshDisabledVisual();
         }
     }
 
@@ -2498,7 +2461,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         float contentH = sr.content.rect.height;
         float viewH = sr.viewport.rect.height;
         if (contentH <= viewH)
-            yield break; // nothing to scroll
+            yield break;
 
         bool oldInertia = sr.inertia;
         Vector2 oldVel = sr.velocity;
@@ -2552,31 +2515,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         fromTopPx = Mathf.Clamp(fromTopPx - padPx, 0f, scrollable);
 
         return 1f - (fromTopPx / scrollable);
-    }
-
-    private static string StripDigits(string key)
-    {
-        if (string.IsNullOrEmpty(key))
-            return key;
-        System.Text.StringBuilder sb = new();
-        foreach (var ch in key)
-            if (!char.IsDigit(ch))
-                sb.Append(ch);
-        return sb.ToString();
-    }
-
-    private static Pokemon FindByExactKey(string normalizedKey)
-    {
-        foreach (var p in PokemonDatabase.Instance.All())
-        {
-            if (GuessNormalizer.Key(p.name) == normalizedKey)
-                return p;
-            if (p.aliases != null)
-                foreach (var a in p.aliases)
-                    if (GuessNormalizer.Key(a) == normalizedKey)
-                        return p;
-        }
-        return null;
     }
 
     private static bool IsExactNameOrAlias(string text, Pokemon p)

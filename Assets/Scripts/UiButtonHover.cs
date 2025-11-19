@@ -167,7 +167,6 @@ public class UiButtonHover
             ApplyColors(bgNormal, textNormal);
         else
         {
-            // simple greyed-out look
             var c = bgNormal * 0.7f;
             c.a = bgNormal.a;
             ApplyColors(c, textNormal * 0.7f);

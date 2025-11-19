@@ -40,7 +40,7 @@ public class UpdaterRunner : MonoBehaviour
     IEnumerator CheckCo()
     {
 #if UNITY_EDITOR
-        // Project root (one level up from Assets)
+
         string local = Path.Combine(
             Directory.GetParent(Application.dataPath)!.FullName,
             "latest.json"
@@ -63,7 +63,6 @@ public class UpdaterRunner : MonoBehaviour
 
                 yield break; // don’t hit the network while in Editor
             }
-            // fall through to web check if parse failed
         }
 #endif
         {
