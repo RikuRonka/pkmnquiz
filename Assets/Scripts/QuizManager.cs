@@ -111,6 +111,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<int, Pokemon> lumiosePickByBase = new();
     private readonly Dictionary<int, PokemonCard> lumioseCardByBase = new();
     private readonly Dictionary<string, int> lumioseByBaseName = new();
+    private readonly HashSet<int> shadowed = new();
+
     bool _shadowMode;
     private bool _testRunning;
     private bool _testCancel;
@@ -245,22 +247,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (IsDialogOpen())
             return;
 
-        if (!_shadowMode)
-        {
-            if (!confirmDialog)
-            {
-                ApplyShadowMode(true);
-                return;
-            }
-
-            confirmDialog.Show(
-                title: "Enable shadows?",
-                message: "This will turn all Pokémon into black silhouettes until you guess them.",
-                confirmLabel: "Enable",
-                cancelLabel: "Cancel",
-                confirmAction: () => ApplyShadowMode(true, lockButton: true)
-            );
-        }
+        RevealNextShadow();
     }
 
     void SetGridVisible(bool visible)
@@ -923,6 +910,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         pokemonById.Clear();
         solved.Clear();
         hinted.Clear();
+        shadowed.Clear();
         megaFormsByBase.Clear();
         finishedDialog.Hide();
         megaSlotPickByBase.Clear();
@@ -1843,6 +1831,42 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
+    private void RevealNextShadow()
+    {
+        // 1) Prefer cards that currently have a type hint
+        Pokemon pick = null;
+
+        foreach (var p in targetList)
+        {
+            if (solved.Contains(p.id) || shadowed.Contains(p.id))
+                continue;
+
+            if (cardById.TryGetValue(p.id, out var card) && card && card.HintVisible)
+            {
+                pick = p;
+                break;
+            }
+        }
+
+        // 2) If none have a hint, pick first unsolved & unshadowed in dex order
+        if (pick == null)
+        {
+            pick = targetList.FirstOrDefault(p =>
+                !solved.Contains(p.id) && !shadowed.Contains(p.id)
+            );
+        }
+
+        if (pick == null)
+            return; // nothing left to shadow
+
+        shadowed.Add(pick.id);
+
+        if (cardById.TryGetValue(pick.id, out var targetCard) && targetCard)
+        {
+            targetCard.SetShadowMode(true);
+        }
+    }
+
     private void FitSection(SectionGroup grp)
     {
         var grid =
@@ -1952,7 +1976,15 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void RevealTypeHintForOne()
     {
-        var pool = targetList.Where(p => !solved.Contains(p.id) && !hinted.Contains(p.id)).ToList();
+        // Only pick cards that are:
+        // - not solved
+        // - not already hinted
+        // - not already shadowed  <-- NEW
+        var pool = targetList
+            .Where(p =>
+                !solved.Contains(p.id) && !hinted.Contains(p.id) && !shadowed.Contains(p.id)
+            )
+            .ToList();
 
         if (pool.Count == 0)
             return;
@@ -2117,6 +2149,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (shadowsBtn)
             shadowsBtn.interactable = true;
+        if (hintTypeBtn)
+            hintTypeBtn.interactable = true;
         BuildTargetList();
         RebuildGrid();
         ResetTimerOnly();

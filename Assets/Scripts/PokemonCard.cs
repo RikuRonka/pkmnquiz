@@ -72,6 +72,7 @@ public class PokemonCard : MonoBehaviour
     static readonly Color BorderRed = new(1f, 0f, 0f, 1f);
     Color _normalColor = Color.white;
     Color _shadowColor = new Color(0f, 0f, 0f, 1f);
+    public bool HintVisible => hintVisible;
 
     void Awake()
     {
@@ -253,15 +254,14 @@ public class PokemonCard : MonoBehaviour
         if (!spriteImage)
             return;
 
-        if (enabled)
-        {
-            HideTypeIcons();
-        }
         if (IsRevealed)
             return;
 
         if (enabled)
         {
+            // overwrite any type hint
+            HideTypeIcons();
+
             if (!spriteImage.sprite && loadedSprite != null)
                 spriteImage.sprite = loadedSprite;
 
