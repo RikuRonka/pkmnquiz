@@ -157,20 +157,32 @@ public class PokemonCard : MonoBehaviour
     {
         if (endStateOutline)
             endStateOutline.enabled = false;
+
         if (background)
-            background.color = Color.white; // or whatever your normal card fill is
+        {
+            var c = background.color;
+            c.a = 0f; // keep it transparent
+            background.color = c;
+        }
     }
 
     public void ShowEndState(bool guessed)
     {
         if (background)
-            background.color = guessed ? new Color(1, 1, 1, 1) : new Color(1, 1, 1, 1);
+        {
+            // keep the card itself transparent – we only want the border
+            var c = background.color;
+            c.a = 0f;
+            background.color = c;
+            background.sprite = null;
+        }
 
         if (endStateOutline)
         {
-            UpdateBorderThickness(); // size may have just changed
+            UpdateBorderThickness();
             endStateOutline.effectColor = guessed ? BorderGreen : BorderRed;
             endStateOutline.enabled = true;
+            endStateOutline.gameObject.GetComponent<Image>().enabled = true;
         }
     }
 
@@ -286,18 +298,20 @@ public class PokemonCard : MonoBehaviour
     {
         if (IsRevealed || Bound == null)
             return;
+
         IsRevealed = true;
         spriteImage.sprite = sprite;
         spriteImage.color = _normalColor;
+
         if (placeholderImage)
         {
-            placeholderImage.enabled = false;
+            placeholderImage.enabled = false; // square disappears
             placeholderImage.color = Color.white;
             placeholderImage.transform.SetAsFirstSibling();
         }
         if (spriteImage)
         {
-            spriteImage.enabled = true;
+            spriteImage.enabled = true; // Pokémon appears
             spriteImage.transform.SetAsLastSibling();
         }
         HideTypeIcons();
@@ -334,7 +348,11 @@ public class PokemonCard : MonoBehaviour
         }
         hintVisible = (typeIconL && typeIconL.enabled) || (typeIconR && typeIconR.enabled);
         if (hintVisible)
+        {
+            if (placeholderImage)
+                placeholderImage.enabled = false;
             LayoutHintIcons();
+        }
     }
 
     private void StopHighlight()

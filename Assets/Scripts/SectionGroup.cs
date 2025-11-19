@@ -150,6 +150,12 @@ public class SectionGroup : MonoBehaviour
 
         if (isMain)
         {
+            Debug.Log(text);
+            if (!Helpers.IsGenTitle(text))
+            {
+                gridRoot.gameObject.SetActive(false);
+            }
+
             titleText.alignment = TextAlignmentOptions.Center;
 
             titleRT.anchorMin = titleRT.anchorMax = new Vector2(0.5f, 0.5f);

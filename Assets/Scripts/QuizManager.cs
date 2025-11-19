@@ -79,6 +79,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     Coroutine _scrollRoutine;
     int _scrollToken;
     private readonly List<SectionGroup> _sections = new();
+    int _hintUsedCount;
+    int _shadowUsedCount;
 
     [SerializeField]
     string selectedType;
@@ -618,7 +620,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     solved.Count,
                     cardById.Count,
                     TimeSpan.FromSeconds(elapsed),
-                    gaveUp: false
+                    gaveUp: false,
+                    hintsUsed: _hintUsedCount,
+                    shadowsUsed: _shadowUsedCount
                 );
         }
     }
@@ -877,6 +881,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         _fits.Clear();
         _sections.Clear();
         _buildToken++;
+        _hintUsedCount = 0;
+        _shadowUsedCount = 0;
         StopAllCoroutines();
         if (!scrollRect || !scrollRect.viewport)
         {
@@ -1849,12 +1855,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         // 2) If none have a hint, pick first unsolved & unshadowed in dex order
-        if (pick == null)
-        {
-            pick = targetList.FirstOrDefault(p =>
-                !solved.Contains(p.id) && !shadowed.Contains(p.id)
-            );
-        }
+        pick ??= targetList.FirstOrDefault(p => !solved.Contains(p.id) && !shadowed.Contains(p.id));
 
         if (pick == null)
             return; // nothing left to shadow
@@ -1864,6 +1865,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (cardById.TryGetValue(pick.id, out var targetCard) && targetCard)
         {
             targetCard.SetShadowMode(true);
+            _shadowUsedCount++;
         }
     }
 
@@ -1949,8 +1951,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     void UpdateTypeHintButtonVisibility()
     {
-        if (hintTypeBtn)
-            hintTypeBtn.gameObject.SetActive(!HasTypeFilter); // hide when doing a TYPE quiz
+        //if (hintTypeBtn)
+        // hintTypeBtn.gameObject.SetActive(!HasTypeFilter); // hide when doing a TYPE quiz
     }
 
     private IEnumerator CoRecalcSafe(GridAutoFit fit, int token)
@@ -1999,10 +2001,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         card.ShowTypeHint(pick.types);
+        _hintUsedCount++;
     }
 
     private void BuildTargetList()
     {
+        _hintUsedCount = 0;
+        _shadowUsedCount = 0;
         var all = PokemonDatabase.Instance.All().AsEnumerable();
 
         if (generation == 0)
@@ -2445,7 +2450,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 guessed: solved.Count,
                 total: cardById.Count,
                 elapsed: TimeSpan.FromSeconds(elapsed),
-                gaveUp: false
+                gaveUp: false,
+                hintsUsed: _hintUsedCount,
+                shadowsUsed: _shadowUsedCount
             );
         }
     }
@@ -2637,7 +2644,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             guessed: guessedIds.Count,
             total: cardById.Count,
             elapsed: TimeSpan.FromSeconds(elapsed),
-            gaveUp: true
+            gaveUp: true,
+            hintsUsed: _hintUsedCount,
+            shadowsUsed: _shadowUsedCount
         );
         Canvas.ForceUpdateCanvases();
         StartCoroutine(RecalculateAfterLayout());

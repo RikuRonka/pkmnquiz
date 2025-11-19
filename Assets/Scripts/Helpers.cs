@@ -169,4 +169,10 @@ public static class Helpers
             _ => $"Generation {generation}",
         };
     }
+
+    public static bool IsGenTitle(string gen)
+    {
+        return gen.Contains("gen", StringComparison.OrdinalIgnoreCase)
+            && !gen.Contains("full quiz", StringComparison.OrdinalIgnoreCase);
+    }
 }
