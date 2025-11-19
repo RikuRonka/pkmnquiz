@@ -307,15 +307,13 @@ public static class DexOrder
 
     public static int GetIndex(Pokemon p)
     {
-        // Hisui block first (new mons + regional forms + Origin forms)
         if (IsHisuiRelated(p))
         {
             if (HisuiIndex.TryGetValue(p.id, out var idx))
-                return 20000 + idx; // after base Galar, before Gmax
-            return 29999; // unknown Hisui → bottom of Hisui block
+                return 20000 + idx;
+            return 29999;
         }
 
-        // Galar / Gmax block
         if (IsGen8NonHisui(p))
         {
             if (Gen8Index.TryGetValue(p.id, out var idx))
@@ -324,7 +322,6 @@ public static class DexOrder
         }
         if (p.generation == 7)
             return GetAlolaIndex(p.id);
-        // everything else
         return 30000 + p.id;
     }
 
@@ -334,32 +331,30 @@ public static class DexOrder
             if (AlolaOrder[i] == id)
                 return i;
 
-        return 99999; // anything missing goes to the end
+        return 99999;
     }
 
     static bool IsHisuiRelated(Pokemon p)
     {
-        // Things that visually live in the Hisui row:
         if (Helpers.IsHisui(p))
-            return true; // all Hisuian forms
+            return true;
 
         if (p.id >= 899 && p.id <= 905)
-            return true; // Wyrdeer → Enamorus
+            return true;
 
         if (p.id == 210483 || p.id == 210484)
-            return true; // Origin Dialga/Palkia
+            return true;
 
         return false;
     }
 
     static bool IsGen8NonHisui(Pokemon p)
     {
-        // Pure Galar + Gmax, but NOT Hisui
         if (p.generation != 8)
             return false;
 
         if (IsHisuiRelated(p))
-            return false; // don’t double-count
+            return false;
 
         return true;
     }
