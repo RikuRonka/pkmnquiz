@@ -2069,7 +2069,23 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             );
         }
 
-        var ordered = all.OrderBy(p => DexOrder.GetIndex(p)).ToList();
+        List<Pokemon> ordered;
+
+        // Full quiz & type quizzes (generation == 0) → mix of all gens
+        if (generation == 0)
+        {
+            ordered = all.OrderBy(p => p.generation) // primary: gen 1 → 9
+                .ThenBy(p => DexOrder.GetIndex(p)) // secondary: custom per-gen order
+                .ToList();
+        }
+        else
+        {
+            // Single-gen quizzes already filtered by gen,
+            // so we just keep your existing DexOrder logic.
+            ordered = all.OrderBy(p => DexOrder.GetIndex(p)).ToList();
+        }
+
+        targetList = ordered;
 
         if (generation == 9)
         {
