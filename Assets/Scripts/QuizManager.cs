@@ -2172,6 +2172,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             shadowsBtn.interactable = true;
         if (hintTypeBtn)
             hintTypeBtn.interactable = true;
+
+        if (pauseBtn)
+            pauseBtn.interactable = true;
         BuildTargetList();
         RebuildGrid();
         ResetTimerOnly();
@@ -2655,6 +2658,18 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         running = false;
         if (guessInput)
             guessInput.interactable = false;
+
+        if (shadowsBtn)
+        {
+            shadowsBtn.interactable = false;
+            shadowsBtn.GetComponent<UiButtonHover>().RefreshDisabledVisual();
+        }
+
+        if (hintTypeBtn)
+            hintTypeBtn.interactable = false;
+
+        if (pauseBtn)
+            pauseBtn.interactable = false;
 
         finishedDialog.Show(
             guessed: guessedIds.Count,
