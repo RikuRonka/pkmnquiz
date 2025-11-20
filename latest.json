@@ -1,5 +1,5 @@
 {
   "version": "1.0.6",
-  "notes": "- Pressing 'next shadow'-button reveals new pokemon silhouette in dex order - Less empty space between title and gen 1 - Showing amount of types and shadows used in finished dialog - Green/red backgrounds working again after giving up",
+  "notes": "- “Next shadow” button now reveals the next Pokémon silhouette in Pokédex order - Reduced empty space between the main title and the first generation (Kanto) - Finished dialog now shows how many type hints and shadows were used - Green / red result borders now work correctly again after using Give up",
   "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.6.zip"
 }
