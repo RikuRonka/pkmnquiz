@@ -34,9 +34,9 @@ public static class OptimizeSprites
                 dirty = true;
             }
 
-            if (importer.maxTextureSize > 512)
+            if (importer.maxTextureSize > 128)
             {
-                importer.maxTextureSize = 512;
+                importer.maxTextureSize = 128;
                 dirty = true;
             }
 
