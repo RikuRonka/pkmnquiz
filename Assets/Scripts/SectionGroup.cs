@@ -150,7 +150,6 @@ public class SectionGroup : MonoBehaviour
 
         if (isMain)
         {
-            Debug.Log(text);
             if (!Helpers.IsGenTitle(text))
             {
                 gridRoot.gameObject.SetActive(false);

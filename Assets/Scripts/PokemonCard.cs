@@ -391,7 +391,26 @@ public class PokemonCard : MonoBehaviour
         FitImageAsCenteredSquare(spriteImage, spritePadding);
         FitImageAsCenteredSquare(placeholderImage, spritePadding);
         FitArtToCell();
+        FitBackgroundToCell();
         UpdateBorderThickness();
+    }
+
+    private void FitBackgroundToCell()
+    {
+        if (!background)
+            return;
+
+        var cell = (RectTransform)transform;
+        if (cell.rect.width <= 0f || cell.rect.height <= 0f)
+            return;
+
+        float side = Mathf.Min(cell.rect.width, cell.rect.height);
+
+        var brt = background.rectTransform;
+        brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.5f);
+        brt.pivot = new Vector2(0.5f, 0.5f);
+        brt.anchoredPosition = Vector2.zero;
+        brt.sizeDelta = new Vector2(side, side);
     }
 
     void UpdateBorderThickness()
