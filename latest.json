@@ -1,5 +1,5 @@
 {
-  "version": "1.0.6",
-  "notes": "- “Next shadow” button now reveals the next Pokémon silhouette in Pokédex order - Reduced empty space between the main title and the first generation (Kanto) - Finished dialog now shows how many type hints and shadows were used - Green / red result borders now work correctly again after using Give up - Reduced Pokémon sprite resolution from 512×512 to 128×128, resulting in shorter loading times and a significantly smaller game size",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.6.zip"
+  "version": "1.0.7",
+  "notes": "- Fixed reveal system: Shadow and type hints now appear in the correct visual/section order instead of skipping generations or jumping to later categories. Mega Evolutions, Gigantamax, Hisui, Paldea Expeditions, and Lumiose Megas are now properly included",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.7.zip"
 }

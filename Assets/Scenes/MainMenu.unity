@@ -4018,37 +4018,40 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PatchNotesView
   notesText: {fileID: 1239978752}
-  patchNotes: "1.0.6\n- \u201CNext shadow\u201D button now reveals the next Pok\xE9mon
-    silhouette in Pok\xE9dex order \n- Reduced empty space between the main title
-    and the first generation (Kanto)\n- Finished dialog now shows how many type hints
-    and shadows were used\n- Green / red result borders now work correctly again
-    after using Give up\n- Reduced Pok\xE9mon sprite resolution from 512\xD7512 to
-    128\xD7128, resulting in shorter loading times and a significantly smaller game
-    size\n\n1.0.5\n- Improved quiz layout: all section titles are now left-aligned
-    and automatically scale with the grid size for better readability\n- Added Patch
-    Notes History, accessible from the main menu\n- Added Pok\xE9mon silhouette mode
-    (\u201CShadows\u201D), allowing players to reveal shadow versions of all Pok\xE9mon\n\n1.0.4\n-
-    Tooltip for patch notes no longer overflows the right side of the screen when
-    the text is long.\n- No need to type \u201CAlolan\u201D, \u201CGalarian\u201D,
-    or \u201CHisui\u201D in Gen 7/8 quizzes if the base form exists in earlier generations.\n-
-    All Pok\xE9mon should now appear in the correct order in every quiz.\n- Type
-    quizzes now use the same background color as their corresponding type buttons.\n-
-    Added Lumiose Mega Evolutions.\n- Meltan and Melmetal appear in the Unknown section
-    under Alola, matching the original quiz. \n- Mega Evolutions are now split into
-    \u201CMega Evolution \u2013 Kalos\u201D and \u201CMega Evolution \u2013 Hoenn\u201D.\n\n1.0.3\n-
-    Re-typing a Pok\xE9mon name now clears the input field and plays the duplicate-guess
-    sound. \n- Added a Pause Menu: pressing Esc (or the Pause button) pauses the
-    quiz, hides the grid, and shows total elapsed time with a Resume button. \n-
-    Fixed an issue where correct/incorrect outline colors after Give Up did not scale
-    properly with different grid sizes.\n\n1.0.2\r\n- Added a Card Size slider allowing
-    you to adjust Pok\xE9mon tile size (zoom in/out).\n\n1.0.1\n- The game can now
-    automatically check for and download updates. \n- Added a toggle to always scroll
-    to the entered Pok\xE9mon, even if it was already guessed.\n- After pressing
-    Give Up, guessed Pok\xE9mon display a green outline and missed ones show a red
-    circle.\n- The final results dialog now has a Close (\xD7) button and stays open
-    until manually dismissed.\n- Added a toggle + slider for background music, with
-    volume preserved between scenes.\n- Added distinct sound effects for correct
-    guesses and duplicate guesses. \n- Buttons now have mouse hover animations.\n-
+  patchNotes: "1.0.7\n- Fixed reveal system: Shadow and type hints now appear in
+    the correct visual/section order instead of skipping generations or jumping to
+    later categories. Mega Evolutions, Gigantamax, Hisui, Paldea Expeditions, and
+    Lumiose Megas are now properly included\n\n1.0.6\n- \u201CNext shadow\u201D button
+    now reveals the next Pok\xE9mon silhouette in Pok\xE9dex order \n- Reduced empty
+    space between the main title and the first generation (Kanto)\n- Finished dialog
+    now shows how many type hints and shadows were used\n- Green / red result borders
+    now work correctly again after using Give up\n- Reduced Pok\xE9mon sprite resolution
+    from 512\xD7512 to 128\xD7128, resulting in shorter loading times and a significantly
+    smaller game size\n\n1.0.5\n- Improved quiz layout: all section titles are now
+    left-aligned and automatically scale with the grid size for better readability\n-
+    Added Patch Notes History, accessible from the main menu\n- Added Pok\xE9mon
+    silhouette mode (\u201CShadows\u201D), allowing players to reveal shadow versions
+    of all Pok\xE9mon\n\n1.0.4\n- Tooltip for patch notes no longer overflows the
+    right side of the screen when the text is long.\n- No need to type \u201CAlolan\u201D,
+    \u201CGalarian\u201D, or \u201CHisui\u201D in Gen 7/8 quizzes if the base form
+    exists in earlier generations.\n- All Pok\xE9mon should now appear in the correct
+    order in every quiz.\n- Type quizzes now use the same background color as their
+    corresponding type buttons.\n- Added Lumiose Mega Evolutions.\n- Meltan and Melmetal
+    appear in the Unknown section under Alola, matching the original quiz. \n- Mega
+    Evolutions are now split into \u201CMega Evolution \u2013 Kalos\u201D and \u201CMega
+    Evolution \u2013 Hoenn\u201D.\n\n1.0.3\n- Re-typing a Pok\xE9mon name now clears
+    the input field and plays the duplicate-guess sound. \n- Added a Pause Menu:
+    pressing Esc (or the Pause button) pauses the quiz, hides the grid, and shows
+    total elapsed time with a Resume button. \n- Fixed an issue where correct/incorrect
+    outline colors after Give Up did not scale properly with different grid sizes.\n\n1.0.2\r\n-
+    Added a Card Size slider allowing you to adjust Pok\xE9mon tile size (zoom in/out).\n\n1.0.1\n-
+    The game can now automatically check for and download updates. \n- Added a toggle
+    to always scroll to the entered Pok\xE9mon, even if it was already guessed.\n-
+    After pressing Give Up, guessed Pok\xE9mon display a green outline and missed
+    ones show a red circle.\n- The final results dialog now has a Close (\xD7) button
+    and stays open until manually dismissed.\n- Added a toggle + slider for background
+    music, with volume preserved between scenes.\n- Added distinct sound effects
+    for correct guesses and duplicate guesses. \n- Buttons now have mouse hover animations.\n-
     The PC executable now uses a Pok\xE9 Ball icon."
 --- !u!1 &637225810 stripped
 GameObject:
