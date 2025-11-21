@@ -688,6 +688,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         {
             int baseId = guess.baseId != 0 ? guess.baseId : guess.id;
 
+            if (
+                generation == 0
+                && HasTypeFilter
+                && megaSlotPickByBase.TryGetValue(baseId, out var typeMegaPick)
+                && cardById.ContainsKey(typeMegaPick.id)
+            )
+            {
+                return typeMegaPick;
+            }
+
             if (generation == 6 && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
                 return megaPick;
             if (
