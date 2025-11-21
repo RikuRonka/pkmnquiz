@@ -1,5 +1,5 @@
 {
-  "version": "1.0.7",
-  "notes": "- Fixed reveal system: Shadow and type hints now appear in the correct visual/section order instead of skipping generations or jumping to later categories. Mega Evolutions, Gigantamax, Hisui, Paldea Expeditions, and Lumiose Megas are now properly included",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.7.zip"
+  "version": "1.0.8",
+  "notes": "- Fixed broken or incorrect sprites for Iron Jugulis, Galarian Weezing, and Comfey - Mega evolutions no longer require typing the “mega” prefix when guessing",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.8.zip"
 }
