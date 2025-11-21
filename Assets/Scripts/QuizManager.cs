@@ -147,6 +147,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     [SerializeField]
     Button shadowsBtn;
+    private readonly List<int> _hintShadowOrder = new();
 
     private void Awake()
     {
@@ -936,6 +937,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         lumiosePickByBase.Clear();
         lumioseCardByBase.Clear();
         lumioseByBaseName.Clear();
+        _hintShadowOrder.Clear();
 
         var ordered = targetList;
 
@@ -1083,6 +1085,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 card.Bind(p);
                 cardById[p.id] = card;
                 pokemonById[p.id] = p;
+                _hintShadowOrder.Add(p.id);
                 if (Helpers.IsRegionalForm(p))
                 {
                     int baseId = p.baseId != 0 ? p.baseId : p.id;
@@ -1137,6 +1140,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     megaCardByBase[baseId] = c;
                     cardById[pick.id] = c;
                     pokemonById[pick.id] = pick;
+                    _hintShadowOrder.Add(pick.id);
                 }
             }
 
@@ -1161,7 +1165,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     c.Bind(p);
                     cardById[p.id] = c;
                     pokemonById[p.id] = p;
-
+                    _hintShadowOrder.Add(p.id);
                     int baseKey = p.baseId != 0 ? p.baseId : p.id;
                     expeditionPickByBase[baseKey] = p;
                     expeditionCardByBase[baseKey] = c;
@@ -1200,7 +1204,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     c.Bind(p);
                     cardById[p.id] = c;
                     pokemonById[p.id] = p;
-
+                    _hintShadowOrder.Add(p.id);
                     int baseId = p.baseId != 0 ? p.baseId : p.id;
                     gmaxPickByBase[baseId] = p;
                     gmaxCardByBase[baseId] = c;
@@ -1238,7 +1242,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     c.Bind(p);
                     cardById[p.id] = c;
                     pokemonById[p.id] = p;
-
+                    _hintShadowOrder.Add(p.id);
                     int baseId = p.baseId != 0 ? p.baseId : p.id;
                     hisuiPickByBase[baseId] = p;
                     hisuiCardByBase[baseId] = c;
@@ -1274,7 +1278,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     c.Bind(p);
                     cardById[p.id] = c;
                     pokemonById[p.id] = p;
-
+                    _hintShadowOrder.Add(p.id);
                     int baseId = p.baseId != 0 ? p.baseId : p.id;
                     lumiosePickByBase[baseId] = p;
                     lumioseCardByBase[baseId] = c;
@@ -1320,6 +1324,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     c.Bind(p);
                     cardById[p.id] = c;
                     pokemonById[p.id] = p;
+                    _hintShadowOrder.Add(p.id);
                 }
 
                 unknownSec.SetCardCount(unknownSec.gridRoot.childCount);
@@ -1373,6 +1378,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             FinalizeSection(fullHisui);
             FinalizeSection(fullLumioseMegas);
             FinalizeSection(unknownSec);
+            RebuildHintShadowOrderFromSections();
             UpdateScore();
             return;
         }
@@ -1463,6 +1469,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             card.Bind(p);
             cardById[p.id] = card;
             pokemonById[p.id] = p;
+            _hintShadowOrder.Add(p.id);
         }
 
         if (generation == 6 && (megaKalosGen != null || megaHoennGen != null))
@@ -1493,7 +1500,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 megaSlotPickByBase[baseId] = pick;
                 megaCardByBase[baseId] = card;
                 cardById[pick.id] = card;
-                pokemonById[pick.id] = pick;
+                _hintShadowOrder.Add(pick.id);
             }
         }
 
@@ -1506,6 +1513,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 card.Bind(p);
                 cardById[p.id] = card;
                 pokemonById[p.id] = p;
+                _hintShadowOrder.Add(p.id);
 
                 int baseId = p.baseId != 0 ? p.baseId : p.id;
                 hisuiPickByBase[baseId] = p;
@@ -1541,6 +1549,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 c.Bind(p);
                 cardById[p.id] = c;
                 pokemonById[p.id] = p;
+                _hintShadowOrder.Add(p.id);
 
                 int baseId = p.baseId != 0 ? p.baseId : p.id;
                 gmaxPickByBase[baseId] = p;
@@ -1592,6 +1601,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 c.Bind(p);
                 cardById[p.id] = c;
                 pokemonById[p.id] = p;
+                _hintShadowOrder.Add(p.id);
 
                 int baseKey = p.baseId != 0 ? p.baseId : p.id;
                 expeditionPickByBase[baseKey] = p;
@@ -1645,6 +1655,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 c.Bind(p);
                 cardById[p.id] = c;
                 pokemonById[p.id] = p;
+                _hintShadowOrder.Add(p.id);
             }
 
             alolaUnknown.SetCardCount(alolaUnknown.gridRoot.childCount);
@@ -1674,6 +1685,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 c.Bind(p);
                 cardById[p.id] = c;
                 pokemonById[p.id] = p;
+                _hintShadowOrder.Add(p.id);
 
                 int baseId = p.baseId != 0 ? p.baseId : p.id;
                 lumiosePickByBase[baseId] = p;
@@ -1706,6 +1718,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             lumioseMegasSec.SetCardCount(lumioseMegasSec.gridRoot.childCount);
             FitSection(lumioseMegasSec);
         }
+        RebuildHintShadowOrderFromSections();
         UpdateScore();
         bool noSubSections =
             generation > 0
@@ -1781,6 +1794,38 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         return i > 0 ? name[..i].Trim() : name.Trim();
     }
 
+    private void RebuildHintShadowOrderFromSections()
+    {
+        _hintShadowOrder.Clear();
+        var seen = new HashSet<int>();
+
+        if (!content)
+            return;
+
+        // Children of "content" are SectionGroup instances,
+        // already in the visual order:
+        // Gen 1, Gen 2, ..., Gen 6, Mega Kalos, Mega Hoenn, Gen 7, ...
+        foreach (Transform secTr in content)
+        {
+            var sec = secTr.GetComponent<SectionGroup>();
+            if (!sec || !sec.gridRoot)
+                continue;
+
+            foreach (Transform cardTr in sec.gridRoot)
+            {
+                var card = cardTr.GetComponent<PokemonCard>();
+                if (!card)
+                    continue;
+
+                int id = card.PokemonId;
+                if (id != 0 && seen.Add(id))
+                {
+                    _hintShadowOrder.Add(id);
+                }
+            }
+        }
+    }
+
     private bool TryAcceptGmaxByBaseName(string text, bool commit)
     {
         if ((generation != 8 && generation != 0) || string.IsNullOrWhiteSpace(text))
@@ -1839,30 +1884,49 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void RevealNextShadow()
     {
-        // 1) Prefer cards that currently have a type hint
+        // 1) Prefer cards that currently have a type hint, in visual order
         Pokemon pick = null;
+        int pickId = 0;
 
-        foreach (var p in targetList)
+        foreach (var id in _hintShadowOrder)
         {
-            if (solved.Contains(p.id) || shadowed.Contains(p.id))
+            if (solved.Contains(id) || shadowed.Contains(id))
                 continue;
 
-            if (cardById.TryGetValue(p.id, out var card) && card && card.HintVisible)
+            if (!cardById.TryGetValue(id, out var card) || !card)
+                continue;
+
+            if (card.HintVisible)
             {
-                pick = p;
+                pickId = id;
+                pokemonById.TryGetValue(id, out pick);
                 break;
             }
         }
 
-        // 2) If none have a hint, pick first unsolved & unshadowed in dex order
-        pick ??= targetList.FirstOrDefault(p => !solved.Contains(p.id) && !shadowed.Contains(p.id));
-
+        // 2) Otherwise, first unsolved & unshadowed in visual order
         if (pick == null)
-            return; // nothing left to shadow
+        {
+            foreach (var id in _hintShadowOrder)
+            {
+                if (solved.Contains(id) || shadowed.Contains(id))
+                    continue;
 
-        shadowed.Add(pick.id);
+                if (!cardById.ContainsKey(id))
+                    continue;
 
-        if (cardById.TryGetValue(pick.id, out var targetCard) && targetCard)
+                pickId = id;
+                pokemonById.TryGetValue(id, out pick);
+                break;
+            }
+        }
+
+        if (pick == null || pickId == 0)
+            return; // nothing left
+
+        shadowed.Add(pickId);
+
+        if (cardById.TryGetValue(pickId, out var targetCard) && targetCard)
         {
             targetCard.SetShadowMode(true);
             _shadowUsedCount++;
@@ -1978,29 +2042,36 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void RevealTypeHintForOne()
     {
-        // Only pick cards that are:
-        // - not solved
-        // - not already hinted
-        // - not already shadowed  <-- NEW
-        var pool = targetList
-            .Where(p =>
-                !solved.Contains(p.id) && !hinted.Contains(p.id) && !shadowed.Contains(p.id)
-            )
-            .ToList();
+        // IDs that are not solved, not hinted, not shadowed – in visual order
+        int pickId = 0;
 
-        if (pool.Count == 0)
+        foreach (var id in _hintShadowOrder)
+        {
+            if (solved.Contains(id) || hinted.Contains(id) || shadowed.Contains(id))
+                continue;
+
+            if (!cardById.ContainsKey(id))
+                continue;
+
+            pickId = id;
+            break;
+        }
+
+        if (pickId == 0)
             return;
 
-        var pick = pool[0];
-        hinted.Add(pick.id);
+        hinted.Add(pickId);
 
-        if (!cardById.TryGetValue(pick.id, out var card) || card == null)
+        if (!cardById.TryGetValue(pickId, out var card) || card == null)
         {
-            Debug.LogWarning($"[Hint] No card for id {pick.id}.");
+            Debug.LogWarning($"[Hint] No card for id {pickId}.");
             return;
         }
 
-        card.ShowTypeHint(pick.types);
+        if (!pokemonById.TryGetValue(pickId, out var p) || p == null || p.types == null)
+            return;
+
+        card.ShowTypeHint(p.types);
         _hintUsedCount++;
     }
 

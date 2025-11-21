@@ -57,13 +57,13 @@ public class PokemonCard : MonoBehaviour
     Image background;
 
     [SerializeField]
-    Outline endStateOutline; // assign in prefab OR let Awake() add it
+    Outline endStateOutline;
 
     [SerializeField, Range(0f, 0.15f)]
-    float borderPctOfSide = 0.06f; // ~6% of the shortest side
+    float borderPctOfSide = 0.06f;
 
     [SerializeField, Range(1f, 12f)]
-    float borderMinPx = 3f; // clamps for tiny cells
+    float borderMinPx = 3f;
 
     [SerializeField, Range(1f, 24f)]
     float borderMaxPx = 10f;
@@ -73,6 +73,7 @@ public class PokemonCard : MonoBehaviour
     Color _normalColor = Color.white;
     Color _shadowColor = new Color(0f, 0f, 0f, 1f);
     public bool HintVisible => hintVisible;
+    public int PokemonId => Bound != null ? Bound.id : 0;
 
     void Awake()
     {
