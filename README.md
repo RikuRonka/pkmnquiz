@@ -18,10 +18,12 @@ Test your knowledge across:
 ---
 
 ## 🖼️ Screenshots
-<img width="2559" height="1439" alt="image" src="https://github.com/user-attachments/assets/70f067d4-7a16-469f-9a21-f023687b7dbe" />
-<img width="2559" height="1439" alt="image" src="https://github.com/user-attachments/assets/713399b0-7248-4d0c-8e9a-4ad298de33d7" />
-<img width="2559" height="1439" alt="image" src="https://github.com/user-attachments/assets/fac085cd-380e-4d11-8a8e-fbe089c9faee" />
-<img width="2559" height="1438" alt="image" src="https://github.com/user-attachments/assets/73e6d03b-62e7-44b0-842d-45d1e860a054" />
+<img width="3840" height="2158" alt="image" src="https://github.com/user-attachments/assets/44485877-d1f1-4135-814f-4a667ebbc771" />
+<img width="3840" height="2160" alt="image" src="https://github.com/user-attachments/assets/220a98aa-eb43-4528-a3be-e8151d99f702" />
+<img width="3840" height="2138" alt="image" src="https://github.com/user-attachments/assets/4127a809-77e5-46c6-a997-29ed217fdd5f" />
+<img width="3834" height="2135" alt="image" src="https://github.com/user-attachments/assets/bcc7f278-a7af-4de1-bd5c-68cc4705aa66" />
+
+
 
 
 ---
