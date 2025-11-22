@@ -24,8 +24,8 @@ Test your knowledge across:
 
 
 ## 🚀 Download & Play
-**[⬇️ Download latest release](https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.8.zip)**  
-No install required — unzip & run `PokemonQuiz.exe`
+**[⬇️ Download latest release](https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build_web.zip)**  
+run `python -m http.server 8000` in that folder and go localhost:8000 in your browser
 
 ## 📝 License
 This project is for educational / fan purposes only.  
