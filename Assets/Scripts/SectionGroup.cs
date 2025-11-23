@@ -2,6 +2,8 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(VerticalLayoutGroup))]
+[RequireComponent(typeof(ContentSizeFitter))]
 public class SectionGroup : MonoBehaviour
 {
     [Header("Refs (assign in prefab OR created at runtime)")]
@@ -34,12 +36,6 @@ public class SectionGroup : MonoBehaviour
 
     [SerializeField]
     float baseFontSize = 36f;
-
-    [SerializeField]
-    float minFontSize = 20f;
-
-    [SerializeField]
-    float maxFontSize = 32f;
     private bool _isMainHeader;
 
     [SerializeField]
@@ -66,8 +62,7 @@ public class SectionGroup : MonoBehaviour
 
     public void EnsureLayout()
     {
-        var vlg =
-            GetComponent<VerticalLayoutGroup>() ?? gameObject.AddComponent<VerticalLayoutGroup>();
+        var vlg = GetComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(0, 0, 0, 0);
         vlg.spacing = 16;
         vlg.childAlignment = TextAnchor.UpperLeft;
@@ -76,7 +71,7 @@ public class SectionGroup : MonoBehaviour
         vlg.childForceExpandWidth = true;
         vlg.childForceExpandHeight = false;
 
-        var csf = GetComponent<ContentSizeFitter>() ?? gameObject.AddComponent<ContentSizeFitter>();
+        var csf = GetComponent<ContentSizeFitter>();
         csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
         csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
@@ -122,17 +117,13 @@ public class SectionGroup : MonoBehaviour
             gridRoot.sizeDelta = new Vector2(0, 100);
         }
 
-        var grid =
-            gridRoot.GetComponent<GridLayoutGroup>()
-            ?? gridRoot.gameObject.AddComponent<GridLayoutGroup>();
+        var grid = gridRoot.GetComponent<GridLayoutGroup>();
         grid.childAlignment = TextAnchor.UpperLeft;
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         grid.spacing = new Vector2(12, 12);
         grid.padding = new RectOffset(0, 0, 0, 0);
 
-        var le =
-            gridRoot.GetComponent<LayoutElement>()
-            ?? gridRoot.gameObject.AddComponent<LayoutElement>();
+        var le = gridRoot.GetComponent<LayoutElement>();
         le.minHeight = 0;
         le.preferredHeight = 100;
     }
@@ -193,7 +184,7 @@ public class SectionGroup : MonoBehaviour
 
             titleText.fontSize = baseFontSize;
 
-            return; // important so non-main code below doesn't run
+            return;
         }
 
         titleText.alignment = TextAlignmentOptions.MidlineLeft;
@@ -214,9 +205,7 @@ public class SectionGroup : MonoBehaviour
     {
         if (!headerSpacer)
             return;
-        var le =
-            headerSpacer.GetComponent<LayoutElement>()
-            ?? headerSpacer.gameObject.AddComponent<LayoutElement>();
+        var le = headerSpacer.GetComponent<LayoutElement>();
         le.minHeight = mainOnlyScreen ? mainOnlyGap : normalGap;
     }
 }

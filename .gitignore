@@ -51,6 +51,7 @@ Thumbs.db
 *.dmp
 
 pkmnquiz_build/
+pkmnquiz_build_web/
 pkmnquiz_build.zip
 *.zip
 Build/

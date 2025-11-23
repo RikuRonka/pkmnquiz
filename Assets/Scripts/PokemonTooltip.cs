@@ -189,7 +189,7 @@ public class PokemonTooltip : MonoBehaviour
         {
             descriptionText.gameObject.SetActive(true);
             descriptionText.alignment = TextAlignmentOptions.TopLeft;
-            descriptionText.enableWordWrapping = true;
+            descriptionText.textWrappingMode = TextWrappingModes.Normal;
             descriptionText.text = FormatNotes(rawNotes);
         }
 

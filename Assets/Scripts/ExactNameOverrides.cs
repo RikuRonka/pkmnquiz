@@ -10,7 +10,7 @@ public static class ExactNameOverrides
 
         ["porygon"] = 137,
         ["porygon2"] = 233,
-        ["porygonz"] = 474, // also matches "porygon-z" after normalization
+        ["porygonz"] = 474,
     };
 
     public static Pokemon TryGet(string rawText)

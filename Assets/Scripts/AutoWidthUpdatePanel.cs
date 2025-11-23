@@ -5,13 +5,13 @@ using UnityEngine;
 public class AutoWidthUpdatePanel : MonoBehaviour
 {
     [SerializeField]
-    TMP_Text body; // your notes text
+    TMP_Text body;
 
     [SerializeField]
-    RectTransform panel; // black panel rect
+    RectTransform panel;
 
     [SerializeField]
-    float horizontalMargin = 40f; // margin from screen edges
+    float horizontalMargin = 40f;
 
     void Awake()
     {
@@ -26,7 +26,7 @@ public class AutoWidthUpdatePanel : MonoBehaviour
         if (!body || !panel)
             return;
 
-        body.enableWordWrapping = true;
+        body.textWrappingMode = TextWrappingModes.Normal;
         body.overflowMode = TextOverflowModes.Overflow;
 
         var parentRect = panel.parent as RectTransform;
