@@ -1,5 +1,5 @@
 {
   "version": "1.1.0",
-  "notes": "- Added a toggle for spelling help - Spelling help no longer suggests already guessed Pokémon - Spelling help is cleared after a Pokémon is guessed - Spelling help and “Always scroll to Pokémon” settings now persist between sessions",
+  "notes": "- Added a toggle for spelling help - Spelling help no longer suggests already guessed Pokémon - Spelling help is cleared after a Pokémon is guessed - Spelling help and “Always scroll to Pokémon” settings now persist between sessions - Added option to switch between windowed and fullscreen modes",
   "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.0.zip"
 }

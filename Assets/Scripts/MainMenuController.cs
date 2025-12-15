@@ -8,6 +8,11 @@ public class MainMenuController : MonoBehaviour
 
     void Awake()
     {
+        bool fullscreen = PlayerPrefs.GetInt("fullscreen", 1) == 1;
+        Screen.fullScreen = fullscreen;
+        Screen.fullScreenMode = fullscreen
+            ? FullScreenMode.FullScreenWindow
+            : FullScreenMode.Windowed;
         if (fullQuizBtn)
         {
             fullQuizBtn.onClick.RemoveAllListeners();
@@ -20,21 +25,21 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
-    public void PlayGen(int gen)
+    public static void PlayGen(int gen)
     {
         GameSettings.Generation = gen;
         GameSettings.TypeFilter = null;
         SceneManager.LoadScene("Quiz");
     }
 
-    public void PlayType(string typeName)
+    public static void PlayType(string typeName)
     {
         GameSettings.Generation = null;
         GameSettings.TypeFilter = new[] { typeName };
         SceneManager.LoadScene("Quiz");
     }
 
-    public void Quit()
+    public static void Quit()
     {
         Application.Quit();
     }
