@@ -4018,12 +4018,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PatchNotesView
   notesText: {fileID: 1239978752}
-  patchNotes: "1.0.9\n- Added spelling helper that suggests the closest Pok\xE9mon
-    name when your input contains typos\n\n1.0.8\n- Fixed broken or incorrect sprites
-    for Iron Jugulis, Galarian Weezing, and Comfey \n- Mega evolutions no longer
-    require typing the \u201Cmega\u201D prefix when guessing\n\n1.0.7\n- Fixed reveal
-    system: Shadow and type hints now appear in the correct visual/section order
-    instead of skipping generations or jumping to later categories. Mega Evolutions,
+  patchNotes: "1.1.0\n- Added a toggle for spelling help\r\n- Spelling help no longer
+    suggests already guessed Pok\xE9mon\r\n- Spelling help is cleared after a Pok\xE9mon
+    is guessed\n- Spelling help and \u201CAlways scroll to Pok\xE9mon\u201D settings
+    now persist between sessions\r\n\n1.0.9\n- Added spelling helper that suggests
+    the closest Pok\xE9mon name when your input contains typos\n\n1.0.8\n- Fixed
+    broken or incorrect sprites for Iron Jugulis, Galarian Weezing, and Comfey \n-
+    Mega evolutions no longer require typing the \u201Cmega\u201D prefix when guessing\n\n1.0.7\n-
+    Fixed reveal system: Shadow and type hints now appear in the correct visual/section
+    order instead of skipping generations or jumping to later categories. Mega Evolutions,
     Gigantamax, Hisui, Paldea Expeditions, and Lumiose Megas are now properly included\n\n1.0.6\n-
     \u201CNext shadow\u201D button now reveals the next Pok\xE9mon silhouette in
     Pok\xE9dex order \n- Reduced empty space between the main title and the first

@@ -1,4 +1,6 @@
 using TMPro;
+using Unity.VisualScripting;
+using UnityEditor.Overlays;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -205,6 +207,10 @@ public class SectionGroup : MonoBehaviour
     {
         if (!headerSpacer)
             return;
+        if (headerSpacer.GetComponent<LayoutElement>() == null)
+        {
+            headerSpacer.AddComponent<LayoutElement>();
+        }
         var le = headerSpacer.GetComponent<LayoutElement>();
         le.minHeight = mainOnlyScreen ? mainOnlyGap : normalGap;
     }

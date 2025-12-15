@@ -118,7 +118,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<string, int> lumioseByBaseName = new();
     private readonly HashSet<int> shadowed = new();
 
-    bool _shadowMode;
+    [SerializeField]
+    Toggle spellingHelpToggle;
+    const string KEY_SPELLING_HELP = "spelling_help";
+    bool _spellingHelpEnabled = true;
+    const string KEY_ALWAYS_SCROLL = "always_scroll_to_pokemon";
+    bool _alwaysScrollEnabled = true;
     private bool _testRunning;
     private bool _testCancel;
 
@@ -306,9 +311,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         if (!guessInput)
             return;
+
         guessInput.SetTextWithoutNotify(string.Empty);
+
+        SetSpellingHelp(null);
+
         if (!guessInput.interactable)
             guessInput.interactable = true;
+
         guessInput.ActivateInputField();
         guessInput.Select();
     }
@@ -516,6 +526,45 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         ApplyColumnsToAllSections();
+        _spellingHelpEnabled = PlayerPrefs.GetInt(KEY_SPELLING_HELP, 1) == 1;
+
+        if (spellingHelpToggle)
+        {
+            spellingHelpToggle.SetIsOnWithoutNotify(_spellingHelpEnabled);
+            spellingHelpToggle.onValueChanged.RemoveAllListeners();
+            spellingHelpToggle.onValueChanged.AddListener(OnSpellingHelpToggleChanged);
+        }
+
+        ApplySpellingHelpState();
+        _alwaysScrollEnabled = PlayerPrefs.GetInt(KEY_ALWAYS_SCROLL, 1) == 1;
+
+        if (alwaysScrollToggle)
+        {
+            alwaysScrollToggle.SetIsOnWithoutNotify(_alwaysScrollEnabled);
+            alwaysScrollToggle.onValueChanged.RemoveAllListeners();
+            alwaysScrollToggle.onValueChanged.AddListener(OnAlwaysScrollToggleChanged);
+        }
+    }
+
+    void OnAlwaysScrollToggleChanged(bool on)
+    {
+        _alwaysScrollEnabled = on;
+        PlayerPrefs.SetInt(KEY_ALWAYS_SCROLL, on ? 1 : 0);
+    }
+
+    private void OnApplicationQuit() => PlayerPrefs.Save();
+
+    void OnSpellingHelpToggleChanged(bool on)
+    {
+        _spellingHelpEnabled = on;
+        PlayerPrefs.SetInt(KEY_SPELLING_HELP, on ? 1 : 0);
+        ApplySpellingHelpState();
+    }
+
+    void ApplySpellingHelpState()
+    {
+        if (!_spellingHelpEnabled)
+            SetSpellingHelp(null);
     }
 
     IEnumerator LocalBuildWithOverlay()
@@ -607,6 +656,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             UpdateScore();
 
         guessInput.SetTextWithoutNotify(string.Empty);
+        SetSpellingHelp(null);
         guessInput.ActivateInputField();
         guessInput.Select();
 
@@ -646,17 +696,15 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!cardById.TryGetValue(p.id, out var card) || !card)
             return;
 
-        if (alwaysScrollToggle && alwaysScrollToggle.isOn)
-        {
-            if (_scrollRoutine != null)
-            {
-                StopCoroutine(_scrollRoutine);
-            }
+        if (!_alwaysScrollEnabled)
+            return;
 
-            _scrollRoutine = StartCoroutine(
-                CoSmartScrollTo(card.GetComponent<RectTransform>(), duration, ++_scrollToken)
-            );
-        }
+        if (_scrollRoutine != null)
+            StopCoroutine(_scrollRoutine);
+
+        _scrollRoutine = StartCoroutine(
+            CoSmartScrollTo(card.GetComponent<RectTransform>(), duration, ++_scrollToken)
+        );
     }
 
     public void OnResetClicked()
@@ -875,6 +923,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private void OnDisable()
     {
         StopAllCoroutines();
+        PlayerPrefs.Save();
     }
 
     private void OnDestroy()
@@ -1738,25 +1787,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     bool HasTypeFilter => !string.IsNullOrEmpty(selectedType);
 
-    void ApplyShadowMode(bool enable, bool lockButton = false)
-    {
-        _shadowMode = enable;
-
-        foreach (var card in cardById.Values)
-        {
-            if (card)
-                card.SetShadowMode(enable);
-        }
-        if (hintTypeBtn)
-            hintTypeBtn.interactable = !enable;
-
-        if (shadowsBtn && lockButton)
-        {
-            shadowsBtn.interactable = false;
-            shadowsBtn.GetComponent<UiButtonHover>().RefreshDisabledVisual();
-        }
-    }
-
     bool MatchesType(Pokemon p)
     {
         if (!HasTypeFilter)
@@ -2028,12 +2058,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!fit.gameObject.activeInHierarchy)
             yield break;
 
-        fit.Recalculate(); // safe now
+        fit.Recalculate();
     }
 
     private void RevealTypeHintForOne()
     {
-        // IDs that are not solved, not hinted, not shadowed – in visual order
         int pickId = 0;
 
         foreach (var id in _hintShadowOrder)
@@ -2283,6 +2312,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (!cardById.ContainsKey(p.id))
                 continue;
 
+            if (solved.Contains(p.id))
+                continue;
+
             void Consider(string candidate)
             {
                 if (string.IsNullOrWhiteSpace(candidate))
@@ -2358,10 +2390,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         var exact = FindByExactPreserveDigits(rawText);
-        if (exact != null && MapToTargetSpecies(exact) != null)
+        if (exact != null)
         {
-            SetSpellingHelp(null);
-            return;
+            var mapped = MapToTargetSpecies(exact);
+            if (mapped != null && solved.Contains(mapped.id))
+            {
+                SetSpellingHelp(null);
+                return;
+            }
         }
 
         var suggestion = FindClosestPokemonName(rawText);
@@ -2383,7 +2419,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         bool commit = char.IsWhiteSpace(currentText[^1]);
         string raw = commit ? currentText.TrimEnd() : currentText;
-        UpdateSpellingHelp(raw, commit);
+        if (_spellingHelpEnabled)
+            UpdateSpellingHelp(raw, commit);
+        else
+            SetSpellingHelp(null);
         if (generation == 8 || generation == 0 && commit)
         {
             if (TryAcceptGmaxByBaseName(currentText.Trim(), commit: true))
