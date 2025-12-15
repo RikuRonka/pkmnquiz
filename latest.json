@@ -1,5 +1,5 @@
 {
-  "version": "1.0.9",
-  "notes": "- Added spelling helper that suggests the closest Pokémon name when your input contains typos",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.0.9.zip"
+  "version": "1.1.0",
+  "notes": "- Added a toggle for spelling help - Spelling help no longer suggests already guessed Pokémon - Spelling help is cleared after a Pokémon is guessed - Spelling help and “Always scroll to Pokémon” settings now persist between sessions",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.0.zip"
 }
