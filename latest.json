@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
-  "notes": "- Added a toggle for spelling help - Spelling help no longer suggests already guessed Pokémon - Spelling help is cleared after a Pokémon is guessed - Spelling help and “Always scroll to Pokémon” settings now persist between sessions - Added option to switch between windowed and fullscreen modes",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.0.zip"
+  "version": "1.1.1",
+  "notes": "- Improved Pokémon sprites by replacing white backgrounds with transparency where needed - Typing “Ursaluna” in the Full Quiz now also reveals Ursaluna (Blood Moon) from Paldea Expeditions- Added a fullscreen toggle in the top right corner - Fixed the ordering of Stunfisk and Silicobra - Ctrl + Click now zooms a Pokémon card",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.1.zip"
 }
