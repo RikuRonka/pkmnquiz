@@ -74,6 +74,7 @@ public class PokemonCard : MonoBehaviour
     Color _shadowColor = new Color(0f, 0f, 0f, 1f);
     public bool HintVisible => hintVisible;
     public int PokemonId => Bound != null ? Bound.id : 0;
+    public Sprite CurrentSprite => spriteImage ? spriteImage.sprite : null;
 
     void Awake()
     {
@@ -152,6 +153,28 @@ public class PokemonCard : MonoBehaviour
             g.raycastTarget = false;
         }
         ResizeArtToCell();
+    }
+
+    public void BindForPreview(Pokemon p)
+    {
+        Bound = p;
+        IsRevealed = true;
+
+        data = p;
+        loadedSprite = SpriteLibrary.Instance.ByPokemon(p);
+
+        if (spriteImage)
+        {
+            spriteImage.sprite = loadedSprite;
+            spriteImage.color = Color.white;
+            spriteImage.enabled = true;
+        }
+
+        if (placeholderImage)
+            placeholderImage.enabled = false;
+
+        HideTypeIcons();
+        StopAllCoroutines();
     }
 
     public void ClearEndState()

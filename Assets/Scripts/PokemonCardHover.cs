@@ -1,6 +1,10 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
+[DisallowMultipleComponent]
 [RequireComponent(typeof(PokemonCard))]
 public class PokemonCardHover
     : MonoBehaviour,
@@ -8,30 +12,41 @@ public class PokemonCardHover
         IPointerExitHandler,
         IPointerMoveHandler
 {
-    PokemonCard card;
-    bool _hovering;
+    private PokemonCard card;
+    private bool _hovering;
+
+    // Global pinned state (one modal for all cards)
+    private static bool s_pinned;
 
     void Awake() => card = GetComponent<PokemonCard>();
 
-    bool CanShow => card != null && card.IsRevealed && card.Pokemon != null;
+    bool CanShowTooltip => card != null && card.IsRevealed && card.Pokemon != null;
+    bool CanShowModal => card != null && card.IsRevealed && card.Pokemon != null;
 
     public void OnPointerEnter(PointerEventData e)
     {
-        if (!CanShow)
-            return;
-
-        var p = card.Pokemon;
-        string t1 = p.types != null && p.types.Length > 0 ? p.types[0] : null;
-        string t2 = p.types != null && p.types.Length > 1 ? p.types[1] : null;
-        var cam = e.pressEventCamera ?? e.enterEventCamera ?? Camera.main;
-        TooltipManager.Instance?.ShowFollow(p.name, t1, t2, null, e.position, cam);
         _hovering = true;
+
+        // If preview is pinned, update preview to this card immediately.
+        if (s_pinned && CanShowModal)
+        {
+            PokemonPreviewModal.Instance?.Show(card);
+            TooltipManager.Instance?.Hide();
+            return;
+        }
+
+        TryShowTooltip(e);
     }
 
     public void OnPointerMove(PointerEventData e)
     {
-        if (!CanShow)
+        if (!_hovering)
             return;
+        if (s_pinned)
+            return; // pinned preview: no tooltip movement
+        if (!CanShowTooltip)
+            return;
+
         var cam = e.pressEventCamera ?? e.enterEventCamera ?? Camera.main;
         TooltipManager.Instance?.MoveFollow(e.position, cam);
     }
@@ -39,24 +54,89 @@ public class PokemonCardHover
     public void OnPointerExit(PointerEventData e)
     {
         _hovering = false;
+
+        // If pinned, keep modal open; only hide tooltip.
         TooltipManager.Instance?.Hide();
     }
 
     void Update()
     {
-        if (!_hovering || !CanShow)
+        // Only toggle when we're hovering a card (prevents Ctrl anywhere toggling randomly)
+        if (!_hovering)
             return;
 
-        Vector2 pos;
+        if (CtrlPressedThisFrame())
+        {
+            // Toggle
+            s_pinned = !s_pinned;
 
-#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+            if (s_pinned)
+            {
+                TooltipManager.Instance?.Hide();
+                if (CanShowModal)
+                    PokemonPreviewModal.Instance?.Show(card);
+            }
+            else
+            {
+                PokemonPreviewModal.Instance?.Hide();
+                // Optionally restore tooltip after unpin
+                if (CanShowTooltip)
+                {
+                    var p = card.Pokemon;
+                    string t1 = p.types != null && p.types.Length > 0 ? p.types[0] : null;
+                    string t2 = p.types != null && p.types.Length > 1 ? p.types[1] : null;
+                    Vector2 pos = GetMousePos();
+                    TooltipManager.Instance?.ShowFollow(p.name, t1, t2, null, pos, null);
+                }
+            }
+        }
 
-        var mouse = UnityEngine.InputSystem.Mouse.current;
-        pos = mouse != null ? mouse.position.ReadValue() : (Vector2)Input.mousePosition;
+        // While not pinned, keep tooltip following mouse (your original behavior)
+        if (!s_pinned && _hovering && CanShowTooltip)
+        {
+            Vector2 pos = GetMousePos();
+            TooltipManager.Instance?.MoveFollow(pos, null); // overlay canvas
+        }
+
+        // While pinned, update preview live as you hover across cards (nice UX)
+        if (s_pinned && _hovering && CanShowModal)
+        {
+            PokemonPreviewModal.Instance?.Show(card);
+        }
+    }
+
+    private void TryShowTooltip(PointerEventData e)
+    {
+        if (!CanShowTooltip)
+            return;
+
+        var p = card.Pokemon;
+        string t1 = p.types != null && p.types.Length > 0 ? p.types[0] : null;
+        string t2 = p.types != null && p.types.Length > 1 ? p.types[1] : null;
+
+        var cam = e.pressEventCamera ?? e.enterEventCamera ?? Camera.main;
+        TooltipManager.Instance?.ShowFollow(p.name, t1, t2, null, e.position, cam);
+    }
+
+    private static bool CtrlPressedThisFrame()
+    {
+#if ENABLE_INPUT_SYSTEM
+        var kb = Keyboard.current;
+        if (kb == null)
+            return false;
+        return kb.leftCtrlKey.wasPressedThisFrame || kb.rightCtrlKey.wasPressedThisFrame;
 #else
-
-        pos = Input.mousePosition;
+        return Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.RightControl);
 #endif
-        TooltipManager.Instance?.MoveFollow(pos, null); // Overlay canvas => cam is null
+    }
+
+    private static Vector2 GetMousePos()
+    {
+#if ENABLE_INPUT_SYSTEM
+        var mouse = Mouse.current;
+        return mouse != null ? mouse.position.ReadValue() : (Vector2)Input.mousePosition;
+#else
+        return Input.mousePosition;
+#endif
     }
 }
