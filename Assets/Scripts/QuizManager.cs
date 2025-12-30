@@ -2674,7 +2674,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         {
             int baseKey = target.baseId != 0 ? target.baseId : target.id;
 
-            RevealAllVariantsForBase(baseKey, includeExpeditions: false);
+            RevealAllVariantsForBase(baseKey, includeExpeditions: true);
         }
 
         UpdateScore();

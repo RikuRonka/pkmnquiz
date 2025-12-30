@@ -5,9 +5,6 @@ TextureImporter:
   - first:
       213: 367196061468792416
     second: shellos_0
-  - first:
-      213: -266998268776212716
-    second: shellos_1
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -112,19 +109,6 @@ TextureImporter:
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
-  - serializedVersion: 4
-    buildTarget: WindowsStoreApps
-    maxTextureSize: 2048
-    resizeAlgorithm: 0
-    textureFormat: -1
-    textureCompression: 1
-    compressionQuality: 50
-    crunchedCompression: 0
-    allowsAlphaSplitting: 0
-    overridden: 0
-    ignorePlatformSupport: 0
-    androidETC2FallbackOverride: 0
-    forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
     sprites:
@@ -132,10 +116,10 @@ TextureImporter:
       name: shellos_0
       rect:
         serializedVersion: 2
-        x: 5
-        y: 5
-        width: 492
-        height: 654
+        x: 0
+        y: 28
+        width: 675
+        height: 899
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -146,28 +130,6 @@ TextureImporter:
       bones: []
       spriteID: 06615c65fda881500800000000000000
       internalID: 367196061468792416
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: shellos_1
-      rect:
-        serializedVersion: 2
-        x: 408
-        y: 4
-        width: 488
-        height: 654
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 41713f93d7e6b4cf0800000000000000
-      internalID: -266998268776212716
       vertices: []
       indices: 
       edges: []
@@ -187,7 +149,6 @@ TextureImporter:
       entries: []
     nameFileIdTable:
       shellos_0: 367196061468792416
-      shellos_1: -266998268776212716
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
