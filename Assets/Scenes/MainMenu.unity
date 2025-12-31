@@ -4094,16 +4094,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PatchNotesView
   notesText: {fileID: 1239978752}
-  patchNotes: "1.1.1\n- Improved Pok\xE9mon sprites by replacing white backgrounds
-    with transparency where needed\n- Typing \u201CUrsaluna\u201D in the Full Quiz
-    now also reveals Ursaluna (Blood Moon) from Paldea Expeditions\n- Added a fullscreen
-    toggle in the top-right corner\n- Fixed the ordering of Stunfisk and Silicobra\n-
-    Ctrl + Click now zooms a Pok\xE9mon card\n\n1.1.0\n- Added a toggle for spelling
-    help\r\n- Spelling help no longer suggests already guessed Pok\xE9mon\r\n- Spelling
-    help is cleared after a Pok\xE9mon is guessed\n- Spelling help and \u201CAlways
-    scroll to Pok\xE9mon\u201D settings now persist between sessions\n- Added option
-    to switch between windowed and fullscreen modes\r\n\n1.0.9\n- Added spelling
-    helper that suggests the closest Pok\xE9mon name when your input contains typos\n\n1.0.8\n-
+  patchNotes: "1.1.2\n- Game now automatically pauses when the window loses focus\n-
+    Added \u201CLast guessed Pok\xE9mon\u201D display to the UI\n- Fixed Vanillish
+    / Vanilluxe ordering\n- Fixed remaining sprites with incorrect transparency\n\n1.1.1\n-
+    Improved Pok\xE9mon sprites by replacing white backgrounds with transparency
+    where needed\n- Typing \u201CUrsaluna\u201D in the Full Quiz now also reveals
+    Ursaluna (Blood Moon) from Paldea Expeditions\n- Added a fullscreen toggle in
+    the top-right corner\n- Fixed the ordering of Stunfisk and Silicobra\n- Ctrl
+    + Click now zooms a Pok\xE9mon card\n\n1.1.0\n- Added a toggle for spelling help\r\n-
+    Spelling help no longer suggests already guessed Pok\xE9mon\r\n- Spelling help
+    is cleared after a Pok\xE9mon is guessed\n- Spelling help and \u201CAlways scroll
+    to Pok\xE9mon\u201D settings now persist between sessions\n- Added option to
+    switch between windowed and fullscreen modes\r\n\n1.0.9\n- Added spelling helper
+    that suggests the closest Pok\xE9mon name when your input contains typos\n\n1.0.8\n-
     Fixed broken or incorrect sprites for Iron Jugulis, Galarian Weezing, and Comfey
     \n- Mega evolutions no longer require typing the \u201Cmega\u201D prefix when
     guessing\n\n1.0.7\n- Fixed reveal system: Shadow and type hints now appear in

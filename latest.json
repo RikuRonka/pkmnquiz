@@ -1,5 +1,5 @@
 {
-  "version": "1.1.1",
-  "notes": "- Improved Pokémon sprites by replacing white backgrounds with transparency where needed - Typing “Ursaluna” in the Full Quiz now also reveals Ursaluna (Blood Moon) from Paldea Expeditions- Added a fullscreen toggle in the top right corner - Fixed the ordering of Stunfisk and Silicobra - Ctrl + Click now zooms a Pokémon card",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.1.zip"
+  "version": "1.1.2",
+  "notes": "- Game now automatically pauses when the window loses focus - Added “Last guessed Pokémon” display to the UI - Fixed Vanillish / Vanilluxe ordering - Fixed remaining sprites with incorrect transparency",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.2.zip"
 }
