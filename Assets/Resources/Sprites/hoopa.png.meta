@@ -5,15 +5,6 @@ TextureImporter:
   - first:
       213: -1099049700091898896
     second: hoopa_0
-  - first:
-      213: -4492527740092366583
-    second: hoopa_1
-  - first:
-      213: -7809766534880601033
-    second: hoopa_2
-  - first:
-      213: -5915349492369369698
-    second: hoopa_3
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -55,7 +46,7 @@ TextureImporter:
   nPOTScale: 0
   lightmap: 0
   compressionQuality: 50
-  spriteMode: 1
+  spriteMode: 2
   spriteExtrude: 1
   spriteMeshType: 1
   alignment: 0
@@ -81,12 +72,12 @@ TextureImporter:
   platformSettings:
   - serializedVersion: 4
     buildTarget: DefaultTexturePlatform
-    maxTextureSize: 128
+    maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
     textureCompression: 1
     compressionQuality: 50
-    crunchedCompression: 1
+    crunchedCompression: 0
     allowsAlphaSplitting: 0
     overridden: 0
     ignorePlatformSupport: 0
@@ -118,19 +109,6 @@ TextureImporter:
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
-  - serializedVersion: 4
-    buildTarget: WindowsStoreApps
-    maxTextureSize: 2048
-    resizeAlgorithm: 0
-    textureFormat: -1
-    textureCompression: 1
-    compressionQuality: 50
-    crunchedCompression: 0
-    allowsAlphaSplitting: 0
-    overridden: 0
-    ignorePlatformSupport: 0
-    androidETC2FallbackOverride: 0
-    forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
     sprites:
@@ -138,10 +116,10 @@ TextureImporter:
       name: hoopa_0
       rect:
         serializedVersion: 2
-        x: 159
-        y: 555
-        width: 171
-        height: 92
+        x: 21
+        y: 0
+        width: 982
+        height: 1024
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -156,77 +134,11 @@ TextureImporter:
       indices: 
       edges: []
       weights: []
-    - serializedVersion: 2
-      name: hoopa_1
-      rect:
-        serializedVersion: 2
-        x: 244
-        y: 4
-        width: 652
-        height: 754
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 901c434a2d557a1c0800000000000000
-      internalID: -4492527740092366583
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: hoopa_2
-      rect:
-        serializedVersion: 2
-        x: 4
-        y: 351
-        width: 243
-        height: 111
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 73c55b5e6b22e9390800000000000000
-      internalID: -7809766534880601033
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: hoopa_3
-      rect:
-        serializedVersion: 2
-        x: 102
-        y: 176
-        width: 187
-        height: 112
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: e9559014af478eda0800000000000000
-      internalID: -5915349492369369698
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
     outline: []
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 5e97eb03825dee720800000000000000
+    spriteID: 
     internalID: 0
     vertices: []
     indices: 
@@ -237,9 +149,6 @@ TextureImporter:
       entries: []
     nameFileIdTable:
       hoopa_0: -1099049700091898896
-      hoopa_1: -4492527740092366583
-      hoopa_2: -7809766534880601033
-      hoopa_3: -5915349492369369698
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
