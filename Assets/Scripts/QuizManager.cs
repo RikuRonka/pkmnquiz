@@ -15,6 +15,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     [SerializeField]
     private Image backgroundImage;
     public TMP_InputField guessInput;
+    public event Action<Pokemon> OnPokemonSolved;
 
     [SerializeField]
     TMP_Text spellingHelpText;
@@ -677,14 +678,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
-    private void ShowNotInQuiz(string name)
+    private void ShowNotInQuiz(string name, Pokemon p = null)
     {
-        toast.Show($"{name} is not part of this quiz", 2f);
+        string reason = ExplainWhyNotInQuiz(p);
 
-        if (guessInput)
-        {
-            RefocusGuess();
-        }
+        if (!string.IsNullOrEmpty(reason))
+            toast.Show($"{name} is not part of this quiz - {reason}", 2.5f);
+        else
+            toast.Show($"{name} is not part of this quiz", 2f);
+
+        RefocusGuess();
     }
 
     void MaybeScrollTo(Pokemon p, float duration = 0.25f)
@@ -2294,6 +2297,47 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
+    private string ExplainWhyNotInQuiz(Pokemon p)
+    {
+        if (p == null)
+            return null;
+
+        // Generation mismatch
+        if (generation > 0 && p.generation != generation)
+        {
+            return Helpers.GetGenTitle(p.generation);
+        }
+
+        // Type-filtered quiz
+        if (HasTypeFilter)
+        {
+            if (
+                p.types == null
+                || !p.types.Any(t =>
+                    string.Equals(t, selectedType, StringComparison.OrdinalIgnoreCase)
+                )
+            )
+            {
+                var typeList = p.types != null ? string.Join("/", p.types) : "Unknown type";
+                return $"Type: {typeList}";
+            }
+        }
+
+        // Special forms
+        if (Helpers.IsMega(p))
+            return "Mega Evolution";
+        if (Helpers.IsGmax(p))
+            return "Gigantamax";
+        if (Helpers.IsHisui(p))
+            return "Hisui (Gen 8)";
+        if (Helpers.IsPaldeaExpedition(p))
+            return "Paldea Expedition";
+        if (Helpers.IsRegionalForm(p))
+            return "Regional form";
+
+        return null;
+    }
+
     string FindClosestPokemonName(string typed)
     {
         if (targetList == null || targetList.Count == 0)
@@ -2616,7 +2660,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             var key = GuessNormalizer.Key(originalText);
             bool exactTyped = IsExactNameOrAlias(originalText, guess);
             if ((commit && exactTyped) || (exactTyped && key.Length >= MIN_TOAST_LEN))
-                ShowNotInQuiz(guess.name);
+                ShowNotInQuiz(guess.name, guess);
             return;
         }
 
@@ -2669,6 +2713,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             MaybeScrollTo(target);
         }
         PlayCorrect();
+        OnPokemonSolved?.Invoke(target);
 
         if (generation == 0)
         {
@@ -2695,6 +2740,33 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 shadowsUsed: _shadowUsedCount
             );
         }
+    }
+
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus)
+        {
+            PauseDueToFocusLoss();
+        }
+    }
+
+    private void OnApplicationPause(bool paused)
+    {
+        if (paused)
+        {
+            PauseDueToFocusLoss();
+        }
+    }
+
+    private void PauseDueToFocusLoss()
+    {
+        if (!running)
+            return;
+
+        if (IsDialogOpen())
+            return;
+
+        PauseGame();
     }
 
     bool HasDifferentSpeciesContinuation(string text, Pokemon currentTarget)
