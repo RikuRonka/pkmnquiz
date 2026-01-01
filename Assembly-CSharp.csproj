@@ -87,6 +87,7 @@
     <Compile Include="Assets\Scripts\SectionHeader.cs" />
     <Compile Include="Assets\Scripts\LoadingManager.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextInfoDebugTool.cs" />
+    <Compile Include="Assets\Scripts\PauseOnFocusLossSetting.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexShakeA.cs" />
     <Compile Include="Assets\Scripts\MusicUIController.cs" />
     <Compile Include="Assets\Scripts\ClickOnDown.cs" />

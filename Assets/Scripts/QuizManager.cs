@@ -68,6 +68,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     public Toast toast;
     private const int MIN_TOAST_LEN = 4;
 
+    const string KEY_PAUSE_ON_FOCUS_LOSS = "pause_on_focus_loss";
+    bool _pauseOnFocusLossEnabled = true;
+
     public SectionHeader sectionHeaderPrefab;
     public SectionGroup sectionGroupPrefab;
     public Transform content;
@@ -498,6 +501,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             selectedType = null;
         }
 
+        _pauseOnFocusLossEnabled = PlayerPrefs.GetInt(KEY_PAUSE_ON_FOCUS_LOSS, 1) == 1;
+
         EnsureLoader();
         SetSpellingHelp(null);
         bool hasRouterParams =
@@ -554,6 +559,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     }
 
     private void OnApplicationQuit() => PlayerPrefs.Save();
+
+    void OnPauseOnFocusLossToggleChanged(bool on)
+    {
+        _pauseOnFocusLossEnabled = on;
+        PlayerPrefs.SetInt(KEY_PAUSE_ON_FOCUS_LOSS, on ? 1 : 0);
+    }
 
     void OnSpellingHelpToggleChanged(bool on)
     {
@@ -2760,10 +2771,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void PauseDueToFocusLoss()
     {
+        if (!_pauseOnFocusLossEnabled)
+            return;
+
         if (!running)
             return;
 
         if (IsDialogOpen())
+            return;
+
+        if (pauseMenu && pauseMenu.IsShowing)
             return;
 
         PauseGame();
