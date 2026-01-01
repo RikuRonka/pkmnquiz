@@ -1,5 +1,5 @@
 {
-  "version": "1.1.2",
-  "notes": "- Game now automatically pauses when the window loses focus - Added “Last guessed Pokémon” display to the UI - Fixed Vanillish / Vanilluxe ordering - Fixed remaining sprites with incorrect transparency",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.2.zip"
+  "version": "1.1.3",
+  "notes": "- Different Pokémon music can now be selected from dropdown menu - Fixed more sprites",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.3.zip"
 }
