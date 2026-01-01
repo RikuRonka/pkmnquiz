@@ -5,9 +5,6 @@ TextureImporter:
   - first:
       213: -4489802062772737217
     second: pyroar_0
-  - first:
-      213: 9124506435682530698
-    second: pyroar_1
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,7 +97,7 @@ TextureImporter:
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
   - serializedVersion: 4
-    buildTarget: WebGL
+    buildTarget: Android
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
@@ -113,7 +110,7 @@ TextureImporter:
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
   - serializedVersion: 4
-    buildTarget: WindowsStoreApps
+    buildTarget: WebGL
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
@@ -132,10 +129,10 @@ TextureImporter:
       name: pyroar_0
       rect:
         serializedVersion: 2
-        x: 4
-        y: 4
-        width: 449
-        height: 486
+        x: 0
+        y: 15
+        width: 601
+        height: 653
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -146,28 +143,6 @@ TextureImporter:
       bones: []
       spriteID: f3b6d98dfc401b1c0800000000000000
       internalID: -4489802062772737217
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: pyroar_1
-      rect:
-        serializedVersion: 2
-        x: 450
-        y: 22
-        width: 443
-        height: 426
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: a857f917242c0ae70800000000000000
-      internalID: 9124506435682530698
       vertices: []
       indices: 
       edges: []
@@ -187,7 +162,6 @@ TextureImporter:
       entries: []
     nameFileIdTable:
       pyroar_0: -4489802062772737217
-      pyroar_1: 9124506435682530698
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

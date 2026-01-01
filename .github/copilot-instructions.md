@@ -8,7 +8,7 @@
   - Layers:
     - Default, TransparentFX, Ignore Raycast, Water, UI
 - Active game object:
-  - Name: PatchNotesPanel
+  - Name: MusicManager
   - Tag: Untagged
-  - Layer: UI
+  - Layer: Default
 <!-- UNITY CODE ASSIST INSTRUCTIONS END -->

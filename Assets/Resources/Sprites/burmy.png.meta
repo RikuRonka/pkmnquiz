@@ -5,12 +5,6 @@ TextureImporter:
   - first:
       213: 7380103823428783306
     second: burmy_0
-  - first:
-      213: -7248429472063324932
-    second: burmy_1
-  - first:
-      213: -5105561530034481313
-    second: burmy_2
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -103,7 +97,7 @@ TextureImporter:
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
   - serializedVersion: 4
-    buildTarget: WebGL
+    buildTarget: Android
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
@@ -116,7 +110,7 @@ TextureImporter:
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
   - serializedVersion: 4
-    buildTarget: WindowsStoreApps
+    buildTarget: WebGL
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
@@ -135,10 +129,10 @@ TextureImporter:
       name: burmy_0
       rect:
         serializedVersion: 2
-        x: 4
-        y: 10
-        width: 88
-        height: 159
+        x: 116
+        y: 0
+        width: 283
+        height: 514
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -149,50 +143,6 @@ TextureImporter:
       bones: []
       spriteID: acc89f073556b6660800000000000000
       internalID: 7380103823428783306
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: burmy_1
-      rect:
-        serializedVersion: 2
-        x: 89
-        y: 82
-        width: 91
-        height: 164
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: cfc713a8cc7686b90800000000000000
-      internalID: -7248429472063324932
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: burmy_2
-      rect:
-        serializedVersion: 2
-        x: 171
-        y: 4
-        width: 91
-        height: 167
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: f57156fb6d66529b0800000000000000
-      internalID: -5105561530034481313
       vertices: []
       indices: 
       edges: []
@@ -212,8 +162,6 @@ TextureImporter:
       entries: []
     nameFileIdTable:
       burmy_0: 7380103823428783306
-      burmy_1: -7248429472063324932
-      burmy_2: -5105561530034481313
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
