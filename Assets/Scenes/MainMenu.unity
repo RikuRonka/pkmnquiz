@@ -4834,10 +4834,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PatchNotesView
   notesText: {fileID: 1239978752}
-  patchNotes: "1.1.3\n- Different Pok\xE9mon music can now be selected from dropdown
-    menu \n- Fixed more sprites\n- Added Pok\xE9mon Quiz-logo\n\n1.1.2\n- Game now
-    automatically pauses when the window loses focus\n- Added \u201CLast guessed
-    Pok\xE9mon\u201D display to the UI\n- Fixed Vanillish / Vanilluxe ordering\n-
+  patchNotes: "1.1.4\r\n- Vanillish and Vanilluxe dex order corrected (again)\r\n-
+    Fixed Cherrim and Leafeon sprites\r\n- Pok\xE9mon Quiz-logo not visible in patch
+    notes anymore\n\n1.1.3\n- Different Pok\xE9mon music can now be selected from
+    dropdown menu \n- Fixed more sprites\n- Added Pok\xE9mon Quiz-logo\n\n1.1.2\n-
+    Game now automatically pauses when the window loses focus\n- Added \u201CLast
+    guessed Pok\xE9mon\u201D display to the UI\n- Fixed Vanillish / Vanilluxe ordering\n-
     Fixed remaining sprites with incorrect transparency\n\n1.1.1\n- Improved Pok\xE9mon
     sprites by replacing white backgrounds with transparency where needed\n- Typing
     \u201CUrsaluna\u201D in the Full Quiz now also reveals Ursaluna (Blood Moon)
