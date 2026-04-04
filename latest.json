@@ -1,5 +1,5 @@
 {
-  "version": "1.1.4",
-  "notes": "- Vanillish and Vanilluxe dex order corrected (again) - Fixed Cherrim and Leafeon sprites - Pokémon Quiz-logo not visible in patch notes anymore",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.4.zip"
+  "version": "1.1.5",
+  "notes": "- Added Hyperspace mega evolutions",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.5.zip"
 }

@@ -8,6 +8,11 @@ public static class Helpers
         && !string.IsNullOrEmpty(p.formKey)
         && p.formKey.Equals(key, StringComparison.OrdinalIgnoreCase);
 
+    public static bool IsHyperspaceMega(Pokemon p) =>
+        p != null
+        && !string.IsNullOrEmpty(p.formKey)
+        && p.formKey.Equals("mega_hyperspace", StringComparison.OrdinalIgnoreCase);
+
     public static bool NameHas(Pokemon p, string needle) =>
         p != null
         && !string.IsNullOrEmpty(p.name)

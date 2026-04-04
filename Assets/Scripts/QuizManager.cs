@@ -118,8 +118,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<int, PokemonCard> regionalCardByBase = new();
     private readonly Dictionary<string, int> regionalByBaseName = new();
     private readonly Dictionary<int, Pokemon> lumiosePickByBase = new();
+    private readonly Dictionary<int, Pokemon> hyperspacePickByBase = new();
     private readonly Dictionary<int, PokemonCard> lumioseCardByBase = new();
+    private readonly Dictionary<int, PokemonCard> hyperspaceCardByBase = new();
     private readonly Dictionary<string, int> lumioseByBaseName = new();
+    private readonly Dictionary<string, int> hyperspaceByBaseName = new();
     private readonly HashSet<int> shadowed = new();
 
     [SerializeField]
@@ -782,6 +785,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             )
                 return lumiosePick;
 
+            if (
+                (generation == 9 || generation == 0)
+                && hyperspacePickByBase.TryGetValue(baseId, out var hyperspacePick)
+            )
+                return hyperspacePick;
+
             var regional = targetList.FirstOrDefault(p =>
                 Helpers.IsRegionalForm(p) && ((p.baseId != 0 ? p.baseId : p.id) == baseId)
             );
@@ -803,7 +812,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 typeof(Helpers).GetMethod("IsRegionalForm") != null && Helpers.IsRegionalForm(guess)
             )
             || Helpers.IsPaldeaExpeditionOrBloodmoon(guess)
-            || Helpers.IsLumioseMega(guess);
+            || Helpers.IsLumioseMega(guess)
+            || Helpers.IsHyperspaceMega(guess);
 
         if (isForm)
         {
@@ -1005,6 +1015,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         lumiosePickByBase.Clear();
         lumioseCardByBase.Clear();
         lumioseByBaseName.Clear();
+        hyperspacePickByBase.Clear();
+        hyperspaceCardByBase.Clear();
+        hyperspaceByBaseName.Clear();
         _hintShadowOrder.Clear();
 
         var ordered = targetList;
@@ -1020,13 +1033,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             gmaxSec = null,
             hisuiSec = null,
             lumioseMegasSec = null,
+            hyperspaceMegasSec = null,
             alolaUnknown = null;
 
         var allDb = PokemonDatabase.Instance.All();
 
         foreach (var m in allDb.Where(Helpers.IsMega).Where(MatchesType))
         {
-            if (Helpers.IsLumioseMega(m))
+            if (Helpers.IsLumioseMega(m) || Helpers.IsHyperspaceMega(m))
                 continue;
             int baseKey = BaseIdOf(m);
             if (!megaFormsByBase.TryGetValue(baseKey, out var list))
@@ -1070,6 +1084,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             .OrderBy(p => DexOrder.GetIndex(p))
             .ToList();
         var lumiosePoolF = allDb.Where(Helpers.IsLumioseMega).Where(MatchesType).ToList();
+        var hyperspacePoolF = allDb.Where(Helpers.IsHyperspaceMega).Where(MatchesType).ToList();
 
         if (generation == 0)
         {
@@ -1081,6 +1096,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             SectionGroup fullHisui = null;
             SectionGroup fullLumioseMegas = null;
             SectionGroup unknownSec = null;
+            SectionGroup fullHyperspaceMegas = null;
 
             foreach (var g in ordered.Select(p => p.generation).Distinct().OrderBy(x => x))
             {
@@ -1140,6 +1156,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     fullLumioseMegas.EnsureLayout();
                     fullLumioseMegas.SetTitle("Mega Evolution - Lumiose", false);
                     _sections.Add(fullLumioseMegas);
+                }
+                if (g == 9 && hyperspacePoolF.Count > 0)
+                {
+                    fullHyperspaceMegas = Instantiate(sectionGroupPrefab, content);
+                    fullHyperspaceMegas.EnsureLayout();
+                    fullHyperspaceMegas.SetTitle("Mega Evolution - Hyperspace", false);
+                    _sections.Add(fullHyperspaceMegas);
                 }
             }
 
@@ -1378,6 +1401,47 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 fullLumioseMegas.SetCardCount(fullLumioseMegas.gridRoot.childCount);
                 FitSection(fullLumioseMegas);
             }
+            if (fullHyperspaceMegas != null)
+            {
+                foreach (var p in hyperspacePoolF.OrderBy(x => x.id))
+                {
+                    var c = Instantiate(cardPrefab, fullHyperspaceMegas.gridRoot);
+                    c.ClearEndState();
+                    c.Bind(p);
+                    cardById[p.id] = c;
+                    pokemonById[p.id] = p;
+                    _hintShadowOrder.Add(p.id);
+                    int baseId = p.baseId != 0 ? p.baseId : p.id;
+                    hyperspacePickByBase[baseId] = p;
+                    hyperspaceCardByBase[baseId] = c;
+
+                    var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
+                    var baseName = baseMon?.name ?? BaseNameFrom(p.name);
+
+                    AddKey(hyperspaceByBaseName, p.name, baseId);
+                    if (p.aliases != null)
+                        foreach (var a in p.aliases)
+                            AddKey(hyperspaceByBaseName, a, baseId);
+
+                    if (!string.IsNullOrEmpty(baseName))
+                    {
+                        AddKey(hyperspaceByBaseName, baseName, baseId);
+                        AddKey(hyperspaceByBaseName, $"{baseName} mega", baseId);
+                        AddKey(hyperspaceByBaseName, $"mega {baseName}", baseId);
+                    }
+
+                    if (baseMon?.aliases != null)
+                        foreach (var a in baseMon.aliases)
+                        {
+                            AddKey(hyperspaceByBaseName, a, baseId);
+                            AddKey(hyperspaceByBaseName, $"{a} mega", baseId);
+                            AddKey(hyperspaceByBaseName, $"mega {a}", baseId);
+                        }
+                }
+
+                fullHyperspaceMegas.SetCardCount(fullHyperspaceMegas.gridRoot.childCount);
+                FitSection(fullHyperspaceMegas);
+            }
             if (unknownSec != null)
             {
                 var unknowns = allDb
@@ -1434,6 +1498,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 FitSection(fullLumioseMegas);
             }
 
+            if (fullHyperspaceMegas != null)
+            {
+                fullHyperspaceMegas.SetCardCount(fullHyperspaceMegas.gridRoot.childCount);
+                FitSection(fullHyperspaceMegas);
+            }
+
             unknownSec.SetCardCount(unknownSec.gridRoot.childCount);
             FitSection(unknownSec);
             foreach (var sec in mainByGen.Values)
@@ -1445,6 +1515,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             FinalizeSection(fullGmax);
             FinalizeSection(fullHisui);
             FinalizeSection(fullLumioseMegas);
+            FinalizeSection(fullHyperspaceMegas);
             FinalizeSection(unknownSec);
             RebuildHintShadowOrderFromSections();
             UpdateScore();
@@ -1485,12 +1556,17 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             lumioseMegasSec = Instantiate(sectionGroupPrefab, content);
             lumioseMegasSec.EnsureLayout();
             lumioseMegasSec.SetTitle("Mega Evolution - Lumiose", false);
+
+            hyperspaceMegasSec = Instantiate(sectionGroupPrefab, content);
+            hyperspaceMegasSec.EnsureLayout();
+            hyperspaceMegasSec.SetTitle("Mega Evolution - Hyperspace", false);
         }
 
         var expeditionPool = new List<Pokemon>();
         var gmaxPoolGen = new List<Pokemon>();
         var hisuiPoolGen = new List<Pokemon>();
         var lumioseMegaPool = new List<Pokemon>();
+        var hyperspaceMegaPool = new List<Pokemon>();
         var alolaUnknownPool = new List<Pokemon>();
 
         foreach (var p in ordered)
@@ -1529,6 +1605,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (generation == 9 && Helpers.IsLumioseMega(p))
             {
                 lumioseMegaPool.Add(p);
+                continue;
+            }
+
+            if (generation == 9 && Helpers.IsHyperspaceMega(p))
+            {
+                hyperspaceMegaPool.Add(p);
                 continue;
             }
 
@@ -1786,6 +1868,48 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             lumioseMegasSec.SetCardCount(lumioseMegasSec.gridRoot.childCount);
             FitSection(lumioseMegasSec);
         }
+        if (hyperspaceMegasSec != null)
+        {
+            foreach (var p in hyperspaceMegaPool.OrderBy(x => x.id))
+            {
+                var c = Instantiate(cardPrefab, hyperspaceMegasSec.gridRoot);
+                c.ClearEndState();
+                c.Bind(p);
+                cardById[p.id] = c;
+                pokemonById[p.id] = p;
+                _hintShadowOrder.Add(p.id);
+
+                int baseId = p.baseId != 0 ? p.baseId : p.id;
+                hyperspacePickByBase[baseId] = p;
+                hyperspaceCardByBase[baseId] = c;
+
+                var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
+                var baseName = baseMon?.name ?? BaseNameFrom(p.name);
+
+                AddKey(hyperspaceByBaseName, p.name, baseId);
+                if (p.aliases != null)
+                    foreach (var a in p.aliases)
+                        AddKey(hyperspaceByBaseName, a, baseId);
+
+                if (!string.IsNullOrEmpty(baseName))
+                {
+                    AddKey(hyperspaceByBaseName, baseName, baseId);
+                    AddKey(hyperspaceByBaseName, $"{baseName} mega", baseId);
+                    AddKey(hyperspaceByBaseName, $"mega {baseName}", baseId);
+                }
+
+                if (baseMon?.aliases != null)
+                    foreach (var a in baseMon.aliases)
+                    {
+                        AddKey(hyperspaceByBaseName, a, baseId);
+                        AddKey(hyperspaceByBaseName, $"{a} mega", baseId);
+                        AddKey(hyperspaceByBaseName, $"mega {a}", baseId);
+                    }
+            }
+
+            hyperspaceMegasSec.SetCardCount(hyperspaceMegasSec.gridRoot.childCount);
+            FitSection(hyperspaceMegasSec);
+        }
         RebuildHintShadowOrderFromSections();
         UpdateScore();
         bool noSubSections =
@@ -1896,6 +2020,23 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         return true;
     }
 
+    private bool TryAcceptHyperspaceByBaseName(string text, bool commit)
+    {
+        if ((generation != 9 && generation != 0) || string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var k = GuessNormalizer.Key(text);
+
+        if (!hyperspaceByBaseName.TryGetValue(k, out var baseId))
+            return false;
+
+        if (!commit)
+            return true;
+
+        RevealAllByBaseId(baseId);
+        return true;
+    }
+
     private void RevealAllVariantsForBase(int baseKey, bool includeExpeditions = false)
     {
         foreach (var kv in cardById)
@@ -1909,6 +2050,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
             bool isVariant =
                 Helpers.IsMega(p)
+                || Helpers.IsLumioseMega(p)
+                || Helpers.IsHyperspaceMega(p)
                 || Helpers.IsGmax(p)
                 || Helpers.IsHisui(p)
                 || Helpers.IsRegionalForm(p)
@@ -2125,6 +2268,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 && !Helpers.IsHisui(p)
                 && !Helpers.IsPaldeaExpedition(p)
                 && !Helpers.IsLumioseMega(p)
+                && !Helpers.IsHyperspaceMega(p)
             );
         }
         else if (generation > 0)
@@ -2150,7 +2294,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             }
             else if (generation == 9)
             {
-                extras = all.Where(p => Helpers.IsPaldeaExpedition(p) || Helpers.IsLumioseMega(p));
+                extras = all.Where(p =>
+                    Helpers.IsPaldeaExpedition(p)
+                    || Helpers.IsLumioseMega(p)
+                    || Helpers.IsHyperspaceMega(p)
+                );
             }
 
             all = genSet.Concat(extras).Distinct();
@@ -2493,6 +2641,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         )
             return;
 
+        if (
+            (generation == 9 || generation == 0)
+            && commit
+            && TryAcceptHyperspaceByBaseName(currentText.Trim(), commit: true)
+        )
+            return;
+
         if (generation == 6)
         {
             var k = GuessNormalizer.Key(currentText.Trim());
@@ -2726,7 +2881,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         PlayCorrect();
         OnPokemonSolved?.Invoke(target);
 
-        if (generation == 0)
+        if (generation == 0 || generation == 9)
         {
             int baseKey = target.baseId != 0 ? target.baseId : target.id;
 
@@ -2750,6 +2905,58 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 hintsUsed: _hintUsedCount,
                 shadowsUsed: _shadowUsedCount
             );
+        }
+    }
+
+    private void RevealAllByBaseId(int baseId)
+    {
+        bool any = false;
+
+        var matches = targetList.Where(p => (p.baseId != 0 ? p.baseId : p.id) == baseId).ToList();
+
+        foreach (var target in matches)
+        {
+            if (solved.Contains(target.id))
+            {
+                if (cardById.TryGetValue(target.id, out var already))
+                    already.FlashHighlight();
+                continue;
+            }
+
+            solved.Add(target.id);
+
+            if (cardById.TryGetValue(target.id, out var card))
+            {
+                card.Reveal();
+                MaybeScrollTo(target);
+            }
+
+            any = true;
+        }
+
+        if (any)
+            UpdateScore();
+
+        guessInput.SetTextWithoutNotify(string.Empty);
+        SetSpellingHelp(null);
+        guessInput.ActivateInputField();
+        guessInput.Select();
+
+        if (IsComplete())
+        {
+            running = false;
+            if (guessInput)
+                guessInput.interactable = false;
+
+            if (finishedDialog)
+                finishedDialog.Show(
+                    solved.Count,
+                    cardById.Count,
+                    TimeSpan.FromSeconds(elapsed),
+                    gaveUp: false,
+                    hintsUsed: _hintUsedCount,
+                    shadowsUsed: _shadowUsedCount
+                );
         }
     }
 
