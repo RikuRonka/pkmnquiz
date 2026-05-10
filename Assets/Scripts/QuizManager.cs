@@ -762,7 +762,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return typeMegaPick;
             }
 
-            if ((generation == 0 || generation == 10) && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
+            if (
+                (generation == 0 || generation == 10)
+                && megaSlotPickByBase.TryGetValue(baseId, out var megaPick)
+            )
                 return megaPick;
             if (
                 (generation == 8 || generation == 0)
@@ -819,7 +822,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         {
             int baseId = guess.baseId != 0 ? guess.baseId : guess.id;
 
-            if ((generation == 0 || generation == 10) && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
+            if (
+                (generation == 0 || generation == 10)
+                && megaSlotPickByBase.TryGetValue(baseId, out var megaPick)
+            )
                 return megaPick;
 
             if (
@@ -883,51 +889,64 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         return true;
     }
 
-    private bool TryAcceptMegaByBaseName(string text, bool commit)
+    private bool TryAcceptAnyMegaByBaseName(string text, bool commit)
     {
-        if (generation != 10)
-            return false;
-        if (string.IsNullOrWhiteSpace(text))
+        if (generation != 10 || string.IsNullOrWhiteSpace(text))
             return false;
 
-        var norm = GuessNormalizer.Key(text);
+        var k = GuessNormalizer.Key(text);
 
-        Pokemon baseSpecies = null;
-        foreach (var p in PokemonDatabase.Instance.All())
-        {
-            var isBase = p.baseId == 0 || p.baseId == p.id;
-            if (!isBase)
-                continue;
-
-            if (GuessNormalizer.Key(p.name) == norm)
-            {
-                baseSpecies = p;
-                break;
-            }
-
-            if (p.aliases != null)
-            {
-                foreach (var a in p.aliases)
-                {
-                    if (GuessNormalizer.Key(a) == norm)
-                    {
-                        baseSpecies = p;
-                        break;
-                    }
-                }
-                if (baseSpecies != null)
-                    break;
-            }
-        }
+        var baseSpecies = PokemonDatabase
+            .Instance.All()
+            .FirstOrDefault(p =>
+                (p.baseId == 0 || p.baseId == p.id)
+                && (
+                    GuessNormalizer.Key(p.name) == k
+                    || (p.aliases != null && p.aliases.Any(a => GuessNormalizer.Key(a) == k))
+                )
+            );
 
         if (baseSpecies == null)
             return false;
 
         int baseId = baseSpecies.baseId != 0 ? baseSpecies.baseId : baseSpecies.id;
-        if (!megaSlotPickByBase.TryGetValue(baseId, out _))
+
+        var matches = pokemonById
+            .Values.Where(p =>
+                cardById.ContainsKey(p.id)
+                && (Helpers.IsMega(p) || Helpers.IsLumioseMega(p) || Helpers.IsHyperspaceMega(p))
+                && (p.baseId != 0 ? p.baseId : p.id) == baseId
+            )
+            .ToList();
+
+        if (matches.Count == 0)
             return false;
 
-        HandleCandidate(baseSpecies, text, commit);
+        if (!commit)
+            return true;
+
+        foreach (var p in matches)
+        {
+            if (solved.Contains(p.id))
+                continue;
+
+            solved.Add(p.id);
+
+            if (cardById.TryGetValue(p.id, out var card))
+            {
+                card.Reveal();
+                MaybeScrollTo(p);
+            }
+
+            OnPokemonSolved?.Invoke(p);
+            PlayCorrect();
+        }
+
+        UpdateScore();
+        guessInput.SetTextWithoutNotify(string.Empty);
+        SetSpellingHelp(null);
+        RefocusGuess();
+
         return true;
     }
 
@@ -2296,10 +2315,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (generation == 6)
             {
                 // Exclude megas from Kalos
-                genSet = genSet.Where(p => 
-                    !Helpers.IsMega(p) 
-                    && !Helpers.IsLumioseMega(p) 
-                    && !Helpers.IsHyperspaceMega(p)
+                genSet = genSet.Where(p =>
+                    !Helpers.IsMega(p) && !Helpers.IsLumioseMega(p) && !Helpers.IsHyperspaceMega(p)
                 );
                 extras = Enumerable.Empty<Pokemon>();
             }
@@ -2649,6 +2666,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return;
         }
 
+        if (generation == 10 && TryAcceptAnyMegaByBaseName(currentText.Trim(), commit: true))
+            return;
+
         if (
             generation == 9
             && commit
@@ -2819,7 +2839,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
         }
 
-        if (!commit && TryAcceptMegaByBaseName(text, commit: false))
+        if (generation == 10 && TryAcceptAnyMegaByBaseName(text, commit))
             return;
 
         if (!commit)
