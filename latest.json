@@ -1,5 +1,5 @@
 {
-  "version": "1.1.5",
-  "notes": "- Added Hyperspace mega evolutions",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.5.zip"
+  "version": "1.1.6",
+  "notes": "- Added separate quiz for Mega Evolutions - Removed Mega evolutions from Kalos and Paldea - Added missing Mega Slowbro, Primal Kyogre and Primal Groudon",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.6.zip"
 }
