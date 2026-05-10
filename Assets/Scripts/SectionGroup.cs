@@ -103,7 +103,7 @@ public class SectionGroup : MonoBehaviour
             titleText.enableAutoSizing = true;
             titleText.fontSizeMin = 18;
             titleText.fontSizeMax = 42;
-            titleText.color = Color.white;
+            titleText.color = Color.black;
             titleText.text = "Header";
         }
 
@@ -137,6 +137,7 @@ public class SectionGroup : MonoBehaviour
         _isMainHeader = isMain;
         titleText.enableAutoSizing = false;
         titleText.text = text ?? "";
+        titleText.color = Color.black;
 
         var titleRT = titleText.rectTransform;
 
