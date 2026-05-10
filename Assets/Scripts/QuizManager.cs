@@ -139,6 +139,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     AudioSource sfx;
 
     [SerializeField]
+    private float keyboardScrollSpeed = 0.5f;
+
+    [SerializeField]
+    private float keyboardColumnRepeatDelay = 0.12f;
+
+    private float _nextKeyboardColumnTime;
+
+    [SerializeField]
     AudioClip correctSfx;
 
     [SerializeField]
@@ -406,6 +414,93 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         _testCancel = false;
     }
 
+    private void HandleKeyboardScroll()
+    {
+        if (!scrollRect || !scrollRect.content)
+            return;
+
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+        var kb = Keyboard.current;
+        if (kb == null)
+            return;
+
+        float dir = 0f;
+
+        if (kb.upArrowKey.isPressed)
+            dir = 1f;
+        else if (kb.downArrowKey.isPressed)
+            dir = -1f;
+
+        if (dir == 0f)
+            return;
+#else
+        float dir = 0f;
+
+        if (Input.GetKey(KeyCode.UpArrow))
+            dir = 1f;
+        else if (Input.GetKey(KeyCode.DownArrow))
+            dir = -1f;
+
+        if (dir == 0f)
+            return;
+#endif
+
+        scrollRect.verticalNormalizedPosition = Mathf.Clamp01(
+            scrollRect.verticalNormalizedPosition
+                + dir * keyboardScrollSpeed * Time.unscaledDeltaTime
+        );
+        if (guessInput && guessInput.isFocused)
+        {
+            guessInput.caretPosition = guessInput.text.Length;
+            guessInput.stringPosition = guessInput.text.Length;
+        }
+    }
+
+    private void HandleKeyboardColumns()
+    {
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+        var kb = Keyboard.current;
+        if (kb == null)
+            return;
+
+        bool left = kb.leftArrowKey.isPressed;
+        bool right = kb.rightArrowKey.isPressed;
+#else
+        bool left = Input.GetKey(KeyCode.LeftArrow);
+        bool right = Input.GetKey(KeyCode.RightArrow);
+#endif
+
+        if (!left && !right)
+            return;
+
+        // Keep the input caret locked to the end every frame while holding arrows.
+        if (guessInput && guessInput.isFocused)
+        {
+            int end = guessInput.text?.Length ?? 0;
+            guessInput.caretPosition = end;
+            guessInput.stringPosition = end;
+        }
+
+        // Only change columns at repeat speed.
+        if (Time.unscaledTime < _nextKeyboardColumnTime)
+            return;
+
+        int delta = left ? 1 : -1;
+
+        currentCols = Mathf.Clamp(currentCols + delta, minColsLarge, maxColsSmall);
+        PlayerPrefs.SetInt(KEY_COLS, currentCols);
+
+        if (cardSizeSlider)
+        {
+            float t = Mathf.InverseLerp(maxColsSmall, minColsLarge, currentCols);
+            cardSizeSlider.SetValueWithoutNotify(t);
+        }
+
+        ApplyColumnsToAllSections();
+
+        _nextKeyboardColumnTime = Time.unscaledTime + keyboardColumnRepeatDelay;
+    }
+
     IEnumerator TypeAndCommit(string s)
     {
         var commit = s + " ";
@@ -635,6 +730,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             elapsed += Time.deltaTime;
             if (timerText)
                 timerText.text = TimeSpan.FromSeconds(elapsed).ToString(@"hh\:mm\:ss");
+        }
+        if (!IsDialogOpen())
+        {
+            HandleKeyboardScroll();
+            HandleKeyboardColumns();
         }
     }
 
