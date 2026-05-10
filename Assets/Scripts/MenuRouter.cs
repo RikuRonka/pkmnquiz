@@ -55,4 +55,12 @@ public class MenuRouter : MonoBehaviour
         EnsureLoader();
         LoadingManager.Instance.LoadQuiz(gen, null);
     }
+
+    public void PlayMegaEvolutionsQuiz()
+    {
+        GameSettings.Generation = 10;
+        GameSettings.TypeFilter = null;
+        EnsureLoader();
+        LoadingManager.Instance.LoadQuiz(10, null);
+    }
 }

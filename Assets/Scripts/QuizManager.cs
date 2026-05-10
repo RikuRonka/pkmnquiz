@@ -762,7 +762,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return typeMegaPick;
             }
 
-            if (generation == 6 && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
+            if ((generation == 0 || generation == 10) && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
                 return megaPick;
             if (
                 (generation == 8 || generation == 0)
@@ -819,7 +819,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         {
             int baseId = guess.baseId != 0 ? guess.baseId : guess.id;
 
-            if (generation == 6 && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
+            if ((generation == 0 || generation == 10) && megaSlotPickByBase.TryGetValue(baseId, out var megaPick))
                 return megaPick;
 
             if (
@@ -885,7 +885,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private bool TryAcceptMegaByBaseName(string text, bool commit)
     {
-        if (generation != 6)
+        if (generation != 10)
             return false;
         if (string.IsNullOrWhiteSpace(text))
             return false;
@@ -1522,7 +1522,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
         }
 
-        if (generation == 6)
+        if (generation == 10)
         {
             megaKalosGen = Instantiate(sectionGroupPrefab, content);
             megaKalosGen.EnsureLayout();
@@ -1531,6 +1531,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             megaHoennGen = Instantiate(sectionGroupPrefab, content);
             megaHoennGen.EnsureLayout();
             megaHoennGen.SetTitle("Mega Evolution - Hoenn", false);
+
+            lumioseMegasSec = Instantiate(sectionGroupPrefab, content);
+            lumioseMegasSec.EnsureLayout();
+            lumioseMegasSec.SetTitle("Mega Evolution - Lumiose", false);
+
+            hyperspaceMegasSec = Instantiate(sectionGroupPrefab, content);
+            hyperspaceMegasSec.EnsureLayout();
+            hyperspaceMegasSec.SetTitle("Mega Evolution - Hyperspace", false);
         }
         if (generation == 7)
         {
@@ -1552,14 +1560,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             paldeaExpeditions = Instantiate(sectionGroupPrefab, content);
             paldeaExpeditions.EnsureLayout();
             paldeaExpeditions.SetTitle("Paldea Expeditions", false);
-
-            lumioseMegasSec = Instantiate(sectionGroupPrefab, content);
-            lumioseMegasSec.EnsureLayout();
-            lumioseMegasSec.SetTitle("Mega Evolution - Lumiose", false);
-
-            hyperspaceMegasSec = Instantiate(sectionGroupPrefab, content);
-            hyperspaceMegasSec.EnsureLayout();
-            hyperspaceMegasSec.SetTitle("Mega Evolution - Hyperspace", false);
         }
 
         var expeditionPool = new List<Pokemon>();
@@ -1571,13 +1571,26 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         foreach (var p in ordered)
         {
-            if (generation == 6 && Helpers.IsMega(p))
+            if (generation == 10)
             {
-                int baseKey = BaseIdOf(p);
-                if (!megaFormsByBase.TryGetValue(baseKey, out var list))
-                    megaFormsByBase[baseKey] = list = new List<Pokemon>();
-                list.Add(p);
-                continue;
+                if (Helpers.IsLumioseMega(p))
+                {
+                    lumioseMegaPool.Add(p);
+                    continue;
+                }
+                if (Helpers.IsHyperspaceMega(p))
+                {
+                    hyperspaceMegaPool.Add(p);
+                    continue;
+                }
+                if (Helpers.IsMega(p))
+                {
+                    int baseKey = BaseIdOf(p);
+                    if (!megaFormsByBase.TryGetValue(baseKey, out var list))
+                        megaFormsByBase[baseKey] = list = new List<Pokemon>();
+                    list.Add(p);
+                    continue;
+                }
             }
             if (generation == 7 && Helpers.IsAlolaUnknown(p))
             {
@@ -1602,18 +1615,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 continue;
             }
 
-            if (generation == 9 && Helpers.IsLumioseMega(p))
-            {
-                lumioseMegaPool.Add(p);
-                continue;
-            }
-
-            if (generation == 9 && Helpers.IsHyperspaceMega(p))
-            {
-                hyperspaceMegaPool.Add(p);
-                continue;
-            }
-
             var card = Instantiate(cardPrefab, main.gridRoot);
             card.ClearEndState();
             card.Bind(p);
@@ -1622,7 +1623,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             _hintShadowOrder.Add(p.id);
         }
 
-        if (generation == 6 && (megaKalosGen != null || megaHoennGen != null))
+        if (generation == 10 && (megaKalosGen != null || megaHoennGen != null))
         {
             var rng = new System.Random();
 
@@ -1650,7 +1651,88 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 megaSlotPickByBase[baseId] = pick;
                 megaCardByBase[baseId] = card;
                 cardById[pick.id] = card;
+                pokemonById[pick.id] = pick;
                 _hintShadowOrder.Add(pick.id);
+            }
+        }
+
+        if (generation == 10 && lumioseMegasSec != null)
+        {
+            foreach (var p in lumioseMegaPool.OrderBy(x => x.id))
+            {
+                var c = Instantiate(cardPrefab, lumioseMegasSec.gridRoot);
+                c.ClearEndState();
+                c.Bind(p);
+                cardById[p.id] = c;
+                pokemonById[p.id] = p;
+                _hintShadowOrder.Add(p.id);
+
+                int baseId = p.baseId != 0 ? p.baseId : p.id;
+                lumiosePickByBase[baseId] = p;
+                lumioseCardByBase[baseId] = c;
+
+                var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
+                var baseName = baseMon?.name ?? BaseNameFrom(p.name);
+
+                AddKey(lumioseByBaseName, p.name, baseId);
+                if (p.aliases != null)
+                    foreach (var a in p.aliases)
+                        AddKey(lumioseByBaseName, a, baseId);
+
+                if (!string.IsNullOrEmpty(baseName))
+                {
+                    AddKey(lumioseByBaseName, baseName, baseId);
+                    AddKey(lumioseByBaseName, $"{baseName} mega", baseId);
+                    AddKey(lumioseByBaseName, $"mega {baseName}", baseId);
+                }
+
+                if (baseMon?.aliases != null)
+                    foreach (var a in baseMon.aliases)
+                    {
+                        AddKey(lumioseByBaseName, a, baseId);
+                        AddKey(lumioseByBaseName, $"{a} mega", baseId);
+                        AddKey(lumioseByBaseName, $"mega {a}", baseId);
+                    }
+            }
+        }
+
+        if (generation == 10 && hyperspaceMegasSec != null)
+        {
+            foreach (var p in hyperspaceMegaPool.OrderBy(x => x.id))
+            {
+                var c = Instantiate(cardPrefab, hyperspaceMegasSec.gridRoot);
+                c.ClearEndState();
+                c.Bind(p);
+                cardById[p.id] = c;
+                pokemonById[p.id] = p;
+                _hintShadowOrder.Add(p.id);
+
+                int baseId = p.baseId != 0 ? p.baseId : p.id;
+                hyperspacePickByBase[baseId] = p;
+                hyperspaceCardByBase[baseId] = c;
+
+                var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
+                var baseName = baseMon?.name ?? BaseNameFrom(p.name);
+
+                AddKey(hyperspaceByBaseName, p.name, baseId);
+                if (p.aliases != null)
+                    foreach (var a in p.aliases)
+                        AddKey(hyperspaceByBaseName, a, baseId);
+
+                if (!string.IsNullOrEmpty(baseName))
+                {
+                    AddKey(hyperspaceByBaseName, baseName, baseId);
+                    AddKey(hyperspaceByBaseName, $"{baseName} mega", baseId);
+                    AddKey(hyperspaceByBaseName, $"mega {baseName}", baseId);
+                }
+
+                if (baseMon?.aliases != null)
+                    foreach (var a in baseMon.aliases)
+                    {
+                        AddKey(hyperspaceByBaseName, a, baseId);
+                        AddKey(hyperspaceByBaseName, $"{a} mega", baseId);
+                        AddKey(hyperspaceByBaseName, $"mega {a}", baseId);
+                    }
             }
         }
 
@@ -1796,6 +1878,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             megaHoennGen.SetCardCount(megaHoennGen.gridRoot.childCount);
             FitSection(megaHoennGen);
         }
+        if (lumioseMegasSec != null)
+        {
+            lumioseMegasSec.SetCardCount(lumioseMegasSec.gridRoot.childCount);
+            FitSection(lumioseMegasSec);
+        }
+        if (hyperspaceMegasSec != null)
+        {
+            hyperspaceMegasSec.SetCardCount(hyperspaceMegasSec.gridRoot.childCount);
+            FitSection(hyperspaceMegasSec);
+        }
         if (alolaUnknown != null)
         {
             foreach (var p in alolaUnknownPool.OrderBy(x => DexOrder.GetIndex(x)))
@@ -1826,90 +1918,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             hisuiSec.SetCardCount(hisuiSec.gridRoot.childCount);
             FitSection(hisuiSec);
         }
-        if (lumioseMegasSec != null)
-        {
-            foreach (var p in lumioseMegaPool.OrderBy(x => x.id))
-            {
-                var c = Instantiate(cardPrefab, lumioseMegasSec.gridRoot);
-                c.ClearEndState();
-                c.Bind(p);
-                cardById[p.id] = c;
-                pokemonById[p.id] = p;
-                _hintShadowOrder.Add(p.id);
 
-                int baseId = p.baseId != 0 ? p.baseId : p.id;
-                lumiosePickByBase[baseId] = p;
-                lumioseCardByBase[baseId] = c;
-
-                var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
-                var baseName = baseMon?.name ?? BaseNameFrom(p.name);
-
-                AddKey(lumioseByBaseName, p.name, baseId);
-                if (p.aliases != null)
-                    foreach (var a in p.aliases)
-                        AddKey(lumioseByBaseName, a, baseId);
-
-                if (!string.IsNullOrEmpty(baseName))
-                {
-                    AddKey(lumioseByBaseName, baseName, baseId);
-                    AddKey(lumioseByBaseName, $"{baseName} mega", baseId);
-                    AddKey(lumioseByBaseName, $"mega {baseName}", baseId);
-                }
-
-                if (baseMon?.aliases != null)
-                    foreach (var a in baseMon.aliases)
-                    {
-                        AddKey(lumioseByBaseName, a, baseId);
-                        AddKey(lumioseByBaseName, $"{a} mega", baseId);
-                        AddKey(lumioseByBaseName, $"mega {a}", baseId);
-                    }
-            }
-
-            lumioseMegasSec.SetCardCount(lumioseMegasSec.gridRoot.childCount);
-            FitSection(lumioseMegasSec);
-        }
-        if (hyperspaceMegasSec != null)
-        {
-            foreach (var p in hyperspaceMegaPool.OrderBy(x => x.id))
-            {
-                var c = Instantiate(cardPrefab, hyperspaceMegasSec.gridRoot);
-                c.ClearEndState();
-                c.Bind(p);
-                cardById[p.id] = c;
-                pokemonById[p.id] = p;
-                _hintShadowOrder.Add(p.id);
-
-                int baseId = p.baseId != 0 ? p.baseId : p.id;
-                hyperspacePickByBase[baseId] = p;
-                hyperspaceCardByBase[baseId] = c;
-
-                var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
-                var baseName = baseMon?.name ?? BaseNameFrom(p.name);
-
-                AddKey(hyperspaceByBaseName, p.name, baseId);
-                if (p.aliases != null)
-                    foreach (var a in p.aliases)
-                        AddKey(hyperspaceByBaseName, a, baseId);
-
-                if (!string.IsNullOrEmpty(baseName))
-                {
-                    AddKey(hyperspaceByBaseName, baseName, baseId);
-                    AddKey(hyperspaceByBaseName, $"{baseName} mega", baseId);
-                    AddKey(hyperspaceByBaseName, $"mega {baseName}", baseId);
-                }
-
-                if (baseMon?.aliases != null)
-                    foreach (var a in baseMon.aliases)
-                    {
-                        AddKey(hyperspaceByBaseName, a, baseId);
-                        AddKey(hyperspaceByBaseName, $"{a} mega", baseId);
-                        AddKey(hyperspaceByBaseName, $"mega {a}", baseId);
-                    }
-            }
-
-            hyperspaceMegasSec.SetCardCount(hyperspaceMegasSec.gridRoot.childCount);
-            FitSection(hyperspaceMegasSec);
-        }
         RebuildHintShadowOrderFromSections();
         UpdateScore();
         bool noSubSections =
@@ -2271,6 +2280,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 && !Helpers.IsHyperspaceMega(p)
             );
         }
+        else if (generation == 10)
+        {
+            // Mega Evolutions only
+            all = all.Where(p =>
+                (Helpers.IsMega(p) || Helpers.IsLumioseMega(p) || Helpers.IsHyperspaceMega(p))
+                && !Helpers.IsGmax(p)
+            );
+        }
         else if (generation > 0)
         {
             var genSet = all.Where(p => p.generation == generation);
@@ -2278,12 +2295,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
             if (generation == 6)
             {
-                var megasDistinctByBase = all.Where(p =>
-                        Helpers.IsMega(p) && !Helpers.IsLumioseMega(p)
-                    )
-                    .GroupBy(p => p.baseId != 0 ? p.baseId : p.id)
-                    .Select(g => g.First());
-                extras = megasDistinctByBase;
+                // Exclude megas from Kalos
+                genSet = genSet.Where(p => 
+                    !Helpers.IsMega(p) 
+                    && !Helpers.IsLumioseMega(p) 
+                    && !Helpers.IsHyperspaceMega(p)
+                );
+                extras = Enumerable.Empty<Pokemon>();
             }
             else if (generation == 8)
             {
@@ -2294,11 +2312,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             }
             else if (generation == 9)
             {
-                extras = all.Where(p =>
-                    Helpers.IsPaldeaExpedition(p)
-                    || Helpers.IsLumioseMega(p)
-                    || Helpers.IsHyperspaceMega(p)
-                );
+                // Only Paldea Expeditions, no Lumiosee Megas or Hyperspace Megas
+                extras = all.Where(p => Helpers.IsPaldeaExpedition(p));
             }
 
             all = genSet.Concat(extras).Distinct();
@@ -2324,7 +2339,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         List<Pokemon> ordered;
 
-        if (generation == 0)
+        if (generation == 0 || generation == 10)
         {
             ordered = all.OrderBy(p => p.generation).ThenBy(p => DexOrder.GetIndex(p)).ToList();
         }

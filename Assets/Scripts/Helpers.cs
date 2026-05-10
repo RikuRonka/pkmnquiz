@@ -171,6 +171,7 @@ public static class Helpers
             7 => "Alola (Gen 7)",
             8 => "Galar (Gen 8)",
             9 => "Paldea (Gen 9)",
+            10 => "Mega Evolutions",
             _ => $"Generation {generation}",
         };
     }
