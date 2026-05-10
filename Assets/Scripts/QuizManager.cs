@@ -166,6 +166,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void Awake()
     {
+        Application.runInBackground = true;
         PokemonDatabase.Instance.LoadIfNeeded();
         var dupes = PokemonDatabase
             .Instance.All()
@@ -2309,7 +2310,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
         else if (generation > 0)
         {
-            var genSet = all.Where(p => p.generation == generation);
+            var genSet = all.Where(p =>
+                p.generation == generation
+                && !Helpers.IsMega(p)
+                && !Helpers.IsLumioseMega(p)
+                && !Helpers.IsHyperspaceMega(p)
+            );
             IEnumerable<Pokemon> extras = Enumerable.Empty<Pokemon>();
 
             if (generation == 6)
@@ -2329,7 +2335,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             }
             else if (generation == 9)
             {
-                // Only Paldea Expeditions, no Lumiosee Megas or Hyperspace Megas
+                // Only Paldea Expeditions, no Lumiose Megas or Hyperspace Megas
                 extras = all.Where(p => Helpers.IsPaldeaExpedition(p));
             }
 
