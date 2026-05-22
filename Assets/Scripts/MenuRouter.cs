@@ -28,16 +28,24 @@ public class MenuRouter : MonoBehaviour
         lm.transform.SetParent(null, false);
     }
 
-    public void PlayFullQuiz()
+    public async void PlayFullQuiz()
     {
+        if (await QuizNetworkRuntime.TryHandleMenuQuizSelectionAsync(0))
+            return;
+
+        QuizNetworkRuntime.Shutdown();
         EnsureLoader();
         GameSettings.Generation = 0;
         GameSettings.TypeFilter = null;
         LoadingManager.Instance.LoadQuiz(0, null);
     }
 
-    public void PlayTypeQuiz(string typeKey)
+    public async void PlayTypeQuiz(string typeKey)
     {
+        if (await QuizNetworkRuntime.TryHandleMenuQuizSelectionAsync(0, typeKey))
+            return;
+
+        QuizNetworkRuntime.Shutdown();
         GameSettings.TypeBgColor = GameObject
             .Find(typeKey.FirstCharacterToUpper())
             .GetComponent<Button>()
@@ -48,16 +56,24 @@ public class MenuRouter : MonoBehaviour
         LoadingManager.Instance.LoadQuiz(0, typeKey);
     }
 
-    public void PlayGenQuiz(int gen)
+    public async void PlayGenQuiz(int gen)
     {
+        if (await QuizNetworkRuntime.TryHandleMenuQuizSelectionAsync(gen))
+            return;
+
+        QuizNetworkRuntime.Shutdown();
         GameSettings.Generation = gen;
         GameSettings.TypeFilter = null;
         EnsureLoader();
         LoadingManager.Instance.LoadQuiz(gen, null);
     }
 
-    public void PlayMegaEvolutionsQuiz()
+    public async void PlayMegaEvolutionsQuiz()
     {
+        if (await QuizNetworkRuntime.TryHandleMenuQuizSelectionAsync(10))
+            return;
+
+        QuizNetworkRuntime.Shutdown();
         GameSettings.Generation = 10;
         GameSettings.TypeFilter = null;
         EnsureLoader();

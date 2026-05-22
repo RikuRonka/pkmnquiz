@@ -61,8 +61,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<int, PokemonCard> cardById = new();
     private readonly HashSet<int> solved = new();
     private readonly HashSet<int> hinted = new();
+    public IReadOnlyCollection<int> SolvedIds => solved;
+    public int CurrentQuizGeneration => generation;
+    public string CurrentTypeFilter => selectedType;
+    public float ElapsedSeconds => elapsed;
+    public bool IsQuizRunning => running;
+
     private float elapsed;
     private bool running;
+    private bool _processingNetworkGuess;
+    private bool _suppressInputRefocus;
     public ScrollRect scrollRect;
 
     public Toast toast;
@@ -245,7 +253,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (pauseMenu)
         {
-            pauseMenu.OnResume = ResumeFromPause;
+            pauseMenu.OnResume = OnPauseMenuResume;
         }
         EnsureUIContracts();
     }
@@ -274,6 +282,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (IsDialogOpen())
             return;
 
+        if (QuizMultiplayerCoordinator.RequestRevealShadow())
+            return;
+
         RevealNextShadow();
     }
 
@@ -297,10 +308,20 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!running)
             return;
 
+        ShowPauseUi();
+    }
+
+    void ShowPauseUi()
+    {
+        if (!pauseMenu)
+            return;
+
         running = false;
-        guessInput.DeactivateInputField();
         if (guessInput)
+        {
+            guessInput.DeactivateInputField();
             guessInput.interactable = false;
+        }
 
         pauseMenu.SetElapsed(System.TimeSpan.FromSeconds(elapsed));
 
@@ -310,7 +331,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     void ResumeFromPause()
     {
-        pauseMenu.Hide();
+        if (pauseMenu)
+            pauseMenu.Hide();
         SetGridVisible(true);
 
         if (!IsComplete())
@@ -323,8 +345,19 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
+    void OnPauseMenuResume()
+    {
+        if (QuizMultiplayerCoordinator.RequestPause(paused: false))
+            return;
+
+        ResumeFromPause();
+    }
+
     void RefocusGuess()
     {
+        if (_suppressInputRefocus)
+            return;
+
         if (!guessInput)
             return;
 
@@ -343,6 +376,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         if (!pauseMenu)
             return;
+
+        if (QuizMultiplayerCoordinator.RequestPause(!pauseMenu.IsShowing))
+            return;
+
         if (pauseMenu.IsShowing)
             ResumeFromPause();
         else
@@ -727,9 +764,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (!IsDialogOpen() && running)
         {
-            elapsed += Time.deltaTime;
-            if (timerText)
-                timerText.text = TimeSpan.FromSeconds(elapsed).ToString(@"hh\:mm\:ss");
+            if (!QuizMultiplayerCoordinator.IsClientOnly)
+                elapsed += Time.deltaTime;
+
+            SetTimerText();
         }
         if (!IsDialogOpen())
         {
@@ -771,10 +809,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (any)
             UpdateScore();
 
-        guessInput.SetTextWithoutNotify(string.Empty);
-        SetSpellingHelp(null);
-        guessInput.ActivateInputField();
-        guessInput.Select();
+        RefocusGuess();
 
         if (IsComplete())
         {
@@ -828,9 +863,18 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     public void OnResetClicked()
     {
         DefocusUI();
+
+        void DoReset()
+        {
+            if (QuizMultiplayerCoordinator.RequestReset())
+                return;
+
+            ResetGame();
+        }
+
         if (!confirmDialog)
         {
-            ResetGame();
+            DoReset();
             return;
         }
 
@@ -839,7 +883,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             message: "This will clear all revealed Pokémon and restart the timer.",
             confirmLabel: "Reset",
             cancelLabel: "Cancel",
-            confirmAction: ResetGame
+            confirmAction: DoReset
         );
     }
 
@@ -950,9 +994,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         DefocusUI();
 
-        static void LeaveNow()
+        void LeaveNow()
         {
+            if (QuizMultiplayerCoordinator.RequestReturnToMenu())
+                return;
+
             LoadingManager.Instance?.CancelLoad();
+            QuizNetworkRuntime.Shutdown();
             SceneManager.LoadScene("MainMenu");
         }
 
@@ -1044,9 +1092,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         UpdateScore();
-        guessInput.SetTextWithoutNotify(string.Empty);
-        SetSpellingHelp(null);
         RefocusGuess();
+        ShowFinishedIfComplete();
 
         return true;
     }
@@ -1082,7 +1129,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         _buildToken++;
         _hintUsedCount = 0;
         _shadowUsedCount = 0;
-        StopAllCoroutines();
+        CancelGridTransientCoroutines();
         if (!scrollRect || !scrollRect.viewport)
         {
             Debug.LogError("ScrollRect/Viewport missing");
@@ -2123,6 +2170,17 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
+    private void CancelGridTransientCoroutines()
+    {
+        _scrollToken++;
+
+        if (_scrollRoutine != null)
+        {
+            StopCoroutine(_scrollRoutine);
+            _scrollRoutine = null;
+        }
+    }
+
     private bool TryAcceptGmaxByBaseName(string text, bool commit)
     {
         if ((generation != 8 && generation != 0) || string.IsNullOrWhiteSpace(text))
@@ -2197,7 +2255,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
-    private void RevealNextShadow()
+    private int RevealNextShadow()
     {
         Pokemon pick = null;
         int pickId = 0;
@@ -2235,15 +2293,17 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         if (pick == null || pickId == 0)
-            return;
-
-        shadowed.Add(pickId);
+            return 0;
 
         if (cardById.TryGetValue(pickId, out var targetCard) && targetCard)
         {
+            shadowed.Add(pickId);
             targetCard.SetShadowMode(true);
             _shadowUsedCount++;
+            return pickId;
         }
+
+        return 0;
     }
 
     private void FitSection(SectionGroup grp)
@@ -2349,6 +2409,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void RevealTypeHintForOne()
     {
+        if (QuizMultiplayerCoordinator.RequestRevealType())
+            return;
+
+        RevealTypeHintForOneInternal();
+    }
+
+    private int RevealTypeHintForOneInternal()
+    {
         int pickId = 0;
 
         foreach (var id in _hintShadowOrder)
@@ -2364,21 +2432,29 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         if (pickId == 0)
-            return;
+            return 0;
 
-        hinted.Add(pickId);
+        return ApplyTypeHintToId(pickId) ? pickId : 0;
+    }
+
+    private bool ApplyTypeHintToId(int pickId)
+    {
+        if (pickId == 0 || hinted.Contains(pickId))
+            return false;
 
         if (!cardById.TryGetValue(pickId, out var card) || card == null)
         {
             Debug.LogWarning($"[Hint] No card for id {pickId}.");
-            return;
+            return false;
         }
 
         if (!pokemonById.TryGetValue(pickId, out var p) || p == null || p.types == null)
-            return;
+            return false;
 
+        hinted.Add(pickId);
         card.ShowTypeHint(p.types);
         _hintUsedCount++;
+        return true;
     }
 
     private void BuildTargetList()
@@ -2512,8 +2588,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private void ResetTimerOnly()
     {
         elapsed = 0f;
-        if (timerText)
-            timerText.text = "00:00:00";
+        SetTimerText();
     }
 
     private bool HasInQuizContinuation(string text)
@@ -2551,6 +2626,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void ResetGame()
     {
+        if (pauseMenu && pauseMenu.IsShowing)
+            pauseMenu.Hide();
+        SetGridVisible(true);
+
         if (giveUpBtn)
             giveUpBtn.interactable = true;
 
@@ -2577,6 +2656,231 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         int total = cardById.Count;
         if (scoreText)
             scoreText.text = $"{solved.Count} / {total}";
+    }
+
+    private void ApplyMultiplayerUiState()
+    {
+        if (!QuizNetworkRuntime.IsMultiplayerActive && !GameSettings.IsMultiplayer)
+            return;
+
+        bool canUseQuizActions = running || (pauseMenu && pauseMenu.IsShowing);
+
+        if (giveUpBtn)
+            giveUpBtn.interactable = canUseQuizActions;
+        if (hintTypeBtn)
+            hintTypeBtn.interactable = canUseQuizActions;
+        if (shadowsBtn)
+            shadowsBtn.interactable = canUseQuizActions;
+        if (resetBtn)
+            resetBtn.interactable = true;
+        if (pauseBtn)
+            pauseBtn.interactable = canUseQuizActions;
+        if (testBtn)
+            testBtn.interactable = canUseQuizActions;
+    }
+
+    public List<int> AcceptNetworkGuessOnServer(string currentText, bool suppressLocalInput)
+    {
+        if (!QuizNetworkRuntime.IsMultiplayerServer)
+            return new List<int>();
+        if (string.IsNullOrWhiteSpace(currentText))
+            return new List<int>();
+
+        var before = solved.ToHashSet();
+        bool wasProcessing = _processingNetworkGuess;
+        bool wasSuppressing = _suppressInputRefocus;
+
+        _processingNetworkGuess = true;
+        _suppressInputRefocus = suppressLocalInput;
+
+        try
+        {
+            ProcessGuessChanged(currentText);
+        }
+        finally
+        {
+            _processingNetworkGuess = wasProcessing;
+            _suppressInputRefocus = wasSuppressing;
+        }
+
+        return solved.Where(id => !before.Contains(id)).ToList();
+    }
+
+    public void ApplyNetworkState(
+        int networkGeneration,
+        string networkTypeFilter,
+        IReadOnlyList<int> solvedIds,
+        float networkElapsed,
+        bool networkRunning
+    )
+    {
+        var normalizedType = string.IsNullOrWhiteSpace(networkTypeFilter)
+            ? null
+            : networkTypeFilter.Trim().ToLowerInvariant();
+
+        bool settingsChanged =
+            generation != networkGeneration
+            || !string.Equals(selectedType, normalizedType, StringComparison.OrdinalIgnoreCase);
+
+        if (settingsChanged)
+        {
+            generation = networkGeneration;
+            selectedType = normalizedType;
+            GameSettings.Generation = string.IsNullOrEmpty(normalizedType)
+                ? networkGeneration
+                : (int?)null;
+            GameSettings.TypeFilter = string.IsNullOrEmpty(normalizedType)
+                ? null
+                : new[] { normalizedType };
+
+            BuildTargetList();
+            RebuildGrid();
+            ApplyColumnsToAllSections();
+            Canvas.ForceUpdateCanvases();
+        }
+
+        elapsed = Mathf.Max(0f, networkElapsed);
+        running = networkRunning && !IsComplete();
+        SetTimerText();
+        ApplyNetworkSolvedIds(solvedIds, clearInput: false, playSound: false);
+        ApplyMultiplayerUiState();
+    }
+
+    public void ApplyNetworkSolvedIds(
+        IReadOnlyList<int> solvedIds,
+        bool clearInput,
+        bool playSound
+    )
+    {
+        if (solvedIds == null || solvedIds.Count == 0)
+        {
+            if (clearInput)
+                RefocusGuess();
+            return;
+        }
+
+        bool anyNew = false;
+
+        foreach (var id in solvedIds)
+        {
+            if (solved.Contains(id))
+                continue;
+            if (!cardById.TryGetValue(id, out var card))
+                continue;
+
+            solved.Add(id);
+            card.Reveal();
+
+            if (pokemonById.TryGetValue(id, out var p))
+            {
+                MaybeScrollTo(p);
+                OnPokemonSolved?.Invoke(p);
+            }
+
+            anyNew = true;
+        }
+
+        if (anyNew)
+        {
+            if (playSound)
+                PlayCorrect();
+            UpdateScore();
+        }
+
+        if (clearInput)
+            RefocusGuess();
+
+        ShowFinishedIfComplete();
+    }
+
+    public void ApplyNetworkTimer(float networkElapsed, bool networkRunning)
+    {
+        elapsed = Mathf.Max(0f, networkElapsed);
+        running = networkRunning && !IsComplete();
+        SetTimerText();
+
+        if (guessInput)
+            guessInput.interactable = running;
+    }
+
+    public void ApplyNetworkPause(bool paused, float networkElapsed)
+    {
+        elapsed = Mathf.Max(0f, networkElapsed);
+        SetTimerText();
+
+        if (paused)
+        {
+            if (pauseMenu && pauseMenu.IsShowing)
+                return;
+
+            ShowPauseUi();
+            return;
+        }
+
+        ResumeFromPause();
+    }
+
+    public int ApplyNetworkRevealShadow()
+    {
+        return RevealNextShadow();
+    }
+
+    public void ApplyNetworkShadow(int id)
+    {
+        if (id == 0 || solved.Contains(id) || shadowed.Contains(id))
+            return;
+        if (!cardById.TryGetValue(id, out var card) || !card)
+            return;
+
+        shadowed.Add(id);
+        card.SetShadowMode(true);
+        _shadowUsedCount++;
+    }
+
+    public int ApplyNetworkRevealType()
+    {
+        return RevealTypeHintForOneInternal();
+    }
+
+    public void ApplyNetworkTypeHint(int id)
+    {
+        ApplyTypeHintToId(id);
+    }
+
+    public void ApplyNetworkReset()
+    {
+        ResetGame();
+    }
+
+    public void ApplyNetworkGiveUp()
+    {
+        RevealAll();
+    }
+
+    private void SetTimerText()
+    {
+        if (timerText)
+            timerText.text = TimeSpan.FromSeconds(elapsed).ToString(@"hh\:mm\:ss");
+    }
+
+    private void ShowFinishedIfComplete()
+    {
+        if (!IsComplete())
+            return;
+
+        running = false;
+        if (guessInput)
+            guessInput.interactable = false;
+
+        if (finishedDialog)
+            finishedDialog.Show(
+                guessed: solved.Count,
+                total: cardById.Count,
+                elapsed: TimeSpan.FromSeconds(elapsed),
+                gaveUp: false,
+                hintsUsed: _hintUsedCount,
+                shadowsUsed: _shadowUsedCount
+            );
     }
 
     void SetSpellingHelp(string name)
@@ -2752,6 +3056,38 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     }
 
     private void OnGuessChanged(string currentText)
+    {
+        if (!_processingNetworkGuess && QuizMultiplayerCoordinator.IsActive)
+        {
+            HandleMultiplayerLocalGuess(currentText);
+            return;
+        }
+
+        ProcessGuessChanged(currentText);
+    }
+
+    private void HandleMultiplayerLocalGuess(string currentText)
+    {
+        if (!running || IsDialogOpen())
+            return;
+        if (string.IsNullOrWhiteSpace(currentText))
+            return;
+
+        bool commit = char.IsWhiteSpace(currentText[^1]);
+        string raw = commit ? currentText.TrimEnd() : currentText;
+
+        if (_spellingHelpEnabled)
+            UpdateSpellingHelp(raw, commit);
+        else
+            SetSpellingHelp(null);
+
+        QuizMultiplayerCoordinator.SubmitGuess(currentText);
+
+        if (commit)
+            RefocusGuess();
+    }
+
+    private void ProcessGuessChanged(string currentText)
     {
         if (!running || IsDialogOpen())
             return;
@@ -3078,10 +3414,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (any)
             UpdateScore();
 
-        guessInput.SetTextWithoutNotify(string.Empty);
-        SetSpellingHelp(null);
-        guessInput.ActivateInputField();
-        guessInput.Select();
+        RefocusGuess();
 
         if (IsComplete())
         {
@@ -3119,6 +3452,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void PauseDueToFocusLoss()
     {
+        if (QuizNetworkRuntime.IsMultiplayerActive)
+            return;
+
         if (!_pauseOnFocusLossEnabled)
             return;
 
@@ -3277,6 +3613,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         void DoGiveUp()
         {
             DefocusUI();
+            if (QuizMultiplayerCoordinator.RequestGiveUp())
+                return;
+
             RevealAll();
             if (giveUpBtn)
                 giveUpBtn.interactable = false;
@@ -3371,6 +3710,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         Canvas.ForceUpdateCanvases();
 
         UpdateScore();
+        ApplyMultiplayerUiState();
+        QuizMultiplayerCoordinator.Attach(this);
         Step(1.00f);
         yield return null;
     }
