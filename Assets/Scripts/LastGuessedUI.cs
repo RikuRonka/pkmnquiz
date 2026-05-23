@@ -34,13 +34,19 @@ public class LastGuessedUI : MonoBehaviour
             quizManager = FindFirstObjectByType<QuizManager>();
 
         if (quizManager)
+        {
             quizManager.OnPokemonSolved += HandleSolved;
+            quizManager.OnQuizReset += ClearUI;
+        }
     }
 
     private void OnDisable()
     {
         if (quizManager)
+        {
             quizManager.OnPokemonSolved -= HandleSolved;
+            quizManager.OnQuizReset -= ClearUI;
+        }
     }
 
     private void HandleSolved(Pokemon p)

@@ -16,4 +16,15 @@ public class PatchNotesView : MonoBehaviour
         if (notesText != null)
             notesText.text = patchNotes;
     }
+
+    void OnEnable()
+    {
+        transform.SetAsLastSibling();
+        MultiplayerMenuPanel.SetOverlayVisible(false);
+    }
+
+    void OnDisable()
+    {
+        MultiplayerMenuPanel.SetOverlayVisible(true);
+    }
 }

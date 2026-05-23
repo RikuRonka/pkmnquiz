@@ -16,6 +16,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private Image backgroundImage;
     public TMP_InputField guessInput;
     public event Action<Pokemon> OnPokemonSolved;
+    public event Action OnQuizReset;
 
     [SerializeField]
     TMP_Text spellingHelpText;
@@ -92,6 +93,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     [SerializeField]
     Toggle alwaysScrollToggle;
     Coroutine _scrollRoutine;
+    Coroutine _scrollResetRoutine;
     int _scrollToken;
     private readonly List<SectionGroup> _sections = new();
     int _hintUsedCount;
@@ -2097,6 +2099,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             && paldeaExpeditions == null;
 
         main.SetHeaderGap(noSubSections);
+        QueueResetScrollToTop();
     }
 
     bool HasTypeFilter => !string.IsNullOrEmpty(selectedType);
@@ -2179,6 +2182,71 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             StopCoroutine(_scrollRoutine);
             _scrollRoutine = null;
         }
+
+        if (_scrollResetRoutine != null)
+        {
+            StopCoroutine(_scrollResetRoutine);
+            _scrollResetRoutine = null;
+        }
+    }
+
+    private void QueueResetScrollToTop()
+    {
+        if (!scrollRect || !scrollRect.content)
+            return;
+
+        if (_scrollResetRoutine != null)
+        {
+            StopCoroutine(_scrollResetRoutine);
+            _scrollResetRoutine = null;
+        }
+
+        ResetScrollToTopImmediate();
+
+        if (isActiveAndEnabled)
+            _scrollResetRoutine = StartCoroutine(CoResetScrollToTop(_buildToken));
+    }
+
+    private IEnumerator CoResetScrollToTop(int token)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            yield return null;
+            if (token != _buildToken)
+                yield break;
+
+            Canvas.ForceUpdateCanvases();
+        }
+
+        foreach (var fit in _fits)
+        {
+            if (fit)
+                fit.Recalculate();
+        }
+
+        if (scrollRect && scrollRect.content)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(scrollRect.content);
+
+        Canvas.ForceUpdateCanvases();
+
+        if (token == _buildToken)
+            ResetScrollToTopImmediate();
+
+        _scrollResetRoutine = null;
+    }
+
+    private void ResetScrollToTopImmediate()
+    {
+        if (!scrollRect || !scrollRect.content)
+            return;
+
+        scrollRect.StopMovement();
+        scrollRect.velocity = Vector2.zero;
+
+        var anchored = scrollRect.content.anchoredPosition;
+        anchored.y = 0f;
+        scrollRect.content.anchoredPosition = anchored;
+        scrollRect.verticalNormalizedPosition = 1f;
     }
 
     private bool TryAcceptGmaxByBaseName(string text, bool commit)
@@ -2626,6 +2694,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void ResetGame()
     {
+        OnQuizReset?.Invoke();
+
         if (pauseMenu && pauseMenu.IsShowing)
             pauseMenu.Hide();
         SetGridVisible(true);
@@ -2872,6 +2942,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (guessInput)
             guessInput.interactable = false;
 
+        ApplyEndStateCardBorders();
+
         if (finishedDialog)
             finishedDialog.Show(
                 guessed: solved.Count,
@@ -2881,6 +2953,21 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 hintsUsed: _hintUsedCount,
                 shadowsUsed: _shadowUsedCount
             );
+    }
+
+    public void RefreshMultiplayerFinishedDialog(bool gaveUp)
+    {
+        if (!QuizNetworkRuntime.IsMultiplayerActive || !finishedDialog || !finishedDialog.IsShowing)
+            return;
+
+        finishedDialog.Show(
+            guessed: solved.Count,
+            total: cardById.Count,
+            elapsed: TimeSpan.FromSeconds(elapsed),
+            gaveUp: gaveUp,
+            hintsUsed: _hintUsedCount,
+            shadowsUsed: _shadowUsedCount
+        );
     }
 
     void SetSpellingHelp(string name)
@@ -3642,14 +3729,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         foreach (var kv in cardById)
         {
-            int id = kv.Key;
             var card = kv.Value;
-
             card.Reveal();
-
-            bool guessed = guessedIds.Contains(id);
-            card.ShowEndState(guessed);
         }
+
+        ApplyEndStateCardBorders(guessedIds);
 
         UpdateScore();
         running = false;
@@ -3678,6 +3762,22 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         );
         Canvas.ForceUpdateCanvases();
         StartCoroutine(RecalculateAfterLayout());
+    }
+
+    private void ApplyEndStateCardBorders(HashSet<int> guessedIds = null)
+    {
+        guessedIds ??= new HashSet<int>(solved);
+
+        foreach (var kv in cardById)
+        {
+            int id = kv.Key;
+            var card = kv.Value;
+            if (!card)
+                continue;
+
+            bool guessed = guessedIds.Contains(id);
+            card.ShowEndState(QuizMultiplayerCoordinator.GetEndStateColorForPokemon(id, guessed));
+        }
     }
 
     IEnumerator RecalculateAfterLayout()

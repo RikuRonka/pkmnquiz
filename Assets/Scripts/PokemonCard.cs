@@ -192,6 +192,11 @@ public class PokemonCard : MonoBehaviour
 
     public void ShowEndState(bool guessed)
     {
+        ShowEndState(guessed ? BorderGreen : BorderRed);
+    }
+
+    public void ShowEndState(Color borderColor)
+    {
         if (background)
         {
             // keep the card itself transparent – we only want the border
@@ -204,7 +209,7 @@ public class PokemonCard : MonoBehaviour
         if (endStateOutline)
         {
             UpdateBorderThickness();
-            endStateOutline.effectColor = guessed ? BorderGreen : BorderRed;
+            endStateOutline.effectColor = borderColor;
             endStateOutline.enabled = true;
             endStateOutline.gameObject.GetComponent<Image>().enabled = true;
         }

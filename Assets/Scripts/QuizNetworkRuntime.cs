@@ -57,6 +57,7 @@ public static class QuizNetworkRuntime
         var manager = EnsureNetworkManager();
         if (manager.IsListening)
         {
+            QuizMultiplayerChatOverlay.ResetSession();
             manager.Shutdown();
             await Task.Yield();
         }
@@ -79,6 +80,7 @@ public static class QuizNetworkRuntime
         if (!manager.StartHost())
             throw new InvalidOperationException("Could not start Netcode host.");
 
+        QuizMultiplayerChatOverlay.Ensure();
         StatusChanged?.Invoke($"Co-op code: {JoinCode} | Players 1/2");
 
         return JoinCode;
@@ -162,6 +164,7 @@ public static class QuizNetworkRuntime
         var manager = EnsureNetworkManager();
         if (manager.IsListening)
         {
+            QuizMultiplayerChatOverlay.ResetSession();
             manager.Shutdown();
             await Task.Yield();
         }
@@ -186,6 +189,7 @@ public static class QuizNetworkRuntime
             throw new InvalidOperationException("Could not start Netcode client.");
 
         RegisterQuizSelectionHandler(manager);
+        QuizMultiplayerChatOverlay.Ensure();
         StatusChanged?.Invoke("Joined co-op. Waiting for host...");
     }
 
@@ -194,6 +198,8 @@ public static class QuizNetworkRuntime
         var manager = NetworkManager.Singleton;
         if (manager && manager.CustomMessagingManager != null)
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(QuizSelectionMessage);
+
+        QuizMultiplayerChatOverlay.ResetSession();
 
         bool wasHost = manager && manager.IsServer;
         string lobbyToDelete = LobbyId;
