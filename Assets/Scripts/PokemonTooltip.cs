@@ -190,7 +190,7 @@ public class PokemonTooltip : MonoBehaviour
             descriptionText.gameObject.SetActive(true);
             descriptionText.alignment = TextAlignmentOptions.TopLeft;
             descriptionText.textWrappingMode = TextWrappingModes.Normal;
-            descriptionText.text = FormatNotes(rawNotes);
+            descriptionText.text = FormatUpdateNotes(rawNotes);
         }
 
         float contentW = MeasureWideNotes(descriptionText);
@@ -262,6 +262,31 @@ public class PokemonTooltip : MonoBehaviour
         if (!s.StartsWith("• "))
             s = "• " + s;
         return s;
+    }
+
+    private static string FormatUpdateNotes(string notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes))
+            return "";
+
+        var s = notes.Replace("\r", "").Trim();
+        s = System.Text.RegularExpressions.Regex.Replace(
+            s,
+            @"^\s*v?\d+(?:\.\d+){1,3}\s*(?:[-:]\s*|\n+)",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
+
+        var parts = System.Text.RegularExpressions.Regex.Split(s, @"(?m)^\s*-\s+|\s+-\s+");
+        var cleaned = new System.Collections.Generic.List<string>();
+        foreach (var part in parts)
+        {
+            var item = System.Text.RegularExpressions.Regex.Replace(part.Trim(), @"\s*\n\s*", " ");
+            if (!string.IsNullOrWhiteSpace(item))
+                cleaned.Add("\u2022 " + item);
+        }
+
+        return string.Join("\n", cleaned);
     }
 
     void ApplyWidth(float preferred)
