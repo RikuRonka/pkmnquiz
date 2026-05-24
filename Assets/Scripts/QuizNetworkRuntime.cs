@@ -15,12 +15,14 @@ using UnityEngine.SceneManagement;
 
 public static class QuizNetworkRuntime
 {
-    private const int MaxRemotePlayers = 1;
+    private const int MaxRemotePlayers = 31;
+    private const int MinimumPlayersToStart = 2;
     private const string ConnectionType = "dtls";
     private const string LobbyCodeKey = "code";
     private const string LobbyRelayKey = "relay";
     private const string LobbyAppKey = "app";
     private const string LobbyAppValue = "pkmnquiz";
+    private const string LobbyHostNameKey = "host";
     private const string PlayerNameKey = "name";
     private const string QuizSelectionMessage = "pkmnquiz_quiz_selection";
     private const int QuizSelectionMessageSize = 256;
@@ -31,7 +33,8 @@ public static class QuizNetworkRuntime
     public static string RelayJoinCode { get; private set; }
     public static string PlayerNickname { get; private set; } = "Player";
     public static string LobbyId { get; private set; }
-    public static int RequiredPlayerCount => MaxRemotePlayers + 1;
+    public static int MaxPlayerCount => MaxRemotePlayers + 1;
+    public static int RequiredPlayerCount => MinimumPlayersToStart;
 
     public static bool IsMultiplayerActive =>
         GameSettings.IsMultiplayer && NetworkManager.Singleton && NetworkManager.Singleton.IsListening;
@@ -44,9 +47,39 @@ public static class QuizNetworkRuntime
 
     public static bool IsHostLobbyReady =>
         IsMultiplayerServer
-        && NetworkManager.Singleton.ConnectedClientsIds.Count >= RequiredPlayerCount;
+        && NetworkManager.Singleton.ConnectedClientsIds.Count >= MinimumPlayersToStart;
 
     public static event Action<string> StatusChanged;
+
+    public readonly struct AvailableLobby
+    {
+        public readonly string Code;
+        public readonly string HostName;
+        public readonly int PlayerCount;
+        public readonly int MaxPlayers;
+
+        public AvailableLobby(string code, string hostName, int playerCount, int maxPlayers)
+        {
+            Code = code ?? string.Empty;
+            HostName = NormalizeNickname(hostName);
+            PlayerCount = Mathf.Max(0, playerCount);
+            MaxPlayers = Mathf.Max(1, maxPlayers);
+        }
+    }
+
+    public readonly struct LobbyMemberInfo
+    {
+        public readonly string Id;
+        public readonly string Name;
+        public readonly bool IsLocalPlayer;
+
+        public LobbyMemberInfo(string id, string name, bool isLocalPlayer)
+        {
+            Id = id ?? string.Empty;
+            Name = NormalizeNickname(name);
+            IsLocalPlayer = isLocalPlayer;
+        }
+    }
 
     public static async Task<string> StartHostLobbyAsync(
         int generation,
@@ -81,7 +114,7 @@ public static class QuizNetworkRuntime
             throw new InvalidOperationException("Could not start Netcode host.");
 
         QuizMultiplayerChatOverlay.Ensure();
-        StatusChanged?.Invoke($"Co-op code: {JoinCode} | Players 1/2");
+        StatusChanged?.Invoke("Co-op lobby | Players: 1");
 
         return JoinCode;
     }
@@ -138,7 +171,7 @@ public static class QuizNetworkRuntime
         var manager = NetworkManager.Singleton;
         if (!manager || !manager.IsServer)
             throw new InvalidOperationException("Only the co-op host can start the quiz.");
-        if (manager.ConnectedClientsIds.Count < RequiredPlayerCount)
+        if (manager.ConnectedClientsIds.Count < MinimumPlayersToStart)
             throw new InvalidOperationException("Wait for another player before choosing a quiz.");
 
         ApplyQuizSettings(generation, typeFilter);
@@ -155,9 +188,9 @@ public static class QuizNetworkRuntime
     public static async Task StartClientAsync(string joinCode, string nickname = null)
     {
         if (string.IsNullOrWhiteSpace(joinCode))
-            throw new ArgumentException("Join code is required.", nameof(joinCode));
+            throw new ArgumentException("Lobby selection is required.", nameof(joinCode));
         if (!IsFourDigitCode(joinCode))
-            throw new ArgumentException("Join code must be 4 numbers.", nameof(joinCode));
+            throw new ArgumentException("Selected lobby is invalid.", nameof(joinCode));
 
         PlayerNickname = NormalizeNickname(nickname);
 
@@ -193,6 +226,68 @@ public static class QuizNetworkRuntime
         StatusChanged?.Invoke("Joined co-op. Waiting for host...");
     }
 
+    public static async Task<List<AvailableLobby>> FindAvailableLobbiesAsync(
+        string nickname = null,
+        int maxResults = 10
+    )
+    {
+        PlayerNickname = NormalizeNickname(nickname);
+        await EnsureServicesReadyAsync(BuildAuthProfile(ClientProfilePrefix, PlayerNickname));
+
+        var response = await QueryOpenPkmnquizLobbiesAsync(Mathf.Clamp(maxResults, 1, 25));
+        var results = new List<AvailableLobby>();
+        if (response?.Results == null)
+            return results;
+
+        foreach (var lobby in response.Results)
+        {
+            string code = GetLobbyData(lobby, LobbyCodeKey);
+            if (!IsFourDigitCode(code))
+                continue;
+
+            string hostName = GetLobbyData(lobby, LobbyHostNameKey);
+            if (string.IsNullOrWhiteSpace(hostName))
+                hostName = GetHostPlayerName(lobby);
+
+            int maxPlayers = lobby.MaxPlayers > 0 ? lobby.MaxPlayers : MaxPlayerCount;
+            int playerCount = Mathf.Clamp(maxPlayers - lobby.AvailableSlots, 0, maxPlayers);
+            if (playerCount == 0 && lobby.Players != null)
+                playerCount = Mathf.Clamp(lobby.Players.Count, 0, maxPlayers);
+
+            results.Add(new AvailableLobby(code, hostName, playerCount, maxPlayers));
+        }
+
+        return results;
+    }
+
+    public static async Task<List<LobbyMemberInfo>> GetCurrentLobbyMembersAsync()
+    {
+        var members = new List<LobbyMemberInfo>();
+        if (string.IsNullOrEmpty(LobbyId))
+            return members;
+
+        var lobby = await LobbyService.Instance.GetLobbyAsync(LobbyId);
+        if (lobby?.Players == null)
+            return members;
+
+        string localPlayerId = GetSignedInPlayerId();
+        foreach (var player in lobby.Players)
+        {
+            if (player == null)
+                continue;
+
+            string fallbackName =
+                player.Id == lobby.HostId ? GetLobbyData(lobby, LobbyHostNameKey) : "Player";
+            string name = GetPlayerName(player, fallbackName);
+            bool isLocalPlayer =
+                !string.IsNullOrEmpty(localPlayerId)
+                && string.Equals(player.Id, localPlayerId, StringComparison.Ordinal);
+            members.Add(new LobbyMemberInfo(player.Id, name, isLocalPlayer));
+        }
+
+        return members;
+    }
+
     public static void Shutdown()
     {
         var manager = NetworkManager.Singleton;
@@ -220,6 +315,22 @@ public static class QuizNetworkRuntime
         PlayerNickname = "Player";
         GameSettings.ClearMultiplayer();
         StatusChanged?.Invoke(null);
+    }
+
+    public static void ReturnToLobbyMenu()
+    {
+        if (!IsMultiplayerActive)
+        {
+            Shutdown();
+            return;
+        }
+
+        GameSettings.Generation = null;
+        GameSettings.TypeFilter = null;
+        GameSettings.TypeBgColor = null;
+        GameSettings.MultiplayerJoinCode = JoinCode ?? GameSettings.MultiplayerJoinCode;
+        GameSettings.MultiplayerNickname = PlayerNickname;
+        StatusChanged?.Invoke(CurrentLobbyStatus());
     }
 
     private static async Task<string> CreateLobbyForRelayAsync(string relayJoinCode, string nickname)
@@ -256,6 +367,10 @@ public static class QuizNetworkRuntime
                         )
                     },
                     {
+                        LobbyHostNameKey,
+                        new DataObject(DataObject.VisibilityOptions.Public, PlayerNickname)
+                    },
+                    {
                         LobbyRelayKey,
                         new DataObject(DataObject.VisibilityOptions.Member, relayJoinCode)
                     },
@@ -264,7 +379,7 @@ public static class QuizNetworkRuntime
 
             var lobby = await LobbyService.Instance.CreateLobbyAsync(
                 $"pkmnquiz-{visibleCode}",
-                MaxRemotePlayers + 1,
+                MaxPlayerCount,
                 options
             );
 
@@ -273,7 +388,7 @@ public static class QuizNetworkRuntime
             return visibleCode;
         }
 
-        throw new InvalidOperationException("Could not find an open 4-digit lobby code.");
+        throw new InvalidOperationException("Could not create an open co-op lobby.");
     }
 
     private static async Task<string> JoinLobbyAndGetRelayCodeAsync(string visibleCode, string nickname)
@@ -281,7 +396,7 @@ public static class QuizNetworkRuntime
         PlayerNickname = NormalizeNickname(nickname);
         var lobby = await FindLobbyByVisibleCodeAsync(visibleCode);
         if (lobby == null)
-            throw new InvalidOperationException("No co-op lobby found for that 4-digit code.");
+            throw new InvalidOperationException("That co-op lobby is no longer available.");
 
         var player = CreateLobbyPlayer(PlayerNickname);
         try
@@ -323,23 +438,72 @@ public static class QuizNetworkRuntime
 
     private static async Task<Lobby> FindLobbyByVisibleCodeAsync(string visibleCode)
     {
-        var response = await LobbyService.Instance.QueryLobbiesAsync(
-            new QueryLobbiesOptions
-            {
-                Count = 1,
-                Filters = new List<QueryFilter>
-                {
-                    new QueryFilter(QueryFilter.FieldOptions.S1, visibleCode, QueryFilter.OpOptions.EQ),
-                    new QueryFilter(QueryFilter.FieldOptions.S2, LobbyAppValue, QueryFilter.OpOptions.EQ),
-                    new QueryFilter(QueryFilter.FieldOptions.AvailableSlots, "0", QueryFilter.OpOptions.GT),
-                },
-            }
-        );
+        var response = await QueryOpenPkmnquizLobbiesAsync(1, visibleCode);
 
         if (response?.Results == null || response.Results.Count == 0)
             return null;
 
         return response.Results[0];
+    }
+
+    private static Task<QueryResponse> QueryOpenPkmnquizLobbiesAsync(
+        int count,
+        string visibleCode = null
+    )
+    {
+        var filters = new List<QueryFilter>
+        {
+            new QueryFilter(QueryFilter.FieldOptions.S2, LobbyAppValue, QueryFilter.OpOptions.EQ),
+            new QueryFilter(QueryFilter.FieldOptions.AvailableSlots, "0", QueryFilter.OpOptions.GT),
+        };
+
+        if (!string.IsNullOrWhiteSpace(visibleCode))
+            filters.Add(
+                new QueryFilter(
+                    QueryFilter.FieldOptions.S1,
+                    visibleCode.Trim(),
+                    QueryFilter.OpOptions.EQ
+                )
+            );
+
+        return LobbyService.Instance.QueryLobbiesAsync(
+            new QueryLobbiesOptions { Count = count, Filters = filters }
+        );
+    }
+
+    private static string GetLobbyData(Lobby lobby, string key)
+    {
+        if (lobby?.Data == null || string.IsNullOrEmpty(key))
+            return string.Empty;
+
+        return lobby.Data.TryGetValue(key, out var data) ? data?.Value ?? string.Empty : string.Empty;
+    }
+
+    private static string GetHostPlayerName(Lobby lobby)
+    {
+        if (lobby?.Players == null || lobby.Players.Count == 0)
+            return "Host";
+
+        Player host = null;
+        if (!string.IsNullOrEmpty(lobby.HostId))
+            host = lobby.Players.Find(player => player != null && player.Id == lobby.HostId);
+        host ??= lobby.Players[0];
+
+        return GetPlayerName(host, "Host");
+    }
+
+    private static string GetPlayerName(Player player, string fallback)
+    {
+        if (
+            player?.Data != null
+            && player.Data.TryGetValue(PlayerNameKey, out var nameData)
+            && !string.IsNullOrWhiteSpace(nameData?.Value)
+        )
+        {
+            return NormalizeNickname(nameData.Value);
+        }
+
+        return NormalizeNickname(fallback);
     }
 
     private static Player CreateLobbyPlayer(string nickname)
@@ -349,7 +513,7 @@ public static class QuizNetworkRuntime
             {
                 {
                     PlayerNameKey,
-                    new PlayerDataObject(PlayerDataObject.VisibilityOptions.Member, nickname)
+                    new PlayerDataObject(PlayerDataObject.VisibilityOptions.Public, nickname)
                 },
             }
         );
@@ -512,6 +676,19 @@ public static class QuizNetworkRuntime
             return "Unknown error";
 
         return string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message;
+    }
+
+    private static string CurrentLobbyStatus()
+    {
+        var manager = NetworkManager.Singleton;
+
+        if (IsMultiplayerServer && manager)
+        {
+            int players = manager.ConnectedClientsIds.Count;
+            return $"Co-op lobby | Players: {players}";
+        }
+
+        return "Joined co-op. Waiting for host...";
     }
 
     private static async Task EnsureServicesReadyAsync(string authProfile)

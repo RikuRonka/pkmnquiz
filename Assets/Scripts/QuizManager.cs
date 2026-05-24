@@ -76,6 +76,61 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     public Toast toast;
     private const int MIN_TOAST_LEN = 4;
+    public MultiplayerGuessFeedback LastNetworkGuessFeedback { get; private set; }
+
+    public enum MultiplayerGuessFeedbackKind
+    {
+        None = 0,
+        NotInQuiz = 1,
+        AlreadyGuessed = 2,
+    }
+
+    public readonly struct MultiplayerGuessFeedback
+    {
+        public readonly MultiplayerGuessFeedbackKind Kind;
+        public readonly int PokemonId;
+        public readonly string Message;
+        public readonly float Duration;
+
+        public bool HasValue => Kind != MultiplayerGuessFeedbackKind.None;
+
+        public MultiplayerGuessFeedback(
+            MultiplayerGuessFeedbackKind kind,
+            int pokemonId,
+            string message,
+            float duration
+        )
+        {
+            Kind = kind;
+            PokemonId = pokemonId;
+            Message = message ?? string.Empty;
+            Duration = Mathf.Max(0.05f, duration);
+        }
+
+        public static MultiplayerGuessFeedback NotInQuiz(string message, float duration)
+        {
+            return new MultiplayerGuessFeedback(
+                MultiplayerGuessFeedbackKind.NotInQuiz,
+                0,
+                message,
+                duration
+            );
+        }
+
+        public static MultiplayerGuessFeedback AlreadyGuessed(
+            int pokemonId,
+            string message,
+            float duration
+        )
+        {
+            return new MultiplayerGuessFeedback(
+                MultiplayerGuessFeedbackKind.AlreadyGuessed,
+                pokemonId,
+                message,
+                duration
+            );
+        }
+    }
 
     const string KEY_PAUSE_ON_FOCUS_LOSS = "pause_on_focus_loss";
     bool _pauseOnFocusLossEnabled = true;
@@ -832,14 +887,45 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void ShowNotInQuiz(string name, Pokemon p = null)
     {
-        string reason = ExplainWhyNotInQuiz(p);
+        string message = BuildNotInQuizMessage(name, p, out float duration);
+        CaptureNetworkGuessFeedback(MultiplayerGuessFeedback.NotInQuiz(message, duration));
 
-        if (!string.IsNullOrEmpty(reason))
-            toast.Show($"{name} is not part of this quiz - {reason}", 2.5f);
-        else
-            toast.Show($"{name} is not part of this quiz", 2f);
+        toast.Show(message, duration);
 
         RefocusGuess();
+    }
+
+    private string BuildNotInQuizMessage(string name, Pokemon p, out float duration)
+    {
+        string reason = ExplainWhyNotInQuiz(p);
+        duration = string.IsNullOrEmpty(reason) ? 2f : 2.5f;
+
+        if (!string.IsNullOrEmpty(reason))
+            return $"{name} is not part of this quiz - {reason}";
+
+        return $"{name} is not part of this quiz";
+    }
+
+    private void CaptureAlreadyGuessedFeedback(Pokemon target)
+    {
+        if (target == null)
+            return;
+
+        var feedback = MultiplayerGuessFeedback.AlreadyGuessed(
+            target.id,
+            $"{target.name} was already guessed",
+            1.6f
+        );
+        CaptureNetworkGuessFeedback(feedback);
+
+        if (_processingNetworkGuess && toast)
+            toast.Show(feedback.Message, feedback.Duration);
+    }
+
+    private void CaptureNetworkGuessFeedback(MultiplayerGuessFeedback feedback)
+    {
+        if (_processingNetworkGuess && feedback.HasValue)
+            LastNetworkGuessFeedback = feedback;
     }
 
     void MaybeScrollTo(Pokemon p, float duration = 0.25f)
@@ -864,6 +950,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     public void OnResetClicked()
     {
+        if (QuizNetworkRuntime.IsMultiplayerClientOnly)
+        {
+            ApplyMultiplayerUiState();
+            return;
+        }
+        if (resetBtn && !resetBtn.interactable)
+            return;
+
         DefocusUI();
 
         void DoReset()
@@ -1012,12 +1106,44 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
         }
 
+        var prompt = BuildBackToMenuPrompt();
         confirmDialog.Show(
-            title: "Leave quiz?",
-            message: "Your progress will be lost. Go back to the main menu?",
-            confirmLabel: "Yes, leave",
+            title: prompt.title,
+            message: prompt.message,
+            confirmLabel: prompt.confirmLabel,
             cancelLabel: "Stay",
             confirmAction: LeaveNow
+        );
+    }
+
+    private (string title, string message, string confirmLabel) BuildBackToMenuPrompt()
+    {
+        bool finished = IsComplete() || (finishedDialog && finishedDialog.IsShowing);
+
+        if (QuizNetworkRuntime.IsMultiplayerClientOnly)
+        {
+            return (
+                "Go to main menu?",
+                "You will leave this quiz screen. The host's co-op session stays active, and you can rejoin with the same code while the host keeps it open.",
+                "Go to menu"
+            );
+        }
+
+        if (QuizNetworkRuntime.IsMultiplayerServer)
+        {
+            string message = finished
+                ? "This quiz is finished. Return both players to the main menu? The co-op lobby and code will stay active."
+                : "This closes the current quiz for both players. The co-op lobby and code will stay active for choosing another quiz.";
+            return ("Return to lobby menu?", message, "Return");
+        }
+
+        if (finished)
+            return ("Go to main menu?", "This quiz is finished. Go back to the main menu?", "Go to menu");
+
+        return (
+            "Leave quiz?",
+            "Your current solo quiz progress will be lost. Go back to the main menu?",
+            "Yes, leave"
         );
     }
 
@@ -2734,19 +2860,36 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
 
         bool canUseQuizActions = running || (pauseMenu && pauseMenu.IsShowing);
+        bool canUseHostActions = !QuizNetworkRuntime.IsMultiplayerClientOnly;
 
         if (giveUpBtn)
-            giveUpBtn.interactable = canUseQuizActions;
+            giveUpBtn.interactable = canUseQuizActions && canUseHostActions;
         if (hintTypeBtn)
             hintTypeBtn.interactable = canUseQuizActions;
         if (shadowsBtn)
             shadowsBtn.interactable = canUseQuizActions;
         if (resetBtn)
-            resetBtn.interactable = true;
+            resetBtn.interactable = canUseHostActions;
+        if (backToMenuBtn)
+            backToMenuBtn.interactable = true;
         if (pauseBtn)
             pauseBtn.interactable = canUseQuizActions;
         if (testBtn)
             testBtn.interactable = canUseQuizActions;
+
+        RefreshButtonVisual(giveUpBtn);
+        RefreshButtonVisual(hintTypeBtn);
+        RefreshButtonVisual(shadowsBtn);
+        RefreshButtonVisual(resetBtn);
+        RefreshButtonVisual(backToMenuBtn);
+        RefreshButtonVisual(pauseBtn);
+        RefreshButtonVisual(testBtn);
+    }
+
+    private static void RefreshButtonVisual(Button button)
+    {
+        if (button && button.TryGetComponent<UiButtonHover>(out var hover))
+            hover.RefreshDisabledVisual();
     }
 
     public List<int> AcceptNetworkGuessOnServer(string currentText, bool suppressLocalInput)
@@ -2760,6 +2903,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         bool wasProcessing = _processingNetworkGuess;
         bool wasSuppressing = _suppressInputRefocus;
 
+        LastNetworkGuessFeedback = default;
         _processingNetworkGuess = true;
         _suppressInputRefocus = suppressLocalInput;
 
@@ -2863,6 +3007,53 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         ShowFinishedIfComplete();
     }
 
+    public void ApplyNetworkGuessFeedback(
+        MultiplayerGuessFeedback feedback,
+        bool clearInput
+    )
+    {
+        if (!feedback.HasValue)
+            return;
+
+        switch (feedback.Kind)
+        {
+            case MultiplayerGuessFeedbackKind.NotInQuiz:
+                if (toast && !string.IsNullOrWhiteSpace(feedback.Message))
+                    toast.Show(feedback.Message, feedback.Duration);
+                if (clearInput)
+                    RefocusGuess();
+                break;
+
+            case MultiplayerGuessFeedbackKind.AlreadyGuessed:
+                Pokemon target = null;
+                if (feedback.PokemonId != 0)
+                    pokemonById.TryGetValue(feedback.PokemonId, out target);
+
+                if (
+                    feedback.PokemonId != 0
+                    && cardById.TryGetValue(feedback.PokemonId, out var card)
+                )
+                {
+                    card.FlashHighlight();
+                    if (target != null)
+                        MaybeScrollTo(target);
+                }
+
+                if (toast)
+                {
+                    string message = !string.IsNullOrWhiteSpace(feedback.Message)
+                        ? feedback.Message
+                        : $"{(target != null ? target.name : "That Pokémon")} was already guessed";
+                    toast.Show(message, feedback.Duration);
+                }
+
+                PlayDuplicate();
+                if (clearInput)
+                    RefocusGuess();
+                break;
+        }
+    }
+
     public void ApplyNetworkTimer(float networkElapsed, bool networkRunning)
     {
         elapsed = Mathf.Max(0f, networkElapsed);
@@ -2920,11 +3111,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     public void ApplyNetworkReset()
     {
         ResetGame();
+        ApplyMultiplayerUiState();
     }
 
     public void ApplyNetworkGiveUp()
     {
         RevealAll();
+        ApplyMultiplayerUiState();
     }
 
     private void SetTimerText()
@@ -3402,6 +3595,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             {
                 if (exact && !HasDifferentSpeciesContinuation(originalText, target))
                 {
+                    CaptureAlreadyGuessedFeedback(target);
                     if (cardById.TryGetValue(target.id, out var c))
                     {
                         c.FlashHighlight();
@@ -3417,6 +3611,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return;
             }
 
+            CaptureAlreadyGuessedFeedback(target);
             if (cardById.TryGetValue(target.id, out var already))
             {
                 already.FlashHighlight();
@@ -3694,6 +3889,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void OnGiveUpClicked()
     {
+        if (QuizNetworkRuntime.IsMultiplayerClientOnly)
+        {
+            ApplyMultiplayerUiState();
+            return;
+        }
+
         if (IsDialogOpen())
             return;
 

@@ -10,6 +10,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 {
     private const string GuessMessage = "pkmnquiz_guess";
     private const string SolvedMessage = "pkmnquiz_solved";
+    private const string GuessFeedbackMessage = "pkmnquiz_guess_feedback";
     private const string ActionRequestMessage = "pkmnquiz_action_request";
     private const string ActionMessage = "pkmnquiz_action";
     private const string NicknameMessage = "pkmnquiz_nickname";
@@ -20,7 +21,17 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     private const int MessageSize = 16384;
     private const float TimerSyncInterval = 0.25f;
     private const string HostPlayerColor = "#6FEA72";
-    private const string RemotePlayerColor = "#FFD84D";
+    private static readonly string[] RemotePlayerColors =
+    {
+        "#FFD84D",
+        "#7DD3FC",
+        "#F9A8D4",
+        "#C4B5FD",
+        "#FDBA74",
+        "#86EFAC",
+        "#FCA5A5",
+        "#A7F3D0",
+    };
     private static readonly Color HostEndStateColor = new(0f, 1f, 0f, 1f);
     private static readonly Color RemoteEndStateColor = new(1f, 0.85f, 0f, 1f);
     private static readonly Color MissedEndStateColor = new(1f, 0f, 0f, 1f);
@@ -40,6 +51,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     private readonly Dictionary<ulong, int> playerTypeHints = new();
     private readonly Dictionary<ulong, int> playerShadows = new();
     private readonly Dictionary<int, ulong> solvedByClientId = new();
+    private readonly HashSet<ulong> hostJoinNotifiedClientIds = new();
 
     public static bool IsActive => QuizNetworkRuntime.IsMultiplayerActive;
     public static bool IsClientOnly => QuizNetworkRuntime.IsMultiplayerClientOnly;
@@ -103,6 +115,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         if (!QuizNetworkRuntime.IsMultiplayerActive)
             return false;
 
+        if (IsHostControlledAction(action) && QuizNetworkRuntime.IsMultiplayerClientOnly)
+            return action == CoopAction.ReturnToMenu ? false : true;
+
         if (!instance)
             Attach(FindFirstObjectByType<QuizManager>());
 
@@ -122,6 +137,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         if (manager && manager.IsServer)
         {
             EnsurePlayer(manager.LocalClientId, QuizNetworkRuntime.PlayerNickname);
+            MarkCurrentClientsAsAlreadyPresent();
             BroadcastScoreboard();
         }
         else if (manager && manager.IsClient)
@@ -161,6 +177,10 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         manager.CustomMessagingManager.RegisterNamedMessageHandler(ActionMessage, OnActionMessage);
         manager.CustomMessagingManager.RegisterNamedMessageHandler(SolvedMessage, OnSolvedMessage);
         manager.CustomMessagingManager.RegisterNamedMessageHandler(
+            GuessFeedbackMessage,
+            OnGuessFeedbackMessage
+        );
+        manager.CustomMessagingManager.RegisterNamedMessageHandler(
             ScoreboardMessage,
             OnScoreboardMessage
         );
@@ -185,6 +205,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             manager.OnClientDisconnectCallback -= OnClientDisconnected;
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(ActionMessage);
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(SolvedMessage);
+            manager.CustomMessagingManager.UnregisterNamedMessageHandler(GuessFeedbackMessage);
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(ScoreboardMessage);
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(StateMessage);
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(TimerMessage);
@@ -237,6 +258,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         if (!manager || !manager.IsListening)
             return;
 
+        if (IsHostControlledAction(action) && !manager.IsServer)
+            return;
+
         if (manager.IsServer)
         {
             HandleServerAction(manager.LocalClientId, action);
@@ -266,8 +290,12 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             return;
 
         var solvedIds = quiz.AcceptNetworkGuessOnServer(currentText, suppressLocalInput);
+        var feedback = quiz.LastNetworkGuessFeedback;
         if (solvedIds.Count == 0)
+        {
+            BroadcastGuessFeedback(feedback, senderClientId);
             return;
+        }
 
         EnsurePlayer(senderClientId, null);
         playerScores[senderClientId] += solvedIds.Count;
@@ -287,6 +315,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     private void HandleServerAction(ulong senderClientId, CoopAction action)
     {
         if (!manager || !manager.IsServer)
+            return;
+
+        if (IsHostControlledAction(action) && senderClientId != manager.LocalClientId)
             return;
 
         if (action == CoopAction.ReturnToMenu)
@@ -435,6 +466,49 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         quiz.ApplyNetworkSolvedIds(solvedIds, clearInput: solvedByLocalPlayer, playSound: true);
     }
 
+    private void BroadcastGuessFeedback(
+        QuizManager.MultiplayerGuessFeedback feedback,
+        ulong guesserClientId
+    )
+    {
+        if (!feedback.HasValue || !manager || !manager.IsServer || manager.CustomMessagingManager == null)
+            return;
+
+        using var writer = new FastBufferWriter(MessageSize, Allocator.Temp);
+        writer.WriteValueSafe(guesserClientId);
+        writer.WriteValueSafe((int)feedback.Kind);
+        writer.WriteValueSafe(feedback.PokemonId);
+        writer.WriteValueSafe(feedback.Message ?? string.Empty);
+        writer.WriteValueSafe(feedback.Duration);
+        manager.CustomMessagingManager.SendNamedMessageToAll(GuessFeedbackMessage, writer);
+    }
+
+    private void OnGuessFeedbackMessage(ulong senderClientId, FastBufferReader reader)
+    {
+        if (manager && manager.IsServer)
+            return;
+
+        reader.ReadValueSafe(out ulong guesserClientId);
+        reader.ReadValueSafe(out int kindValue);
+        reader.ReadValueSafe(out int pokemonId);
+        reader.ReadValueSafe(out string message);
+        reader.ReadValueSafe(out float duration);
+
+        if (!quiz)
+            quiz = FindFirstObjectByType<QuizManager>();
+        if (!quiz)
+            return;
+
+        var feedback = new QuizManager.MultiplayerGuessFeedback(
+            (QuizManager.MultiplayerGuessFeedbackKind)kindValue,
+            pokemonId,
+            message,
+            duration
+        );
+        bool clearInput = manager && guesserClientId == manager.LocalClientId;
+        quiz.ApplyNetworkGuessFeedback(feedback, clearInput);
+    }
+
     private void RecordSolvedBy(IReadOnlyCollection<int> solvedIds, ulong solverClientId)
     {
         if (solvedIds == null)
@@ -464,6 +538,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     {
         reader.ReadValueSafe(out string nickname);
         EnsurePlayer(senderClientId, nickname);
+        MaybeShowHostJoinNotice(senderClientId, playerNames[senderClientId]);
         BroadcastScoreboard();
     }
 
@@ -492,6 +567,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             playerScores.Remove(clientId);
             playerTypeHints.Remove(clientId);
             playerShadows.Remove(clientId);
+            hostJoinNotifiedClientIds.Remove(clientId);
             BroadcastScoreboard();
             return;
         }
@@ -607,6 +683,36 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             playerShadows[clientId] = 0;
     }
 
+    private void MarkCurrentClientsAsAlreadyPresent()
+    {
+        if (!manager || !manager.IsServer)
+            return;
+
+        foreach (var clientId in manager.ConnectedClientsIds)
+        {
+            EnsurePlayer(clientId, null);
+            if (clientId != manager.LocalClientId)
+                hostJoinNotifiedClientIds.Add(clientId);
+        }
+    }
+
+    private void MaybeShowHostJoinNotice(ulong clientId, string playerName)
+    {
+        if (!manager || !manager.IsServer || clientId == manager.LocalClientId)
+            return;
+        if (!hostJoinNotifiedClientIds.Add(clientId))
+            return;
+
+        if (!quiz)
+            quiz = FindFirstObjectByType<QuizManager>();
+
+        if (quiz && quiz.toast)
+            quiz.toast.Show(
+                $"{QuizNetworkRuntime.NormalizeNickname(playerName)} joined the game.",
+                2.5f
+            );
+    }
+
     private List<PlayerScore> BuildScoreboard()
     {
         var scores = new List<PlayerScore>();
@@ -698,12 +804,15 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
     private static string PlayerNameColor(ulong clientId)
     {
-        return clientId == 0UL ? HostPlayerColor : RemotePlayerColor;
+        if (clientId == 0UL)
+            return HostPlayerColor;
+
+        return RemotePlayerColors[(int)((clientId - 1UL) % (ulong)RemotePlayerColors.Length)];
     }
 
     private static string DefaultPlayerName(ulong clientId)
     {
-        return clientId == 0UL ? "Player 1" : "Player 2";
+        return $"Player {clientId + 1UL}";
     }
 
     private static void WriteSolvedPayload(
@@ -838,7 +947,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             yield return new WaitForSecondsRealtime(delay);
 
         LoadingManager.Instance?.CancelLoad();
-        QuizNetworkRuntime.Shutdown();
+        QuizNetworkRuntime.ReturnToLobbyMenu();
         SceneManager.LoadScene("MainMenu");
     }
 
@@ -852,10 +961,18 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         GiveUp = 6,
         ReturnToMenu = 7,
     }
+
+    private static bool IsHostControlledAction(CoopAction action)
+    {
+        return action == CoopAction.Reset
+            || action == CoopAction.GiveUp
+            || action == CoopAction.ReturnToMenu;
+    }
 }
 
 public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour
 {
+    private const string PlayerCountColor = "#7DD3FC";
     private static string scoreboardText = string.Empty;
     private TMP_Text label;
     private float nextRefresh;
@@ -954,18 +1071,20 @@ public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour
         if (!label)
             return;
 
-        var code = QuizNetworkRuntime.JoinCode ?? GameSettings.MultiplayerJoinCode;
         string scores = string.IsNullOrEmpty(scoreboardText) ? "" : $"\n{scoreboardText}";
         if (NetworkManager.Singleton && NetworkManager.Singleton.IsServer)
         {
             int players = NetworkManager.Singleton.ConnectedClientsIds.Count;
-            label.text = string.IsNullOrEmpty(code)
-                ? $"Co-op host | Players {players}/2{scores}"
-                : $"Co-op code {code} | Players {players}/2{scores}";
+            label.text = $"Co-op host | Players: {FormatPlayerCount(players)}{scores}";
             return;
         }
 
-        label.text = string.IsNullOrEmpty(code) ? $"Co-op client{scores}" : $"Co-op joined | {code}{scores}";
+        label.text = $"Co-op joined{scores}";
+    }
+
+    private static string FormatPlayerCount(int players)
+    {
+        return $"<color={PlayerCountColor}><b>{players}</b></color>";
     }
 }
 
@@ -976,20 +1095,47 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private const int MessageSize = 1024;
     private const int MaxChatLines = 64;
     private const int MaxMessageLength = 180;
+    private const float MinInputHeight = 28f;
+    private const float MaxInputHeight = 72f;
+    private const float InputVerticalPadding = 8f;
+    private const float MenuChatWidth = 360f;
+    private const float MenuChatHeight = 236f;
+    private const float MenuChatMessagesHeight = 166f;
+    private const float QuizChatWidth = 340f;
+    private const float QuizChatHeight = 128f;
+    private const float QuizChatMessagesHeight = 58f;
+    private const float QuizExpandedChatWidth = 380f;
+    private const float QuizExpandedChatHeight = 304f;
+    private const float QuizExpandedChatMessagesHeight = 234f;
+    private const float PausedChatWidth = 430f;
+    private const float PausedChatHeight = 140f;
+    private const float PausedChatMessagesHeight = 70f;
+    private const float PausedExpandedChatHeight = 330f;
+    private const float PausedExpandedChatMessagesHeight = 260f;
 
     private static QuizMultiplayerChatOverlay instance;
+    private static bool overlayVisible = true;
 
     private readonly List<GameObject> lineObjects = new();
     private Canvas rootCanvas;
+    private CanvasGroup canvasGroup;
     private NetworkManager manager;
     private bool registered;
     private bool registeredAsServer;
     private string appliedLayoutScene;
     private RectTransform lineContainer;
     private LayoutElement messageListLayout;
+    private LayoutElement inputRowLayout;
+    private LayoutElement inputLayout;
     private ScrollRect scrollRect;
     private TMP_InputField inputField;
+    private TMP_Text inputText;
     private Button sendButton;
+    private Button expandButton;
+    private TMP_Text expandButtonLabel;
+    private bool expandedInQuiz;
+    private float basePanelHeight = 124f;
+    private float currentInputHeight = MinInputHeight;
 
     public static void Ensure()
     {
@@ -1008,8 +1154,17 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         }
 
         instance.gameObject.SetActive(true);
+        instance.ApplyOverlayVisibility();
         instance.RegisterHandlers();
         instance.ApplyScenePlacement();
+    }
+
+    public static void SetOverlayVisible(bool visible)
+    {
+        overlayVisible = visible;
+
+        if (instance)
+            instance.ApplyOverlayVisibility();
     }
 
     public static void ResetSession()
@@ -1056,7 +1211,9 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private void Awake()
     {
         rootCanvas = GetComponentInParent<Canvas>();
+        canvasGroup = gameObject.GetOrAdd<CanvasGroup>();
         BuildUi();
+        ApplyOverlayVisibility();
     }
 
     private void OnDestroy()
@@ -1072,9 +1229,21 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         if (!QuizNetworkRuntime.IsMultiplayerActive)
             return;
 
+        ApplyOverlayVisibility();
         RegisterHandlers();
         ApplyScenePlacement();
         RefreshSendButton();
+        RefreshInputHeight();
+    }
+
+    private void ApplyOverlayVisibility()
+    {
+        if (!canvasGroup)
+            canvasGroup = gameObject.GetOrAdd<CanvasGroup>();
+
+        canvasGroup.alpha = overlayVisible ? 1f : 0f;
+        canvasGroup.interactable = overlayVisible;
+        canvasGroup.blocksRaycasts = overlayVisible;
     }
 
     private void RegisterHandlers()
@@ -1144,6 +1313,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             inputField.Select();
         }
         RefreshSendButton();
+        RefreshInputHeight();
 
         if (manager.IsServer)
         {
@@ -1205,12 +1375,14 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 
     private void BuildUi()
     {
+        TmpCjkFontFallback.EnsureRegistered();
+
         var rt = (RectTransform)transform;
         rt.anchorMin = new Vector2(1f, 1f);
         rt.anchorMax = new Vector2(1f, 1f);
         rt.pivot = new Vector2(1f, 1f);
         rt.anchoredPosition = new Vector2(-480f, -116f);
-        rt.sizeDelta = new Vector2(330f, 124f);
+        rt.sizeDelta = new Vector2(QuizChatWidth, QuizChatHeight);
 
         var background = gameObject.AddComponent<Image>();
         background.color = new Color(0.05f, 0.06f, 0.07f, 0.84f);
@@ -1234,29 +1406,76 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         var rt = (RectTransform)transform;
         string sceneName = SceneManager.GetActiveScene().name;
         bool mainMenu = string.Equals(sceneName, "MainMenu", System.StringComparison.OrdinalIgnoreCase);
-        string layoutKey = mainMenu ? "main-menu" : "quiz";
+        bool paused = !mainMenu && IsPauseMenuShowing();
+        string layoutKey = mainMenu
+            ? "main-menu"
+            : paused
+                ? (expandedInQuiz ? "quiz-paused-expanded" : "quiz-paused")
+                : (expandedInQuiz ? "quiz-expanded" : "quiz");
         if (!force && appliedLayoutScene == layoutKey)
             return;
 
         appliedLayoutScene = layoutKey;
+        SetExpandButtonVisible(!mainMenu);
 
         if (mainMenu)
         {
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(207f, -520f);
-            rt.sizeDelta = new Vector2(240f, 176f);
-            SetMessageListHeight(106f);
+            rt.anchoredPosition = new Vector2(207f, -782f);
+            rt.sizeDelta = new Vector2(MenuChatWidth, MenuChatHeight);
+            basePanelHeight = MenuChatHeight;
+            SetMessageListHeight(MenuChatMessagesHeight);
+            ApplyPanelHeight();
+            RefreshInputHeight();
             return;
         }
 
         rt.anchorMin = new Vector2(1f, 1f);
         rt.anchorMax = new Vector2(1f, 1f);
         rt.pivot = new Vector2(1f, 1f);
+        if (paused)
+        {
+            rt.anchoredPosition = new Vector2(-34f, -180f);
+            rt.sizeDelta = new Vector2(
+                PausedChatWidth,
+                expandedInQuiz ? PausedExpandedChatHeight : PausedChatHeight
+            );
+            basePanelHeight = expandedInQuiz ? PausedExpandedChatHeight : PausedChatHeight;
+            SetMessageListHeight(
+                expandedInQuiz ? PausedExpandedChatMessagesHeight : PausedChatMessagesHeight
+            );
+            ApplyPanelHeight();
+            RefreshInputHeight();
+            return;
+        }
+
         rt.anchoredPosition = new Vector2(-480f, -116f);
-        rt.sizeDelta = new Vector2(330f, 124f);
-        SetMessageListHeight(54f);
+        rt.sizeDelta = new Vector2(
+            expandedInQuiz ? QuizExpandedChatWidth : QuizChatWidth,
+            expandedInQuiz ? QuizExpandedChatHeight : QuizChatHeight
+        );
+        basePanelHeight = expandedInQuiz ? QuizExpandedChatHeight : QuizChatHeight;
+        SetMessageListHeight(
+            expandedInQuiz ? QuizExpandedChatMessagesHeight : QuizChatMessagesHeight
+        );
+        ApplyPanelHeight();
+        RefreshInputHeight();
+    }
+
+    private static bool IsPauseMenuShowing()
+    {
+        var pauseMenu = FindFirstObjectByType<PauseMenu>();
+        return pauseMenu && pauseMenu.IsShowing;
+    }
+
+    private void SetExpandButtonVisible(bool visible)
+    {
+        if (expandButton)
+            expandButton.gameObject.SetActive(visible);
+
+        RefreshExpandButtonLabel();
     }
 
     private void SetMessageListHeight(float height)
@@ -1268,9 +1487,66 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         messageListLayout.preferredHeight = height;
     }
 
+    private void ApplyPanelHeight()
+    {
+        var rt = (RectTransform)transform;
+        var size = rt.sizeDelta;
+        size.y = basePanelHeight + Mathf.Max(0f, currentInputHeight - MinInputHeight);
+        rt.sizeDelta = size;
+    }
+
+    private void OnChatInputChanged(string value)
+    {
+        RefreshSendButton();
+        RefreshInputHeight();
+    }
+
+    private void RefreshInputHeight()
+    {
+        if (!inputField || !inputText || !inputRowLayout || !inputLayout)
+            return;
+
+        var inputRt = (RectTransform)inputField.transform;
+        float width = inputRt.rect.width - 16f;
+        if (width <= 1f && inputRt.parent is RectTransform parentRt)
+            width = parentRt.rect.width - 16f - 64f;
+        if (width <= 1f)
+            return;
+
+        string value = string.IsNullOrEmpty(inputField.text) ? "Message" : inputField.text;
+        float preferred = inputText.GetPreferredValues(value, width, 0f).y + InputVerticalPadding;
+        float height = Mathf.Clamp(Mathf.Ceil(preferred), MinInputHeight, MaxInputHeight);
+        if (Mathf.Abs(height - currentInputHeight) < 0.5f)
+            return;
+
+        currentInputHeight = height;
+        inputRowLayout.minHeight = height;
+        inputRowLayout.preferredHeight = height;
+        inputLayout.minHeight = height;
+        inputLayout.preferredHeight = height;
+        ApplyPanelHeight();
+        LayoutRebuilder.MarkLayoutForRebuild((RectTransform)transform);
+    }
+
     private void CreateHeader()
     {
-        var label = UiObject("Header").AddComponent<TextMeshProUGUI>();
+        var row = UiObject("Header");
+        var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
+        rowLayout.spacing = 6f;
+        rowLayout.childAlignment = TextAnchor.MiddleCenter;
+        rowLayout.childControlWidth = true;
+        rowLayout.childControlHeight = true;
+        rowLayout.childForceExpandWidth = false;
+        rowLayout.childForceExpandHeight = false;
+
+        var rowElement = row.AddComponent<LayoutElement>();
+        rowElement.minHeight = 18f;
+        rowElement.preferredHeight = 18f;
+
+        var labelGo = new GameObject("Title", typeof(RectTransform));
+        labelGo.transform.SetParent(row.transform, false);
+        var label = labelGo.AddComponent<TextMeshProUGUI>();
+        TmpCjkFontFallback.ApplyTo(label);
         label.text = "Chat";
         label.fontSize = 13f;
         label.fontStyle = FontStyles.Bold;
@@ -1278,9 +1554,63 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         label.alignment = TextAlignmentOptions.MidlineLeft;
         label.raycastTarget = false;
 
-        var layout = label.gameObject.AddComponent<LayoutElement>();
-        layout.minHeight = 16f;
-        layout.preferredHeight = 16f;
+        var labelLayout = labelGo.AddComponent<LayoutElement>();
+        labelLayout.minHeight = 18f;
+        labelLayout.preferredHeight = 18f;
+        labelLayout.flexibleWidth = 1f;
+
+        expandButton = CreateHeaderButton(row.transform);
+        RefreshExpandButtonLabel();
+    }
+
+    private Button CreateHeaderButton(Transform parent)
+    {
+        var go = new GameObject("Expand Chat", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+
+        var image = go.AddComponent<Image>();
+        image.color = new Color(0.16f, 0.35f, 0.70f, 1f);
+
+        var button = go.AddComponent<Button>();
+        button.targetGraphic = image;
+        button.onClick.AddListener(ToggleExpandedInQuiz);
+
+        var layout = go.AddComponent<LayoutElement>();
+        layout.minWidth = 24f;
+        layout.preferredWidth = 24f;
+        layout.minHeight = 18f;
+        layout.preferredHeight = 18f;
+
+        var labelGo = new GameObject("Text", typeof(RectTransform));
+        labelGo.transform.SetParent(go.transform, false);
+        var labelRt = (RectTransform)labelGo.transform;
+        labelRt.anchorMin = Vector2.zero;
+        labelRt.anchorMax = Vector2.one;
+        labelRt.offsetMin = Vector2.zero;
+        labelRt.offsetMax = Vector2.zero;
+
+        expandButtonLabel = labelGo.AddComponent<TextMeshProUGUI>();
+        TmpCjkFontFallback.ApplyTo(expandButtonLabel);
+        expandButtonLabel.fontSize = 14f;
+        expandButtonLabel.fontStyle = FontStyles.Bold;
+        expandButtonLabel.color = Color.white;
+        expandButtonLabel.alignment = TextAlignmentOptions.Center;
+        expandButtonLabel.raycastTarget = false;
+        return button;
+    }
+
+    private void ToggleExpandedInQuiz()
+    {
+        expandedInQuiz = !expandedInQuiz;
+        appliedLayoutScene = null;
+        RefreshExpandButtonLabel();
+        ApplyScenePlacement(force: true);
+    }
+
+    private void RefreshExpandButtonLabel()
+    {
+        if (expandButtonLabel)
+            expandButtonLabel.text = expandedInQuiz ? "-" : "+";
     }
 
     private void CreateMessageList()
@@ -1337,21 +1667,23 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         var row = UiObject("Input Row");
         var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
         rowLayout.spacing = 8f;
+        rowLayout.childAlignment = TextAnchor.LowerLeft;
         rowLayout.childControlWidth = true;
         rowLayout.childControlHeight = true;
         rowLayout.childForceExpandWidth = false;
         rowLayout.childForceExpandHeight = false;
 
-        var rowElement = row.AddComponent<LayoutElement>();
-        rowElement.minHeight = 28f;
-        rowElement.preferredHeight = 28f;
+        inputRowLayout = row.AddComponent<LayoutElement>();
+        inputRowLayout.minHeight = MinInputHeight;
+        inputRowLayout.preferredHeight = MinInputHeight;
 
         inputField = CreateInput(row.transform);
-        inputField.onValueChanged.AddListener(_ => RefreshSendButton());
+        inputField.onValueChanged.AddListener(OnChatInputChanged);
         inputField.onSubmit.AddListener(_ => SendCurrentMessage());
 
         sendButton = CreateButton(row.transform, "Send", SendCurrentMessage);
         RefreshSendButton();
+        RefreshInputHeight();
     }
 
     private TMP_InputField CreateInput(Transform parent)
@@ -1362,15 +1694,15 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         var image = go.AddComponent<Image>();
         image.color = new Color(1f, 1f, 1f, 0.94f);
 
-        var layout = go.AddComponent<LayoutElement>();
-        layout.minHeight = 28f;
-        layout.preferredHeight = 28f;
-        layout.flexibleWidth = 1f;
+        inputLayout = go.AddComponent<LayoutElement>();
+        inputLayout.minHeight = MinInputHeight;
+        inputLayout.preferredHeight = MinInputHeight;
+        inputLayout.flexibleWidth = 1f;
 
         var input = go.AddComponent<TMP_InputField>();
         input.characterLimit = MaxMessageLength;
         input.contentType = TMP_InputField.ContentType.Standard;
-        input.lineType = TMP_InputField.LineType.SingleLine;
+        input.lineType = TMP_InputField.LineType.MultiLineSubmit;
         input.richText = false;
 
         var viewportGo = new GameObject("Text Area", typeof(RectTransform));
@@ -1378,8 +1710,8 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         var viewport = (RectTransform)viewportGo.transform;
         viewport.anchorMin = Vector2.zero;
         viewport.anchorMax = Vector2.one;
-        viewport.offsetMin = new Vector2(8f, 2f);
-        viewport.offsetMax = new Vector2(-8f, -2f);
+        viewport.offsetMin = new Vector2(8f, 4f);
+        viewport.offsetMax = new Vector2(-8f, -4f);
         viewportGo.AddComponent<RectMask2D>();
 
         var textGo = new GameObject("Text", typeof(RectTransform));
@@ -1391,11 +1723,13 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         textRt.offsetMax = Vector2.zero;
 
         var text = textGo.AddComponent<TextMeshProUGUI>();
+        TmpCjkFontFallback.ApplyTo(text);
         text.fontSize = 13f;
         text.color = new Color(0.05f, 0.06f, 0.07f, 1f);
-        text.alignment = TextAlignmentOptions.MidlineLeft;
-        text.textWrappingMode = TextWrappingModes.NoWrap;
+        text.alignment = TextAlignmentOptions.TopLeft;
+        text.textWrappingMode = TextWrappingModes.Normal;
         text.richText = false;
+        inputText = text;
 
         var placeholderGo = new GameObject("Placeholder", typeof(RectTransform));
         placeholderGo.transform.SetParent(viewportGo.transform, false);
@@ -1406,11 +1740,12 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         placeholderRt.offsetMax = Vector2.zero;
 
         var placeholder = placeholderGo.AddComponent<TextMeshProUGUI>();
+        TmpCjkFontFallback.ApplyTo(placeholder);
         placeholder.text = "Message";
         placeholder.fontSize = 13f;
         placeholder.color = new Color(0.2f, 0.25f, 0.3f, 0.55f);
-        placeholder.alignment = TextAlignmentOptions.MidlineLeft;
-        placeholder.textWrappingMode = TextWrappingModes.NoWrap;
+        placeholder.alignment = TextAlignmentOptions.TopLeft;
+        placeholder.textWrappingMode = TextWrappingModes.Normal;
         placeholder.richText = false;
 
         input.textViewport = viewport;
@@ -1446,6 +1781,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         labelRt.offsetMax = new Vector2(-6f, 0f);
 
         var label = labelGo.AddComponent<TextMeshProUGUI>();
+        TmpCjkFontFallback.ApplyTo(label);
         label.text = labelText;
         label.fontSize = 12f;
         label.fontStyle = FontStyles.Bold;
@@ -1480,6 +1816,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         lineGo.transform.SetParent(lineContainer, false);
 
         var label = lineGo.AddComponent<TextMeshProUGUI>();
+        TmpCjkFontFallback.ApplyTo(label);
         label.text =
             $"{QuizMultiplayerCoordinator.EscapeRichText(timestamp)} "
             + $"{QuizMultiplayerCoordinator.FormatColoredPlayerName(senderClientId, senderName)}: "
@@ -1493,6 +1830,8 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 
         var layout = lineGo.AddComponent<LayoutElement>();
         layout.minHeight = 15f;
+        layout.preferredHeight = 15f;
+        lineGo.AddComponent<ChatLinePreferredHeight>().Configure(label, layout, 15f, 3f);
 
         lineObjects.Add(lineGo);
         while (lineObjects.Count > MaxChatLines)
@@ -1531,7 +1870,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 
     private static string DefaultChatName(ulong clientId)
     {
-        return clientId == 0UL ? "Player1" : "Player2";
+        return $"Player{clientId + 1UL}";
     }
 
     private static string CurrentTimestamp()
@@ -1592,5 +1931,202 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         }
 
         return sb.ToString().Trim();
+    }
+}
+
+public sealed class ChatLinePreferredHeight : MonoBehaviour
+{
+    private TMP_Text label;
+    private LayoutElement layout;
+    private float minHeight;
+    private float padding;
+    private float lastWidth = -1f;
+    private string lastText;
+
+    public void Configure(TMP_Text textLabel, LayoutElement layoutElement, float minimum, float extraPadding)
+    {
+        label = textLabel;
+        layout = layoutElement;
+        minHeight = minimum;
+        padding = extraPadding;
+        Refresh();
+    }
+
+    private void LateUpdate()
+    {
+        Refresh();
+    }
+
+    private void OnRectTransformDimensionsChange()
+    {
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        if (!label || !layout)
+            return;
+
+        var rt = (RectTransform)transform;
+        float width = rt.rect.width;
+        if (width <= 1f && rt.parent is RectTransform parentRt)
+            width = parentRt.rect.width;
+        if (width <= 1f)
+            return;
+
+        string text = label.text ?? string.Empty;
+        if (Mathf.Abs(width - lastWidth) < 0.5f && string.Equals(text, lastText))
+            return;
+
+        lastWidth = width;
+        lastText = text;
+
+        float height = Mathf.Max(
+            minHeight,
+            Mathf.Ceil(label.GetPreferredValues(text, width, 0f).y + padding)
+        );
+        if (Mathf.Abs(layout.preferredHeight - height) < 0.5f)
+            return;
+
+        layout.minHeight = height;
+        layout.preferredHeight = height;
+
+        if (rt.parent is RectTransform layoutRoot)
+            LayoutRebuilder.MarkLayoutForRebuild(layoutRoot);
+    }
+}
+
+public static class TmpCjkFontFallback
+{
+    private const string JapaneseSample = "\u65e5\u672c\u8a9e\u304b\u306a\u30ab\u30ca";
+    private const string KoreanSample = "\ud55c\uad6d\uc5b4\uac00";
+    private static bool attempted;
+    private static string[] installedFontNames;
+
+    private enum Coverage
+    {
+        Japanese,
+        Korean,
+    }
+
+    private readonly struct FontCandidate
+    {
+        public readonly string Family;
+        public readonly string Style;
+        public readonly Coverage Coverage;
+
+        public FontCandidate(string family, string style, Coverage coverage)
+        {
+            Family = family;
+            Style = style;
+            Coverage = coverage;
+        }
+    }
+
+    private static readonly FontCandidate[] Candidates =
+    {
+        new("Noto Sans CJK JP", "Regular", Coverage.Japanese),
+        new("Noto Sans JP", "Regular", Coverage.Japanese),
+        new("Yu Gothic", "Regular", Coverage.Japanese),
+        new("Meiryo", "Regular", Coverage.Japanese),
+        new("MS Gothic", "Regular", Coverage.Japanese),
+        new("Hiragino Sans", "W3", Coverage.Japanese),
+        new("Hiragino Kaku Gothic ProN", "W3", Coverage.Japanese),
+        new("Noto Sans CJK KR", "Regular", Coverage.Korean),
+        new("Noto Sans KR", "Regular", Coverage.Korean),
+        new("Malgun Gothic", "Regular", Coverage.Korean),
+        new("Gulim", "Regular", Coverage.Korean),
+        new("Batang", "Regular", Coverage.Korean),
+        new("Apple SD Gothic Neo", "Regular", Coverage.Korean),
+        new("NanumGothic", "Regular", Coverage.Korean),
+    };
+
+    public static void ApplyTo(TMP_Text text)
+    {
+        EnsureRegistered();
+        if (text)
+            text.SetAllDirty();
+    }
+
+    public static void EnsureRegistered()
+    {
+        if (attempted)
+            return;
+
+        attempted = true;
+
+        var fallbacks = TMP_Settings.fallbackFontAssets;
+        if (fallbacks == null)
+        {
+            fallbacks = new List<TMP_FontAsset>();
+            TMP_Settings.fallbackFontAssets = fallbacks;
+        }
+
+        bool hasJapanese = AnyFallbackSupports(fallbacks, JapaneseSample);
+        bool hasKorean = AnyFallbackSupports(fallbacks, KoreanSample);
+
+        foreach (var candidate in Candidates)
+        {
+            if (candidate.Coverage == Coverage.Japanese && hasJapanese)
+                continue;
+            if (candidate.Coverage == Coverage.Korean && hasKorean)
+                continue;
+            if (!IsFontInstalled(candidate.Family))
+                continue;
+
+            var fontAsset = TMP_FontAsset.CreateFontAsset(candidate.Family, candidate.Style, 90);
+            if (!fontAsset)
+                continue;
+
+            fontAsset.name = $"Runtime {candidate.Family} {candidate.Style} TMP Fallback";
+            fontAsset.hideFlags = HideFlags.HideAndDontSave;
+            fontAsset.isMultiAtlasTexturesEnabled = true;
+
+            string sample = candidate.Coverage == Coverage.Japanese ? JapaneseSample : KoreanSample;
+            if (!SupportsSample(fontAsset, sample))
+            {
+                UnityEngine.Object.Destroy(fontAsset);
+                continue;
+            }
+
+            fallbacks.Add(fontAsset);
+            if (candidate.Coverage == Coverage.Japanese)
+                hasJapanese = true;
+            else
+                hasKorean = true;
+
+            if (hasJapanese && hasKorean)
+                break;
+        }
+    }
+
+    private static bool IsFontInstalled(string family)
+    {
+        if (installedFontNames == null)
+            installedFontNames = Font.GetOSInstalledFontNames();
+
+        foreach (var fontName in installedFontNames)
+            if (string.Equals(fontName, family, System.StringComparison.OrdinalIgnoreCase))
+                return true;
+
+        return false;
+    }
+
+    private static bool AnyFallbackSupports(List<TMP_FontAsset> fallbacks, string sample)
+    {
+        if (fallbacks == null)
+            return false;
+
+        foreach (var fallback in fallbacks)
+            if (fallback && SupportsSample(fallback, sample))
+                return true;
+
+        return false;
+    }
+
+    private static bool SupportsSample(TMP_FontAsset fontAsset, string sample)
+    {
+        uint[] missing;
+        return fontAsset && fontAsset.HasCharacters(sample, out missing, false, true);
     }
 }

@@ -1,5 +1,5 @@
 {
-  "version": "1.1.8",
-  "notes": "- Chat for multiplayer - ",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.8.zip"
+  "version": "1.1.9",
+  "notes": "1.1.9 - Added open lobby matchmaking so players can join co-op without manually sharing a code - Improved the co-op lobby UI with a larger panel, clearer player counts, colored action buttons, and Join labels - Added host join notifications with player nicknames and a pulsing prompt when a quiz can be chosen - Improved multiplayer chat placement, expansion, pause behavior, and patch notes hiding - Fixed host-only reset and give up actions, and kept co-op lobbies active when returning to the main menu",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.1.9.zip"
 }

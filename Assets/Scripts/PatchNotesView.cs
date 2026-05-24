@@ -21,10 +21,12 @@ public class PatchNotesView : MonoBehaviour
     {
         transform.SetAsLastSibling();
         MultiplayerMenuPanel.SetOverlayVisible(false);
+        QuizMultiplayerChatOverlay.SetOverlayVisible(false);
     }
 
     void OnDisable()
     {
         MultiplayerMenuPanel.SetOverlayVisible(true);
+        QuizMultiplayerChatOverlay.SetOverlayVisible(true);
     }
 }
