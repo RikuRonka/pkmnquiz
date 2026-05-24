@@ -63,6 +63,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly HashSet<int> solved = new();
     private readonly HashSet<int> hinted = new();
     public IReadOnlyCollection<int> SolvedIds => solved;
+    public IReadOnlyCollection<int> HintedIds => hinted;
+    public IReadOnlyCollection<int> ShadowedIds => shadowed;
     public int CurrentQuizGeneration => generation;
     public string CurrentTypeFilter => selectedType;
     public float ElapsedSeconds => elapsed;
@@ -133,6 +135,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     }
 
     const string KEY_PAUSE_ON_FOCUS_LOSS = "pause_on_focus_loss";
+    private const int BaseContentTopPadding = 32;
+    private const int MultiplayerContentTopPadding = 32;
+    private const float MultiplayerGridRightPaddingMin = 390f;
     bool _pauseOnFocusLossEnabled = true;
 
     public SectionHeader sectionHeaderPrefab;
@@ -149,7 +154,21 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     Toggle alwaysScrollToggle;
     Coroutine _scrollRoutine;
     Coroutine _scrollResetRoutine;
+    Coroutine _localBuildRoutine;
+    Coroutine _networkStateApplyRoutine;
+    Coroutine _scrollRestoreRoutine;
     int _scrollToken;
+    int _appliedContentTopPadding = -1;
+    private RectTransform _scrollViewportRt;
+    private RectTransform _scrollRectRt;
+    private Vector2 _originalViewportOffsetMin;
+    private Vector2 _originalViewportOffsetMax;
+    private Vector2 _originalScrollRectOffsetMin;
+    private Vector2 _originalScrollRectOffsetMax;
+    private bool _viewportOffsetsCaptured;
+    private bool _scrollRectOffsetsCaptured;
+    private bool _multiplayerRightDockApplied;
+    private bool _endStateBordersShowing;
     private readonly List<SectionGroup> _sections = new();
     int _hintUsedCount;
     int _shadowUsedCount;
@@ -590,7 +609,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             cardSizeSlider.SetValueWithoutNotify(t);
         }
 
-        ApplyColumnsToAllSections();
+        ApplyColumnsToAllSections(preserveScroll: true);
 
         _nextKeyboardColumnTime = Time.unscaledTime + keyboardColumnRepeatDelay;
     }
@@ -665,7 +684,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         var vlg = crt.GetOrAdd<VerticalLayoutGroup>();
         vlg.childAlignment = TextAnchor.UpperLeft;
         vlg.spacing = 16f;
-        vlg.padding = new RectOffset(vlg.padding.left, vlg.padding.right, 32, vlg.padding.bottom);
+        _appliedContentTopPadding = BaseContentTopPadding;
+        vlg.padding = new RectOffset(
+            vlg.padding.left,
+            vlg.padding.right,
+            BaseContentTopPadding,
+            vlg.padding.bottom
+        );
         vlg.childControlWidth = true;
         vlg.childControlHeight = false;
         vlg.childForceExpandWidth = true;
@@ -698,15 +723,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         EnsureLoader();
         SetSpellingHelp(null);
-        bool hasRouterParams =
+        bool loaderIsBuildingThisScene =
             LoadingManager.Instance
+            && LoadingManager.Instance.IsLoading
             && (
                 LoadingManager.Instance.PendingGen != 0
                 || !string.IsNullOrEmpty(LoadingManager.Instance.PendingType)
             );
 
-        if (!hasRouterParams)
-            StartCoroutine(LocalBuildWithOverlay());
+        if (!loaderIsBuildingThisScene)
+            _localBuildRoutine = StartCoroutine(LocalBuildWithOverlay());
         ResetTimerOnly();
         running = true;
         guessInput?.ActivateInputField();
@@ -789,6 +815,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         );
 
         _loader?.Hide();
+        _localBuildRoutine = null;
     }
 
     private void DefocusUI()
@@ -1096,6 +1123,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return;
 
             LoadingManager.Instance?.CancelLoad();
+            if (QuizNetworkRuntime.IsMultiplayerClientOnly)
+            {
+                QuizMultiplayerCoordinator.NotifyLocalPlayerLeavingQuiz();
+                QuizNetworkRuntime.ReturnToLobbyMenu(keepActiveQuizSelection: true);
+                SceneManager.LoadScene("MainMenu");
+                return;
+            }
+
             QuizNetworkRuntime.Shutdown();
             SceneManager.LoadScene("MainMenu");
         }
@@ -1124,7 +1159,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         {
             return (
                 "Go to main menu?",
-                "You will leave this quiz screen. The host's co-op session stays active, and you can rejoin with the same code while the host keeps it open.",
+                "You will leave this quiz screen. The host's co-op session stays active, and you can return from the main menu while the host keeps it open.",
                 "Go to menu"
             );
         }
@@ -1291,6 +1326,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         solved.Clear();
         hinted.Clear();
         shadowed.Clear();
+        _endStateBordersShowing = false;
         megaFormsByBase.Clear();
         finishedDialog.Hide();
         megaSlotPickByBase.Clear();
@@ -2299,6 +2335,116 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
     }
 
+    private void ApplyContentTopPadding(bool preserveScroll)
+    {
+        if (!content)
+            return;
+
+        int targetTopPadding =
+            (QuizNetworkRuntime.IsMultiplayerActive || GameSettings.IsMultiplayer)
+                ? MultiplayerContentTopPadding
+                : BaseContentTopPadding;
+        if (_appliedContentTopPadding == targetTopPadding)
+            return;
+
+        float scrollOffsetY = 0f;
+        bool hasScrollSnapshot = preserveScroll && TryCaptureScrollOffset(out scrollOffsetY);
+
+        var contentRt = content as RectTransform;
+        if (!contentRt)
+            return;
+
+        var vlg = contentRt.GetOrAdd<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset(
+            vlg.padding.left,
+            vlg.padding.right,
+            targetTopPadding,
+            vlg.padding.bottom
+        );
+        _appliedContentTopPadding = targetTopPadding;
+
+        LayoutRebuilder.MarkLayoutForRebuild(contentRt);
+        Canvas.ForceUpdateCanvases();
+
+        if (hasScrollSnapshot)
+            RestoreScrollOffsetAfterLayout(scrollOffsetY);
+    }
+
+    private void ApplyMultiplayerRightDock(bool enabled, bool preserveScroll)
+    {
+        if (!scrollRect || !scrollRect.viewport)
+            return;
+
+        var scrollRt = scrollRect.GetComponent<RectTransform>();
+        if (!_scrollRectOffsetsCaptured || _scrollRectRt != scrollRt)
+        {
+            _scrollRectRt = scrollRt;
+            if (_scrollRectRt)
+            {
+                _originalScrollRectOffsetMin = _scrollRectRt.offsetMin;
+                _originalScrollRectOffsetMax = _scrollRectRt.offsetMax;
+            }
+            _scrollRectOffsetsCaptured = true;
+            _multiplayerRightDockApplied = false;
+        }
+
+        if (!_viewportOffsetsCaptured || _scrollViewportRt != scrollRect.viewport)
+        {
+            _scrollViewportRt = scrollRect.viewport;
+            _originalViewportOffsetMin = _scrollViewportRt.offsetMin;
+            _originalViewportOffsetMax = _scrollViewportRt.offsetMax;
+            _viewportOffsetsCaptured = true;
+            _multiplayerRightDockApplied = false;
+        }
+
+        if (_multiplayerRightDockApplied == enabled)
+            return;
+
+        float scrollOffsetY = 0f;
+        bool hasScrollSnapshot = preserveScroll && TryCaptureScrollOffset(out scrollOffsetY);
+
+        if (_scrollRectRt)
+        {
+            _scrollRectRt.offsetMin = _originalScrollRectOffsetMin;
+            _scrollRectRt.offsetMax = _originalScrollRectOffsetMax;
+        }
+        _scrollViewportRt.offsetMin = _originalViewportOffsetMin;
+        _scrollViewportRt.offsetMax = _originalViewportOffsetMax;
+        float rightPadding = Mathf.Max(
+            MultiplayerGridRightPaddingMin,
+            (
+                (_scrollRectRt ? _scrollRectRt.parent : _scrollViewportRt.parent) as RectTransform
+            )?.rect.width * 0.20f ?? MultiplayerGridRightPaddingMin
+        );
+
+        if (enabled)
+        {
+            if (_scrollRectRt && _scrollRectRt != _scrollViewportRt)
+            {
+                _scrollRectRt.offsetMax = new Vector2(
+                    _originalScrollRectOffsetMax.x - rightPadding,
+                    _originalScrollRectOffsetMax.y
+                );
+            }
+            else
+            {
+                _scrollViewportRt.offsetMax = new Vector2(
+                    _originalViewportOffsetMax.x - rightPadding,
+                    _originalViewportOffsetMax.y
+                );
+            }
+        }
+        _multiplayerRightDockApplied = enabled;
+
+        Canvas.ForceUpdateCanvases();
+        if (_scrollRectRt)
+            LayoutRebuilder.MarkLayoutForRebuild(_scrollRectRt);
+        ApplyColumnsToAllSections();
+
+        if (hasScrollSnapshot)
+            RestoreScrollOffsetAfterLayout(scrollOffsetY);
+    }
+
     private void CancelGridTransientCoroutines()
     {
         _scrollToken++;
@@ -2314,6 +2460,108 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             StopCoroutine(_scrollResetRoutine);
             _scrollResetRoutine = null;
         }
+
+        if (_scrollRestoreRoutine != null)
+        {
+            StopCoroutine(_scrollRestoreRoutine);
+            _scrollRestoreRoutine = null;
+        }
+    }
+
+    private void CancelPendingResetScrollToTop()
+    {
+        if (_scrollResetRoutine == null)
+            return;
+
+        StopCoroutine(_scrollResetRoutine);
+        _scrollResetRoutine = null;
+    }
+
+    private void CancelActiveSmartScroll()
+    {
+        _scrollToken++;
+
+        if (_scrollRoutine == null)
+            return;
+
+        StopCoroutine(_scrollRoutine);
+        _scrollRoutine = null;
+    }
+
+    private bool TryCaptureScrollOffset(out float offsetY)
+    {
+        offsetY = 0f;
+        if (!scrollRect || !scrollRect.content || !scrollRect.viewport)
+            return false;
+
+        Canvas.ForceUpdateCanvases();
+        float maxOffset = Mathf.Max(0f, scrollRect.content.rect.height - scrollRect.viewport.rect.height);
+        if (maxOffset <= 0f)
+            return false;
+
+        offsetY = Mathf.Clamp(scrollRect.content.anchoredPosition.y, 0f, maxOffset);
+        return true;
+    }
+
+    private void RestoreScrollOffsetAfterLayout(float offsetY)
+    {
+        if (_scrollRestoreRoutine != null)
+        {
+            StopCoroutine(_scrollRestoreRoutine);
+            _scrollRestoreRoutine = null;
+        }
+
+        RestoreScrollOffset(offsetY);
+
+        if (isActiveAndEnabled)
+            _scrollRestoreRoutine = StartCoroutine(CoRestoreScrollOffset(offsetY, _buildToken));
+    }
+
+    private IEnumerator CoRestoreScrollOffset(float offsetY, int token)
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            yield return null;
+            if (token != _buildToken)
+                yield break;
+
+            RebuildSectionContentLayoutImmediate();
+            RestoreScrollOffset(offsetY);
+        }
+
+        _scrollRestoreRoutine = null;
+    }
+
+    private void RestoreScrollOffset(float offsetY)
+    {
+        if (!scrollRect || !scrollRect.content || !scrollRect.viewport)
+            return;
+
+        Canvas.ForceUpdateCanvases();
+        float maxOffset = Mathf.Max(0f, scrollRect.content.rect.height - scrollRect.viewport.rect.height);
+
+        scrollRect.StopMovement();
+        scrollRect.velocity = Vector2.zero;
+
+        if (maxOffset <= 0f)
+        {
+            scrollRect.verticalNormalizedPosition = 1f;
+            return;
+        }
+
+        var anchored = scrollRect.content.anchoredPosition;
+        anchored.y = Mathf.Clamp(offsetY, 0f, maxOffset);
+        scrollRect.content.anchoredPosition = anchored;
+        scrollRect.verticalNormalizedPosition = 1f - Mathf.Clamp01(anchored.y / maxOffset);
+    }
+
+    private bool IsNearTopScrollOffset(float offsetY)
+    {
+        if (!scrollRect || !scrollRect.viewport)
+            return offsetY <= 1f;
+
+        float topLockRange = Mathf.Max(120f, scrollRect.viewport.rect.height * 0.18f);
+        return offsetY <= topLockRange;
     }
 
     private void QueueResetScrollToTop()
@@ -2349,6 +2597,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (fit)
                 fit.Recalculate();
         }
+
+        RebuildSectionContentLayoutImmediate();
 
         if (scrollRect && scrollRect.content)
             LayoutRebuilder.ForceRebuildLayoutImmediate(scrollRect.content);
@@ -2523,6 +2773,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         fit.MaxCols = currentCols;
 
         _fits.Add(fit);
+        fit.Recalculate();
+        grp.RefreshPreferredHeight();
 
         StartCoroutine(CoRecalcSafe(fit, _buildToken));
     }
@@ -2539,7 +2791,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
         currentCols = cols;
         PlayerPrefs.SetInt(KEY_COLS, currentCols);
-        ApplyColumnsToAllSections();
+        ApplyColumnsToAllSections(preserveScroll: true);
     }
 
     void FinalizeSection(SectionGroup sec)
@@ -2558,8 +2810,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         FitSection(sec);
     }
 
-    private void ApplyColumnsToAllSections()
+    private void ApplyColumnsToAllSections(bool preserveScroll = false)
     {
+        float scrollOffsetY = 0f;
+        bool hasScrollSnapshot = preserveScroll && TryCaptureScrollOffset(out scrollOffsetY);
+        if (preserveScroll)
+        {
+            CancelActiveSmartScroll();
+            CancelPendingResetScrollToTop();
+        }
+
         if (cardSizeLabel)
             cardSizeLabel.text = $"{currentCols} cols";
 
@@ -2577,6 +2837,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (!sec)
                 continue;
             sec.UpdateHeaderForCols(currentCols, minColsLarge, maxColsSmall);
+        }
+
+        RebuildSectionContentLayoutImmediate();
+
+        if (hasScrollSnapshot)
+        {
+            if (IsNearTopScrollOffset(scrollOffsetY))
+                RestoreScrollOffsetAfterLayout(0f);
+            else
+                RestoreScrollOffsetAfterLayout(scrollOffsetY);
         }
     }
 
@@ -2599,6 +2869,27 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             yield break;
 
         fit.Recalculate();
+        RebuildSectionContentLayoutImmediate();
+    }
+
+    private void RebuildSectionContentLayoutImmediate()
+    {
+        Canvas.ForceUpdateCanvases();
+
+        foreach (var sec in _sections)
+        {
+            if (!sec)
+                continue;
+
+            sec.RefreshPreferredHeight();
+            if (sec.transform is RectTransform secRt)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(secRt);
+        }
+
+        if (content is RectTransform contentRt)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
+
+        Canvas.ForceUpdateCanvases();
     }
 
     private void RevealTypeHintForOne()
@@ -2856,7 +3147,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void ApplyMultiplayerUiState()
     {
-        if (!QuizNetworkRuntime.IsMultiplayerActive && !GameSettings.IsMultiplayer)
+        bool multiplayerUi = QuizNetworkRuntime.IsMultiplayerActive || GameSettings.IsMultiplayer;
+        ApplyContentTopPadding(preserveScroll: true);
+        ApplyMultiplayerRightDock(multiplayerUi, preserveScroll: true);
+
+        if (!multiplayerUi)
             return;
 
         bool canUseQuizActions = running || (pauseMenu && pauseMenu.IsShowing);
@@ -2924,6 +3219,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         int networkGeneration,
         string networkTypeFilter,
         IReadOnlyList<int> solvedIds,
+        IReadOnlyList<int> hintedIds,
+        IReadOnlyList<int> shadowedIds,
         float networkElapsed,
         bool networkRunning
     )
@@ -2932,32 +3229,107 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             ? null
             : networkTypeFilter.Trim().ToLowerInvariant();
 
-        bool settingsChanged =
-            generation != networkGeneration
-            || !string.Equals(selectedType, normalizedType, StringComparison.OrdinalIgnoreCase);
+        var solvedSnapshot = solvedIds != null ? new List<int>(solvedIds) : new List<int>();
+        var hintedSnapshot = hintedIds != null ? new List<int>(hintedIds) : new List<int>();
+        var shadowedSnapshot = shadowedIds != null ? new List<int>(shadowedIds) : new List<int>();
 
-        if (settingsChanged)
+        if (_networkStateApplyRoutine != null)
+            StopCoroutine(_networkStateApplyRoutine);
+
+        _networkStateApplyRoutine = StartCoroutine(
+            CoApplyNetworkState(
+                networkGeneration,
+                normalizedType,
+                solvedSnapshot,
+                hintedSnapshot,
+                shadowedSnapshot,
+                networkElapsed,
+                networkRunning
+            )
+        );
+    }
+
+    private IEnumerator CoApplyNetworkState(
+        int networkGeneration,
+        string normalizedType,
+        IReadOnlyList<int> solvedIds,
+        IReadOnlyList<int> hintedIds,
+        IReadOnlyList<int> shadowedIds,
+        float networkElapsed,
+        bool networkRunning
+    )
+    {
+        StopLocalBuildForNetworkState();
+
+        generation = networkGeneration;
+        selectedType = normalizedType;
+        GameSettings.Generation = string.IsNullOrEmpty(normalizedType)
+            ? networkGeneration
+            : (int?)null;
+        GameSettings.TypeFilter = string.IsNullOrEmpty(normalizedType) ? null : new[] { normalizedType };
+
+        // Let any pending Destroy calls from an interrupted build clear before making
+        // the authoritative multiplayer grid.
+        yield return null;
+
+        BuildTargetList();
+        RebuildGrid();
+
+        yield return null;
+
+        RefreshNetworkGridLayout();
+        elapsed = Mathf.Max(0f, networkElapsed);
+        SetTimerText();
+        ApplyNetworkHintState(hintedIds, shadowedIds);
+        ApplyNetworkSolvedIds(solvedIds, clearInput: false, playSound: false);
+        running = networkRunning && !IsComplete();
+        RefreshNetworkGridLayout();
+        ApplyMultiplayerUiState();
+        _networkStateApplyRoutine = null;
+    }
+
+    private void StopLocalBuildForNetworkState()
+    {
+        if (_localBuildRoutine == null)
+            return;
+
+        StopCoroutine(_localBuildRoutine);
+        _localBuildRoutine = null;
+        _loader?.Hide();
+    }
+
+    private void RefreshNetworkGridLayout()
+    {
+        if (!pauseMenu || !pauseMenu.IsShowing)
+            SetGridVisible(true);
+
+        ApplyColumnsToAllSections();
+        Canvas.ForceUpdateCanvases();
+
+        foreach (var fit in _fits)
         {
-            generation = networkGeneration;
-            selectedType = normalizedType;
-            GameSettings.Generation = string.IsNullOrEmpty(normalizedType)
-                ? networkGeneration
-                : (int?)null;
-            GameSettings.TypeFilter = string.IsNullOrEmpty(normalizedType)
-                ? null
-                : new[] { normalizedType };
-
-            BuildTargetList();
-            RebuildGrid();
-            ApplyColumnsToAllSections();
-            Canvas.ForceUpdateCanvases();
+            if (fit)
+                fit.Recalculate();
         }
 
-        elapsed = Mathf.Max(0f, networkElapsed);
-        running = networkRunning && !IsComplete();
-        SetTimerText();
-        ApplyNetworkSolvedIds(solvedIds, clearInput: false, playSound: false);
-        ApplyMultiplayerUiState();
+        if (scrollRect && scrollRect.content)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(scrollRect.content);
+
+        Canvas.ForceUpdateCanvases();
+    }
+
+    private void ApplyNetworkHintState(
+        IReadOnlyList<int> hintedIds,
+        IReadOnlyList<int> shadowedIds
+    )
+    {
+        if (hintedIds != null)
+            foreach (var id in hintedIds)
+                ApplyNetworkTypeHint(id);
+
+        if (shadowedIds != null)
+            foreach (var id in shadowedIds)
+                ApplyNetworkShadow(id);
     }
 
     public void ApplyNetworkSolvedIds(
@@ -3967,6 +4339,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void ApplyEndStateCardBorders(HashSet<int> guessedIds = null)
     {
+        _endStateBordersShowing = true;
         guessedIds ??= new HashSet<int>(solved);
 
         foreach (var kv in cardById)
@@ -3979,6 +4352,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             bool guessed = guessedIds.Contains(id);
             card.ShowEndState(QuizMultiplayerCoordinator.GetEndStateColorForPokemon(id, guessed));
         }
+    }
+
+    public void RefreshMultiplayerEndStateColors()
+    {
+        if (_endStateBordersShowing)
+            ApplyEndStateCardBorders();
     }
 
     IEnumerator RecalculateAfterLayout()
@@ -4003,7 +4382,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         Step(0.40f);
         yield return null;
 
+        bool multiplayerUi = QuizNetworkRuntime.IsMultiplayerActive || GameSettings.IsMultiplayer;
+        ApplyContentTopPadding(preserveScroll: false);
+        ApplyMultiplayerRightDock(multiplayerUi, preserveScroll: false);
         RebuildGrid();
+        if (!pauseMenu || !pauseMenu.IsShowing)
+            SetGridVisible(true);
         Step(0.90f);
         yield return null;
 

@@ -1,6 +1,7 @@
 using System.Collections;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 [RequireComponent(typeof(CanvasGroup))]
 public class Toast : MonoBehaviour
@@ -11,6 +12,9 @@ public class Toast : MonoBehaviour
 
     [SerializeField]
     private TMP_Text label;
+
+    [SerializeField]
+    private Graphic background;
 
     [Header("Timing (seconds)")]
     [SerializeField]
@@ -23,11 +27,27 @@ public class Toast : MonoBehaviour
     private float fadeOut = 0.25f;
 
     private Coroutine co;
+    private Color defaultBackgroundColor;
+    private bool hasDefaultBackgroundColor;
 
     void Awake()
     {
         if (!group && !TryGetComponent(out group))
             group = gameObject.AddComponent<CanvasGroup>();
+        if (!background)
+        {
+            var rootGraphic = GetComponent<Graphic>();
+            if (rootGraphic && rootGraphic != label)
+                background = rootGraphic;
+        }
+        if (!background)
+            background = FindBackgroundGraphic();
+        if (background)
+        {
+            defaultBackgroundColor = background.color;
+            hasDefaultBackgroundColor = true;
+            background.raycastTarget = false;
+        }
 
         HideImmediate();
     }
@@ -39,10 +59,20 @@ public class Toast : MonoBehaviour
 
     public void Show(string message, float? seconds = null)
     {
+        Show(message, seconds, null);
+    }
+
+    public void Show(string message, float? seconds, Color? backgroundColor)
+    {
         if (label)
             label.text = message;
         if (seconds.HasValue)
             hold = Mathf.Max(0.05f, seconds.Value);
+        EnsureBackground(backgroundColor);
+        if (background)
+            background.color = backgroundColor ?? (
+                hasDefaultBackgroundColor ? defaultBackgroundColor : background.color
+            );
 
         if (!gameObject.activeSelf)
             gameObject.SetActive(true);
@@ -89,8 +119,45 @@ public class Toast : MonoBehaviour
     {
         if (!group)
             return;
+        if (background && hasDefaultBackgroundColor)
+            background.color = defaultBackgroundColor;
         group.alpha = 0f;
         group.blocksRaycasts = false;
         group.interactable = false;
+    }
+
+    private void EnsureBackground(Color? backgroundColor)
+    {
+        if (background || !backgroundColor.HasValue)
+            return;
+
+        background = FindBackgroundGraphic();
+        if (background)
+        {
+            defaultBackgroundColor = background.color;
+            hasDefaultBackgroundColor = true;
+            background.raycastTarget = false;
+            return;
+        }
+
+        var image = gameObject.AddComponent<Image>();
+        image.color = Color.clear;
+        image.raycastTarget = false;
+        background = image;
+        defaultBackgroundColor = Color.clear;
+        hasDefaultBackgroundColor = true;
+    }
+
+    private Graphic FindBackgroundGraphic()
+    {
+        foreach (var image in GetComponentsInChildren<Image>(true))
+        {
+            if (!image || image.GetComponent<TMP_Text>())
+                continue;
+
+            return image;
+        }
+
+        return null;
     }
 }

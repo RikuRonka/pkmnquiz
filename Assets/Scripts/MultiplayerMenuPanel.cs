@@ -11,10 +11,13 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 {
     private const string NicknamePrefsKey = "coop_nickname";
     private const float PanelWidth = 360f;
-    private const float CompactPanelHeight = 262f;
+    private const float CompactPanelHeight = 300f;
     private const float BrowserPanelHeight = 376f;
     private const float InputHeight = 34f;
     private const float ButtonHeight = 34f;
+    private const float ColorPanelWidth = 88f;
+    private const float ColorPanelHeight = 166f;
+    private const float ColorSwatchSize = 18f;
     private const float LobbyListHeight = 106f;
     private const float LobbyEntryHeight = 28f;
     private const float LobbyEntryJoinWidth = 60f;
@@ -35,7 +38,13 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     private TMP_Text hostNoticeLabel;
     private Button hostButton;
     private Button refreshLobbiesButton;
+    private Button returnToQuizButton;
     private Button leaveButton;
+    private readonly List<Button> colorButtons = new();
+    private readonly List<Outline> colorButtonOutlines = new();
+    private readonly HashSet<string> occupiedColorHexes = new(StringComparer.OrdinalIgnoreCase);
+    private GameObject colorPickerPanel;
+    private CanvasGroup colorPickerCanvasGroup;
     private GameObject lobbyListPanel;
     private RectTransform lobbyListContent;
     private TMP_Text lobbyListEmptyLabel;
@@ -52,6 +61,9 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     private bool lobbyMemberSnapshotRunning;
     private bool pendingLobbyJoinNotice;
     private int pendingLobbyJoinNoticeCount;
+    private string selectedColorHex = QuizNetworkRuntime.PlayerColorHex;
+    private float nextLobbyMemberRefresh;
+    private static string sessionNickname = string.Empty;
 
     public static void EnsureInScene()
     {
@@ -112,6 +124,8 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     private void OnDestroy()
     {
         QuizNetworkRuntime.StatusChanged -= SetStatus;
+        if (colorPickerPanel)
+            Destroy(colorPickerPanel);
     }
 
     private void BuildUi()
@@ -153,8 +167,11 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         nicknameInput = CreateInput("Nickname", 14);
         PlayerPrefs.DeleteKey(NicknamePrefsKey);
         PlayerPrefs.Save();
-        nicknameInput.SetTextWithoutNotify(string.Empty);
+        nicknameInput.SetTextWithoutNotify(sessionNickname);
+        selectedColorHex = QuizNetworkRuntime.SetPlayerColorHex(QuizNetworkRuntime.PlayerColorHex);
+        CreateColorPickerPanel();
         hostButton = CreateButton("Host co-op lobby", OnHostClicked, HostButtonColor);
+        returnToQuizButton = CreateButton("Return to co-op quiz", OnReturnToQuizClicked, JoinBadgeColor);
         refreshLobbiesButton = CreateButton("Find open lobbies", OnFindLobbiesClicked, BrowseButtonColor);
         CreateLobbyBrowser();
         leaveButton = CreateButton("Leave co-op lobby", OnLeaveClicked, LeaveButtonColor);
@@ -170,6 +187,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         canvasGroup.alpha = overlayVisible ? 1f : 0f;
         canvasGroup.interactable = overlayVisible;
         canvasGroup.blocksRaycasts = overlayVisible;
+        ApplyColorPickerVisibility(IsInLobby());
     }
 
     private TMP_Text CreateLabel(string text, float size, FontStyles style, float height = 0f)
@@ -220,6 +238,167 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         label.raycastTarget = false;
 
         return button;
+    }
+
+    private void CreateColorPickerPanel()
+    {
+        colorPickerPanel = new GameObject("Select Color Panel", typeof(RectTransform));
+        colorPickerPanel.transform.SetParent(transform.parent, false);
+
+        var panelRt = (RectTransform)colorPickerPanel.transform;
+        var selfRt = (RectTransform)transform;
+        panelRt.anchorMin = selfRt.anchorMin;
+        panelRt.anchorMax = selfRt.anchorMax;
+        panelRt.pivot = new Vector2(0f, 1f);
+        panelRt.anchoredPosition = selfRt.anchoredPosition + new Vector2(PanelWidth + 8f, 0f);
+        panelRt.sizeDelta = new Vector2(ColorPanelWidth, ColorPanelHeight);
+
+        var image = colorPickerPanel.AddComponent<Image>();
+        image.color = new Color(0.03f, 0.04f, 0.05f, 0.72f);
+        colorPickerCanvasGroup = colorPickerPanel.AddComponent<CanvasGroup>();
+
+        var layout = colorPickerPanel.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(8, 8, 8, 8);
+        layout.spacing = 6f;
+        layout.childAlignment = TextAnchor.UpperCenter;
+        layout.childControlWidth = false;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = false;
+        layout.childForceExpandHeight = false;
+
+        var labelGo = new GameObject("Title", typeof(RectTransform));
+        labelGo.transform.SetParent(colorPickerPanel.transform, false);
+        var label = labelGo.AddComponent<TextMeshProUGUI>();
+        label.text = "Select color";
+        label.fontSize = 11f;
+        label.fontStyle = FontStyles.Bold;
+        label.color = Color.white;
+        label.alignment = TextAlignmentOptions.Center;
+        label.raycastTarget = false;
+
+        var labelLayout = labelGo.AddComponent<LayoutElement>();
+        labelLayout.minWidth = ColorPanelWidth - 16f;
+        labelLayout.preferredWidth = ColorPanelWidth - 16f;
+        labelLayout.minHeight = 24f;
+        labelLayout.preferredHeight = 24f;
+
+        var gridGo = new GameObject("Swatches", typeof(RectTransform));
+        gridGo.transform.SetParent(colorPickerPanel.transform, false);
+
+        var gridLayout = gridGo.AddComponent<GridLayoutGroup>();
+        gridLayout.cellSize = new Vector2(ColorSwatchSize, ColorSwatchSize);
+        gridLayout.spacing = new Vector2(5f, 5f);
+        gridLayout.childAlignment = TextAnchor.UpperCenter;
+        gridLayout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        gridLayout.constraintCount = 3;
+
+        var gridElement = gridGo.AddComponent<LayoutElement>();
+        gridElement.minWidth = ColorPanelWidth - 16f;
+        gridElement.preferredWidth = ColorPanelWidth - 16f;
+        gridElement.minHeight = 4f * ColorSwatchSize + 3f * 5f;
+        gridElement.preferredHeight = gridElement.minHeight;
+
+        foreach (var colorHex in QuizNetworkRuntime.PlayerColorPalette)
+            CreateColorSwatch(gridGo.transform, colorHex);
+
+        RefreshColorSwatches();
+        ApplyColorPickerVisibility(false);
+    }
+
+    private void CreateColorSwatch(Transform parent, string colorHex)
+    {
+        var go = new GameObject($"Color {colorHex}", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        ((RectTransform)go.transform).sizeDelta = new Vector2(ColorSwatchSize, ColorSwatchSize);
+
+        var image = go.AddComponent<Image>();
+        image.color = QuizNetworkRuntime.ColorFromHex(colorHex);
+
+        var outline = go.AddComponent<Outline>();
+        outline.effectColor = Color.white;
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        var button = go.AddComponent<Button>();
+        button.targetGraphic = image;
+        PreserveSwatchTint(button);
+        button.onClick.AddListener(() => SetSelectedColor(colorHex));
+
+        var layout = go.AddComponent<LayoutElement>();
+        layout.minWidth = ColorSwatchSize;
+        layout.preferredWidth = ColorSwatchSize;
+        layout.minHeight = ColorSwatchSize;
+        layout.preferredHeight = ColorSwatchSize;
+
+        colorButtons.Add(button);
+        colorButtonOutlines.Add(outline);
+    }
+
+    private static void PreserveSwatchTint(Button button)
+    {
+        if (!button)
+            return;
+
+        var colors = button.colors;
+        colors.normalColor = Color.white;
+        colors.highlightedColor = Color.white;
+        colors.pressedColor = new Color(0.86f, 0.86f, 0.86f, 1f);
+        colors.selectedColor = Color.white;
+        colors.disabledColor = Color.white;
+        colors.colorMultiplier = 1f;
+        button.colors = colors;
+    }
+
+    private async void SetSelectedColor(string colorHex)
+    {
+        colorHex = QuizNetworkRuntime.NormalizeColorHex(colorHex);
+        if (occupiedColorHexes.Contains(colorHex))
+        {
+            SetStatus("That color is already taken in this lobby.");
+            return;
+        }
+
+        selectedColorHex = QuizNetworkRuntime.SetPlayerColorHex(colorHex);
+        RefreshColorSwatches();
+
+        if (IsInLobby())
+        {
+            try
+            {
+                await QuizNetworkRuntime.UpdateCurrentLobbyPlayerAsync(CurrentNickname(), selectedColorHex);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
+                SetStatus($"Color update failed: {ReadableError(ex)}");
+            }
+        }
+    }
+
+    private void RefreshColorSwatches()
+    {
+        for (int i = 0; i < colorButtonOutlines.Count; i++)
+        {
+            string colorHex = i < QuizNetworkRuntime.PlayerColorPalette.Length
+                ? QuizNetworkRuntime.NormalizeColorHex(QuizNetworkRuntime.PlayerColorPalette[i])
+                : string.Empty;
+            bool selected = string.Equals(colorHex, selectedColorHex, StringComparison.OrdinalIgnoreCase);
+            bool occupied = occupiedColorHexes.Contains(colorHex);
+            if (colorButtons[i])
+                colorButtons[i].gameObject.SetActive(!occupied || selected);
+            colorButtonOutlines[i].enabled = selected;
+            if (colorButtons[i])
+                colorButtons[i].interactable = !operationBusy && !occupied;
+        }
+    }
+
+    private void ApplyColorPickerVisibility(bool visible)
+    {
+        if (!colorPickerCanvasGroup)
+            return;
+
+        colorPickerCanvasGroup.alpha = overlayVisible && visible ? 1f : 0f;
+        colorPickerCanvasGroup.interactable = overlayVisible && visible;
+        colorPickerCanvasGroup.blocksRaycasts = overlayVisible && visible;
     }
 
     private TMP_InputField CreateInput(string placeholderText, int characterLimit)
@@ -358,7 +537,11 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         try
         {
             var nickname = CurrentNickname();
-            await QuizNetworkRuntime.StartHostLobbyAsync(0, nickname: nickname);
+            await QuizNetworkRuntime.StartHostLobbyAsync(
+                0,
+                nickname: nickname,
+                colorHex: selectedColorHex
+            );
             hostingLobby = true;
             joinedLobby = false;
             SetBusy(false);
@@ -383,6 +566,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         try
         {
             var nickname = CurrentNickname();
+            QuizNetworkRuntime.SetPlayerColorHex(selectedColorHex);
             var lobbies = await QuizNetworkRuntime.FindAvailableLobbiesAsync(nickname);
             PopulateLobbyList(lobbies);
             if (lobbies.Count == 0)
@@ -403,15 +587,23 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         }
     }
 
-    private async void OnBrowserLobbyClicked(string code)
+    private void OnReturnToQuizClicked()
     {
-        if (operationBusy || string.IsNullOrWhiteSpace(code))
+        if (operationBusy)
             return;
 
-        await JoinCodeAsync(code);
+        QuizNetworkRuntime.ReturnToActiveQuiz();
     }
 
-    private async Task JoinCodeAsync(string code)
+    private async void OnBrowserLobbyClicked(QuizNetworkRuntime.AvailableLobby lobby)
+    {
+        if (operationBusy || string.IsNullOrWhiteSpace(lobby.Code))
+            return;
+
+        await JoinCodeAsync(lobby);
+    }
+
+    private async Task JoinCodeAsync(QuizNetworkRuntime.AvailableLobby lobby)
     {
         SetBusy(true);
         SetStatus("Joining co-op lobby...");
@@ -419,7 +611,16 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         try
         {
             var nickname = CurrentNickname();
-            await QuizNetworkRuntime.StartClientAsync(code, nickname);
+            if (LobbyHasNickname(lobby, nickname))
+            {
+                SetStatus("That nickname is already taken in this lobby.");
+                SetBusy(false);
+                return;
+            }
+
+            selectedColorHex = FirstAvailableColor(lobby);
+            QuizNetworkRuntime.SetPlayerColorHex(selectedColorHex);
+            await QuizNetworkRuntime.StartClientAsync(lobby.Code, nickname, selectedColorHex);
             hostingLobby = false;
             joinedLobby = true;
             SetBusy(false);
@@ -431,6 +632,41 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
             SetStatus($"Join failed: {ReadableError(ex)}");
             SetBusy(false);
         }
+    }
+
+    private static bool LobbyHasNickname(
+        QuizNetworkRuntime.AvailableLobby lobby,
+        string nickname
+    )
+    {
+        nickname = QuizNetworkRuntime.NormalizeNickname(nickname);
+        foreach (var takenName in lobby.TakenNames)
+            if (
+                string.Equals(
+                    QuizNetworkRuntime.NormalizeNickname(takenName),
+                    nickname,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+                return true;
+
+        return false;
+    }
+
+    private static string FirstAvailableColor(QuizNetworkRuntime.AvailableLobby lobby)
+    {
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var takenColor in lobby.TakenColors)
+            taken.Add(QuizNetworkRuntime.NormalizeColorHex(takenColor));
+
+        foreach (var colorHex in QuizNetworkRuntime.PlayerColorPalette)
+        {
+            string normalized = QuizNetworkRuntime.NormalizeColorHex(colorHex);
+            if (!taken.Contains(normalized))
+                return normalized;
+        }
+
+        return QuizNetworkRuntime.PlayerColorHex;
     }
 
     private void PopulateLobbyList(IReadOnlyList<QuizNetworkRuntime.AvailableLobby> lobbies)
@@ -466,7 +702,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
         var button = go.AddComponent<Button>();
         button.targetGraphic = image;
-        button.onClick.AddListener(() => OnBrowserLobbyClicked(code));
+        button.onClick.AddListener(() => OnBrowserLobbyClicked(lobby));
 
         var layout = go.AddComponent<LayoutElement>();
         layout.minHeight = LobbyEntryHeight;
@@ -550,6 +786,12 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
         if (hostButton)
             hostButton.interactable = !operationBusy && !inLobby;
+        if (returnToQuizButton)
+        {
+            bool canReturn = !operationBusy && QuizNetworkRuntime.CanReturnToActiveQuiz;
+            returnToQuizButton.gameObject.SetActive(canReturn);
+            returnToQuizButton.interactable = canReturn;
+        }
         if (refreshLobbiesButton)
         {
             refreshLobbiesButton.gameObject.SetActive(canBrowse);
@@ -559,6 +801,8 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
             lobbyListPanel.SetActive(canBrowse);
         if (nicknameInput)
             nicknameInput.interactable = !operationBusy && !inLobby;
+        ApplyColorPickerVisibility(inLobby);
+        RefreshColorSwatches();
         if (leaveButton)
         {
             bool canLeave =
@@ -716,6 +960,13 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         {
             lastObservedPlayerCount = -1;
             observedLobbyMembers.Clear();
+            occupiedColorHexes.Clear();
+        }
+
+        if (IsInLobby() && !operationBusy && Time.unscaledTime >= nextLobbyMemberRefresh)
+        {
+            QueueLobbyMemberSnapshot(false);
+            nextLobbyMemberRefresh = Time.unscaledTime + 2.5f;
         }
 
         ApplyInteractivity();
@@ -775,6 +1026,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
                 var joinedNames = new List<string>();
                 var nonLocalNames = new List<string>();
                 var currentMembers = new Dictionary<string, string>();
+                var currentOccupiedColors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var member in members)
                 {
                     if (string.IsNullOrEmpty(member.Id))
@@ -782,7 +1034,14 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
                     currentMembers[member.Id] = member.Name;
                     if (!member.IsLocalPlayer)
+                    {
                         nonLocalNames.Add(member.Name);
+                        currentOccupiedColors.Add(QuizNetworkRuntime.NormalizeColorHex(member.ColorHex));
+                    }
+                    else
+                    {
+                        selectedColorHex = QuizNetworkRuntime.SetPlayerColorHex(member.ColorHex);
+                    }
 
                     if (
                         showJoinNotice
@@ -797,6 +1056,11 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
                 observedLobbyMembers.Clear();
                 foreach (var member in currentMembers)
                     observedLobbyMembers[member.Key] = member.Value;
+
+                occupiedColorHexes.Clear();
+                foreach (var colorHex in currentOccupiedColors)
+                    occupiedColorHexes.Add(colorHex);
+                RefreshColorSwatches();
 
                 if (showJoinNotice && joinedNames.Count == 0 && fallbackJoinCount > 0)
                 {
@@ -872,7 +1136,14 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
     private string CurrentNickname()
     {
-        return QuizNetworkRuntime.NormalizeNickname(nicknameInput ? nicknameInput.text : null);
+        sessionNickname = QuizNetworkRuntime.NormalizeNickname(nicknameInput ? nicknameInput.text : null);
+        return sessionNickname;
+    }
+
+    private bool IsInLobby()
+    {
+        bool networkActive = NetworkManager.Singleton && NetworkManager.Singleton.IsListening;
+        return hostingLobby || joinedLobby || networkActive;
     }
 
 }

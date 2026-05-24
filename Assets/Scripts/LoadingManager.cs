@@ -21,6 +21,7 @@ public class LoadingManager : MonoBehaviour
     TMP_Text percentLabel;
     public int PendingGen { get; private set; } = 0;
     public string PendingType { get; private set; } = null;
+    public bool IsLoading => _loadCo != null;
     string _title = "Building…";
     Coroutine _fadeCo;
     Coroutine _loadCo;

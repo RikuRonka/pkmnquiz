@@ -4976,7 +4976,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PatchNotesView
   notesText: {fileID: 1239978752}
-  patchNotes: "1.1.9\n- Added open lobby matchmaking so players can join co-op without
+  patchNotes: "1.2.0\n- Added player color selection in co-op lobbies and during
+    quizzes\n- Matched multiplayer names and result highlights to each player's chosen
+    color\n- Added a draggable and resizable quiz chat panel with reserved grid space
+    on the right\n- Added a return-to-quiz flow for clients and clearer notifications
+    when players leave\n- Improved quiz grid refreshes after rejoining and changing
+    column counts\n- Fixed section title spacing so titles stay stable when changing
+    cols\n\n1.1.9\n- Added open lobby matchmaking so players can join co-op without
     manually sharing a code\n- Improved the co-op lobby UI with a larger panel, clearer
     player counts, colored action buttons, and Join labels\n- Added host join notifications
     with player nicknames and a pulsing prompt when a quiz can be chosen\n- Improved

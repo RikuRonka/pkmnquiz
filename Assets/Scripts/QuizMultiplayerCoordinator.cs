@@ -3,6 +3,7 @@ using TMPro;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -18,26 +19,15 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     private const string StateRequestMessage = "pkmnquiz_state_request";
     private const string StateMessage = "pkmnquiz_state";
     private const string TimerMessage = "pkmnquiz_timer";
-    private const int MessageSize = 16384;
+    private const string PlayerNoticeMessage = "pkmnquiz_player_notice";
+    private const int MessageSize = 32768;
     private const float TimerSyncInterval = 0.25f;
-    private const string HostPlayerColor = "#6FEA72";
-    private static readonly string[] RemotePlayerColors =
-    {
-        "#FFD84D",
-        "#7DD3FC",
-        "#F9A8D4",
-        "#C4B5FD",
-        "#FDBA74",
-        "#86EFAC",
-        "#FCA5A5",
-        "#A7F3D0",
-    };
-    private static readonly Color HostEndStateColor = new(0f, 1f, 0f, 1f);
-    private static readonly Color RemoteEndStateColor = new(1f, 0.85f, 0f, 1f);
     private static readonly Color MissedEndStateColor = new(1f, 0f, 0f, 1f);
+    private static readonly Color LeaveNoticeBackground = new(0.72f, 0.08f, 0.10f, 0.95f);
 
     private static QuizMultiplayerCoordinator instance;
     private static List<PlayerScore> latestScoreboard = new();
+    private static readonly Dictionary<ulong, string> latestPlayerColors = new();
 
     private QuizManager quiz;
     private NetworkManager manager;
@@ -47,6 +37,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     private float nextStateRequest;
     private float nextTimerSync;
     private readonly Dictionary<ulong, string> playerNames = new();
+    private readonly Dictionary<ulong, string> playerColors = new();
     private readonly Dictionary<ulong, int> playerScores = new();
     private readonly Dictionary<ulong, int> playerTypeHints = new();
     private readonly Dictionary<ulong, int> playerShadows = new();
@@ -67,10 +58,10 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             && instance.solvedByClientId.TryGetValue(pokemonId, out var solverClientId)
         )
         {
-            return solverClientId == 0UL ? HostEndStateColor : RemoteEndStateColor;
+            return QuizNetworkRuntime.ColorFromHex(GetKnownPlayerColor(solverClientId));
         }
 
-        return HostEndStateColor;
+        return QuizNetworkRuntime.ColorFromHex(QuizNetworkRuntime.PlayerColorHex);
     }
 
     public static void Attach(QuizManager quizManager)
@@ -110,6 +101,115 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
     public static bool RequestReturnToMenu() => RequestAction(CoopAction.ReturnToMenu);
 
+    public static void NotifyLocalPlayerLeavingQuiz()
+    {
+        if (!QuizNetworkRuntime.IsMultiplayerClientOnly)
+            return;
+
+        if (!instance)
+            Attach(FindFirstObjectByType<QuizManager>());
+        if (!instance || !instance.manager || instance.manager.CustomMessagingManager == null)
+            return;
+
+        using var writer = new FastBufferWriter(MessageSize, Allocator.Temp);
+        writer.WriteValueSafe(string.Empty);
+        writer.WriteValueSafe(true);
+        instance.manager.CustomMessagingManager.SendNamedMessage(PlayerNoticeMessage, 0UL, writer);
+    }
+
+    public static string LocalPlayerColorHex
+    {
+        get
+        {
+            var current = NetworkManager.Singleton;
+            if (current && latestPlayerColors.TryGetValue(current.LocalClientId, out var colorHex))
+                return QuizNetworkRuntime.NormalizeColorHex(colorHex);
+
+            return QuizNetworkRuntime.NormalizeColorHex(QuizNetworkRuntime.PlayerColorHex);
+        }
+    }
+
+    public static bool IsPlayerColorTakenByAnother(string colorHex)
+    {
+        colorHex = QuizNetworkRuntime.NormalizeColorHex(colorHex);
+        var current = NetworkManager.Singleton;
+        ulong localClientId = current ? current.LocalClientId : ulong.MaxValue;
+
+        if (instance)
+        {
+            foreach (var kv in instance.playerColors)
+            {
+                if (kv.Key == localClientId)
+                    continue;
+                if (
+                    string.Equals(
+                        QuizNetworkRuntime.NormalizeColorHex(kv.Value),
+                        colorHex,
+                        System.StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                    return true;
+            }
+        }
+
+        if (latestScoreboard != null)
+        {
+            foreach (var score in latestScoreboard)
+            {
+                if (score.ClientId == localClientId)
+                    continue;
+                if (
+                    string.Equals(
+                        QuizNetworkRuntime.NormalizeColorHex(score.ColorHex),
+                        colorHex,
+                        System.StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool TrySetLocalPlayerColor(string colorHex)
+    {
+        colorHex = QuizNetworkRuntime.NormalizeColorHex(colorHex);
+
+        var current = NetworkManager.Singleton;
+        if (current && current.IsListening && IsPlayerColorTakenByAnother(colorHex))
+        {
+            ShowLocalNotice("That color is already taken.", false);
+            return false;
+        }
+
+        QuizNetworkRuntime.SetPlayerColorHex(colorHex);
+
+        if (!current || !current.IsListening)
+            return true;
+
+        if (!instance)
+            Attach(FindFirstObjectByType<QuizManager>());
+
+        ulong localClientId = current.LocalClientId;
+        ApplyLocalPlayerColorToScoreboard(localClientId, colorHex);
+
+        if (instance)
+        {
+            instance.EnsurePlayer(localClientId, QuizNetworkRuntime.PlayerNickname, colorHex);
+            if (current.IsServer)
+                instance.BroadcastScoreboard();
+            else if (current.IsClient)
+                instance.SendNickname();
+        }
+
+        _ = QuizNetworkRuntime.UpdateCurrentLobbyPlayerAsync(
+            QuizNetworkRuntime.PlayerNickname,
+            colorHex
+        );
+        return true;
+    }
+
     private static bool RequestAction(CoopAction action)
     {
         if (!QuizNetworkRuntime.IsMultiplayerActive)
@@ -136,7 +236,11 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
         if (manager && manager.IsServer)
         {
-            EnsurePlayer(manager.LocalClientId, QuizNetworkRuntime.PlayerNickname);
+            EnsurePlayer(
+                manager.LocalClientId,
+                QuizNetworkRuntime.PlayerNickname,
+                QuizNetworkRuntime.PlayerColorHex
+            );
             MarkCurrentClientsAsAlreadyPresent();
             BroadcastScoreboard();
         }
@@ -186,6 +290,10 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         );
         manager.CustomMessagingManager.RegisterNamedMessageHandler(StateMessage, OnStateMessage);
         manager.CustomMessagingManager.RegisterNamedMessageHandler(TimerMessage, OnTimerMessage);
+        manager.CustomMessagingManager.RegisterNamedMessageHandler(
+            PlayerNoticeMessage,
+            OnPlayerNoticeMessage
+        );
         registered = true;
     }
 
@@ -209,6 +317,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(ScoreboardMessage);
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(StateMessage);
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(TimerMessage);
+            manager.CustomMessagingManager.UnregisterNamedMessageHandler(PlayerNoticeMessage);
         }
 
         if (instance == this)
@@ -531,13 +640,16 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
         using var writer = new FastBufferWriter(MessageSize, Allocator.Temp);
         writer.WriteValueSafe(QuizNetworkRuntime.PlayerNickname);
+        writer.WriteValueSafe(QuizNetworkRuntime.PlayerColorHex);
         manager.CustomMessagingManager.SendNamedMessage(NicknameMessage, 0UL, writer);
     }
 
     private void OnNicknameMessage(ulong senderClientId, FastBufferReader reader)
     {
         reader.ReadValueSafe(out string nickname);
-        EnsurePlayer(senderClientId, nickname);
+        reader.ReadValueSafe(out string colorHex);
+        colorHex = NormalizeRequestedPlayerColor(senderClientId, colorHex);
+        EnsurePlayer(senderClientId, nickname, colorHex);
         MaybeShowHostJoinNotice(senderClientId, playerNames[senderClientId]);
         BroadcastScoreboard();
     }
@@ -563,7 +675,18 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
         if (manager.IsServer)
         {
+            string playerName = playerNames.TryGetValue(clientId, out var knownName)
+                ? knownName
+                : DefaultPlayerName(clientId);
+            if (clientId != manager.LocalClientId && IsQuizSceneActive())
+            {
+                string message = $"{QuizNetworkRuntime.NormalizeNickname(playerName)} left the quiz.";
+                ShowLocalNotice(message, true);
+                BroadcastPlayerNotice(message, true);
+            }
+
             playerNames.Remove(clientId);
+            playerColors.Remove(clientId);
             playerScores.Remove(clientId);
             playerTypeHints.Remove(clientId);
             playerShadows.Remove(clientId);
@@ -574,6 +697,14 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
         if (clientId == 0UL)
             BeginReturnToMenu(0f);
+    }
+
+    private static bool IsQuizSceneActive()
+    {
+        return SceneManager.GetActiveScene().name.Equals(
+            "Quiz",
+            System.StringComparison.OrdinalIgnoreCase
+        );
     }
 
     private void SendStateToClient(ulong clientId)
@@ -587,6 +718,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         writer.WriteValueSafe(quiz.ElapsedSeconds);
         writer.WriteValueSafe(quiz.IsQuizRunning);
         WriteIds(writer, quiz.SolvedIds);
+        WriteIds(writer, quiz.HintedIds);
+        WriteIds(writer, quiz.ShadowedIds);
         WriteScoreboard(writer, BuildScoreboard());
         WriteSolvedOwners(writer);
         manager.CustomMessagingManager.SendNamedMessage(StateMessage, clientId, writer);
@@ -599,6 +732,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         reader.ReadValueSafe(out float elapsed);
         reader.ReadValueSafe(out bool isRunning);
         var solvedIds = ReadIds(reader);
+        var hintedIds = ReadIds(reader);
+        var shadowedIds = ReadIds(reader);
         var scoreboard = ReadScoreboard(reader);
         var solvedOwners = ReadSolvedOwners(reader);
         stateReceived = true;
@@ -611,8 +746,16 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         if (!quiz)
             return;
 
-        quiz.ApplyNetworkState(generation, typeFilter, solvedIds, elapsed, isRunning);
         ApplyScoreboard(scoreboard);
+        quiz.ApplyNetworkState(
+            generation,
+            typeFilter,
+            solvedIds,
+            hintedIds,
+            shadowedIds,
+            elapsed,
+            isRunning
+        );
     }
 
     private void BroadcastTimer()
@@ -635,6 +778,63 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             quiz = FindFirstObjectByType<QuizManager>();
         if (quiz)
             quiz.ApplyNetworkTimer(elapsed, isRunning);
+    }
+
+    private void BroadcastPlayerNotice(
+        string message,
+        bool isLeaveNotice,
+        ulong excludedClientId = ulong.MaxValue
+    )
+    {
+        if (!manager || !manager.IsServer || manager.CustomMessagingManager == null)
+            return;
+
+        foreach (var clientId in manager.ConnectedClientsIds)
+        {
+            if (clientId == manager.LocalClientId || clientId == excludedClientId)
+                continue;
+
+            using var writer = new FastBufferWriter(MessageSize, Allocator.Temp);
+            writer.WriteValueSafe(message ?? string.Empty);
+            writer.WriteValueSafe(isLeaveNotice);
+            manager.CustomMessagingManager.SendNamedMessage(PlayerNoticeMessage, clientId, writer);
+        }
+    }
+
+    private void OnPlayerNoticeMessage(ulong senderClientId, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out string message);
+        reader.ReadValueSafe(out bool isLeaveNotice);
+
+        if (manager && manager.IsServer)
+        {
+            if (senderClientId != manager.LocalClientId && isLeaveNotice)
+            {
+                string playerName = playerNames.TryGetValue(senderClientId, out var knownName)
+                    ? knownName
+                    : DefaultPlayerName(senderClientId);
+                string relayMessage =
+                    $"{QuizNetworkRuntime.NormalizeNickname(playerName)} left the quiz.";
+                ShowLocalNotice(relayMessage, true);
+                BroadcastPlayerNotice(relayMessage, true, senderClientId);
+            }
+            return;
+        }
+
+        ShowLocalNotice(message, isLeaveNotice);
+    }
+
+    private static void ShowLocalNotice(string message, bool isLeaveNotice)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        var currentQuiz = FindFirstObjectByType<QuizManager>();
+        if (!currentQuiz || !currentQuiz.toast)
+            return;
+
+        Color? backgroundColor = isLeaveNotice ? LeaveNoticeBackground : null;
+        currentQuiz.toast.Show(message, 2.5f, backgroundColor);
     }
 
     private void BroadcastScoreboard()
@@ -667,7 +867,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         ApplyScoreboard(ReadScoreboard(reader));
     }
 
-    private void EnsurePlayer(ulong clientId, string nickname)
+    private void EnsurePlayer(ulong clientId, string nickname, string colorHex = null)
     {
         if (!playerNames.ContainsKey(clientId))
             playerNames[clientId] = DefaultPlayerName(clientId);
@@ -675,12 +875,57 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(nickname))
             playerNames[clientId] = QuizNetworkRuntime.NormalizeNickname(nickname);
 
+        if (!playerColors.ContainsKey(clientId))
+            playerColors[clientId] = QuizNetworkRuntime.DefaultColorForClient(clientId);
+
+        if (!string.IsNullOrWhiteSpace(colorHex))
+            playerColors[clientId] = QuizNetworkRuntime.NormalizeColorHex(colorHex);
+
         if (!playerScores.ContainsKey(clientId))
             playerScores[clientId] = 0;
         if (!playerTypeHints.ContainsKey(clientId))
             playerTypeHints[clientId] = 0;
         if (!playerShadows.ContainsKey(clientId))
             playerShadows[clientId] = 0;
+    }
+
+    private string NormalizeRequestedPlayerColor(ulong clientId, string colorHex)
+    {
+        colorHex = QuizNetworkRuntime.NormalizeColorHex(colorHex);
+        if (!IsColorTakenByOtherClient(clientId, colorHex))
+            return colorHex;
+
+        if (playerColors.TryGetValue(clientId, out var existingColor))
+            return QuizNetworkRuntime.NormalizeColorHex(existingColor);
+
+        foreach (var paletteColor in QuizNetworkRuntime.PlayerColorPalette)
+        {
+            string normalized = QuizNetworkRuntime.NormalizeColorHex(paletteColor);
+            if (!IsColorTakenByOtherClient(clientId, normalized))
+                return normalized;
+        }
+
+        return QuizNetworkRuntime.DefaultColorForClient(clientId);
+    }
+
+    private bool IsColorTakenByOtherClient(ulong clientId, string colorHex)
+    {
+        colorHex = QuizNetworkRuntime.NormalizeColorHex(colorHex);
+        foreach (var kv in playerColors)
+        {
+            if (kv.Key == clientId)
+                continue;
+            if (
+                string.Equals(
+                    QuizNetworkRuntime.NormalizeColorHex(kv.Value),
+                    colorHex,
+                    System.StringComparison.OrdinalIgnoreCase
+                )
+            )
+                return true;
+        }
+
+        return false;
     }
 
     private void MarkCurrentClientsAsAlreadyPresent()
@@ -726,7 +971,12 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             var shadows = playerShadows.TryGetValue(clientId, out var shadowCount)
                 ? shadowCount
                 : 0;
-            scores.Add(new PlayerScore(clientId, playerNames[clientId], score, typeHints, shadows));
+            var colorHex = playerColors.TryGetValue(clientId, out var color)
+                ? color
+                : QuizNetworkRuntime.DefaultColorForClient(clientId);
+            scores.Add(
+                new PlayerScore(clientId, playerNames[clientId], colorHex, score, typeHints, shadows)
+            );
         }
 
         return scores;
@@ -737,7 +987,53 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         latestScoreboard = scoreboard == null
             ? new List<PlayerScore>()
             : new List<PlayerScore>(scoreboard);
+
+        latestPlayerColors.Clear();
+        foreach (var score in latestScoreboard)
+            latestPlayerColors[score.ClientId] = score.ColorHex;
+
         QuizMultiplayerStatusOverlay.SetScoreboard(FormatScoreboard(scoreboard));
+        var currentQuiz = FindFirstObjectByType<QuizManager>();
+        if (currentQuiz)
+            currentQuiz.RefreshMultiplayerEndStateColors();
+    }
+
+    private static void ApplyLocalPlayerColorToScoreboard(ulong localClientId, string colorHex)
+    {
+        if (latestScoreboard == null || latestScoreboard.Count == 0)
+        {
+            latestPlayerColors[localClientId] = QuizNetworkRuntime.NormalizeColorHex(colorHex);
+            QuizMultiplayerStatusOverlay.SetScoreboard(FormatScoreboard(latestScoreboard));
+            return;
+        }
+
+        var next = new List<PlayerScore>(latestScoreboard.Count);
+        bool changed = false;
+        foreach (var score in latestScoreboard)
+        {
+            if (score.ClientId != localClientId)
+            {
+                next.Add(score);
+                continue;
+            }
+
+            next.Add(
+                new PlayerScore(
+                    score.ClientId,
+                    score.Name,
+                    colorHex,
+                    score.Count,
+                    score.TypeHints,
+                    score.Shadows
+                )
+            );
+            changed = true;
+        }
+
+        if (changed)
+            ApplyScoreboard(next);
+        else
+            latestPlayerColors[localClientId] = QuizNetworkRuntime.NormalizeColorHex(colorHex);
     }
 
     public static string GetFinishedStatsText()
@@ -776,12 +1072,19 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             return string.Empty;
 
         System.Text.StringBuilder sb = new();
+        var current = NetworkManager.Singleton;
+        ulong localClientId = current ? current.LocalClientId : ulong.MaxValue;
         for (int i = 0; i < scoreboard.Count; i++)
         {
             if (i > 0)
                 sb.Append(" | ");
 
+            bool isLocalPlayer = current && scoreboard[i].ClientId == localClientId;
+            if (isLocalPlayer)
+                sb.Append("<link=\"local_color\">");
             sb.Append(FormatColoredPlayerName(scoreboard[i].ClientId, scoreboard[i].Name));
+            if (isLocalPlayer)
+                sb.Append("</link>");
             sb.Append(": ");
             sb.Append(scoreboard[i].Count);
         }
@@ -791,7 +1094,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
     public static string FormatColoredPlayerName(ulong clientId, string name)
     {
-        return $"<color={PlayerNameColor(clientId)}>{EscapeRichText(name)}</color>";
+        return $"<color={GetKnownPlayerColor(clientId)}>{EscapeRichText(name)}</color>";
     }
 
     public static string EscapeRichText(string value)
@@ -802,12 +1105,15 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         return value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
     }
 
-    private static string PlayerNameColor(ulong clientId)
+    private static string GetKnownPlayerColor(ulong clientId)
     {
-        if (clientId == 0UL)
-            return HostPlayerColor;
+        if (latestPlayerColors.TryGetValue(clientId, out var latestColor))
+            return QuizNetworkRuntime.NormalizeColorHex(latestColor);
 
-        return RemotePlayerColors[(int)((clientId - 1UL) % (ulong)RemotePlayerColors.Length)];
+        if (instance && instance.playerColors.TryGetValue(clientId, out var liveColor))
+            return QuizNetworkRuntime.NormalizeColorHex(liveColor);
+
+        return QuizNetworkRuntime.DefaultColorForClient(clientId);
     }
 
     private static string DefaultPlayerName(ulong clientId)
@@ -854,6 +1160,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         {
             writer.WriteValueSafe(scores[i].ClientId);
             writer.WriteValueSafe(scores[i].Name);
+            writer.WriteValueSafe(scores[i].ColorHex);
             writer.WriteValueSafe(scores[i].Count);
             writer.WriteValueSafe(scores[i].TypeHints);
             writer.WriteValueSafe(scores[i].Shadows);
@@ -868,10 +1175,11 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         {
             reader.ReadValueSafe(out ulong clientId);
             reader.ReadValueSafe(out string name);
+            reader.ReadValueSafe(out string colorHex);
             reader.ReadValueSafe(out int score);
             reader.ReadValueSafe(out int typeHints);
             reader.ReadValueSafe(out int shadows);
-            scores.Add(new PlayerScore(clientId, name, score, typeHints, shadows));
+            scores.Add(new PlayerScore(clientId, name, colorHex, score, typeHints, shadows));
         }
 
         return scores;
@@ -918,14 +1226,23 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     {
         public readonly ulong ClientId;
         public readonly string Name;
+        public readonly string ColorHex;
         public readonly int Count;
         public readonly int TypeHints;
         public readonly int Shadows;
 
-        public PlayerScore(ulong clientId, string name, int count, int typeHints, int shadows)
+        public PlayerScore(
+            ulong clientId,
+            string name,
+            string colorHex,
+            int count,
+            int typeHints,
+            int shadows
+        )
         {
             ClientId = clientId;
             Name = string.IsNullOrWhiteSpace(name) ? "Player" : name;
+            ColorHex = QuizNetworkRuntime.NormalizeColorHex(colorHex);
             Count = count;
             TypeHints = Mathf.Max(0, typeHints);
             Shadows = Mathf.Max(0, shadows);
@@ -970,11 +1287,19 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     }
 }
 
-public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour
+public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour, IPointerClickHandler
 {
     private const string PlayerCountColor = "#7DD3FC";
+    private const float ColorPanelWidth = 176f;
+    private const float ColorPanelHeight = 118f;
+    private const float ColorSwatchSize = 18f;
     private static string scoreboardText = string.Empty;
+    private readonly List<Button> colorButtons = new();
+    private readonly List<Image> colorButtonImages = new();
+    private readonly List<Outline> colorButtonOutlines = new();
     private TMP_Text label;
+    private GameObject colorPickerPanel;
+    private bool colorPickerVisible;
     private float nextRefresh;
 
     public static void SetScoreboard(string text)
@@ -1017,7 +1342,7 @@ public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour
     private static void ConfigureCanvas(Canvas canvas)
     {
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 500;
+        canvas.sortingOrder = 700;
 
         var scaler = canvas.GetComponent<CanvasScaler>();
         if (!scaler)
@@ -1034,8 +1359,8 @@ public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour
         rt.anchorMin = new Vector2(1f, 1f);
         rt.anchorMax = new Vector2(1f, 1f);
         rt.pivot = new Vector2(1f, 1f);
-        rt.anchoredPosition = new Vector2(-34f, -112f);
-        rt.sizeDelta = new Vector2(430f, 54f);
+        rt.anchoredPosition = new Vector2(-8f, -112f);
+        rt.sizeDelta = new Vector2(390f, 54f);
 
         var background = gameObject.AddComponent<Image>();
         background.color = new Color(0.12f, 0.14f, 0.17f, 0.78f);
@@ -1054,6 +1379,7 @@ public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour
         label.richText = true;
         label.raycastTarget = false;
 
+        CreateColorPicker();
         Refresh();
     }
 
@@ -1063,6 +1389,7 @@ public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour
             return;
 
         Refresh();
+        RefreshColorPicker();
         nextRefresh = Time.unscaledTime + 0.5f;
     }
 
@@ -1080,6 +1407,174 @@ public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour
         }
 
         label.text = $"Co-op joined{scores}";
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (!QuizNetworkRuntime.IsMultiplayerActive)
+            return;
+
+        if (label)
+            label.ForceMeshUpdate();
+
+        int linkIndex = label
+            ? TMP_TextUtilities.FindIntersectingLink(
+                label,
+                eventData.position,
+                eventData.pressEventCamera
+            )
+            : -1;
+        bool clickedLocalName =
+            linkIndex >= 0 && label.textInfo.linkInfo[linkIndex].GetLinkID() == "local_color";
+
+        if (!clickedLocalName && string.IsNullOrWhiteSpace(scoreboardText))
+            return;
+
+        colorPickerVisible = !colorPickerVisible;
+        ApplyColorPickerVisibility();
+    }
+
+    private void CreateColorPicker()
+    {
+        colorPickerPanel = new GameObject("Status Color Picker", typeof(RectTransform));
+        colorPickerPanel.transform.SetParent(transform, false);
+
+        var rt = (RectTransform)colorPickerPanel.transform;
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot = new Vector2(1f, 1f);
+        rt.anchoredPosition = new Vector2(-8f, 0f);
+        rt.sizeDelta = new Vector2(ColorPanelWidth, ColorPanelHeight);
+
+        var image = colorPickerPanel.AddComponent<Image>();
+        image.color = new Color(0.05f, 0.06f, 0.07f, 0.92f);
+
+        var layout = colorPickerPanel.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(10, 10, 8, 8);
+        layout.spacing = 5f;
+        layout.childAlignment = TextAnchor.UpperCenter;
+        layout.childControlWidth = true;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = false;
+        layout.childForceExpandHeight = false;
+
+        var titleGo = new GameObject("Title", typeof(RectTransform));
+        titleGo.transform.SetParent(colorPickerPanel.transform, false);
+        var title = titleGo.AddComponent<TextMeshProUGUI>();
+        title.text = "Select color";
+        title.fontSize = 11f;
+        title.fontStyle = FontStyles.Bold;
+        title.color = Color.white;
+        title.alignment = TextAlignmentOptions.Center;
+        title.raycastTarget = false;
+        var titleLayout = titleGo.AddComponent<LayoutElement>();
+        titleLayout.minWidth = ColorPanelWidth - 20f;
+        titleLayout.preferredWidth = ColorPanelWidth - 20f;
+        titleLayout.minHeight = 16f;
+        titleLayout.preferredHeight = 16f;
+
+        var gridGo = new GameObject("Swatches", typeof(RectTransform));
+        gridGo.transform.SetParent(colorPickerPanel.transform, false);
+        ((RectTransform)gridGo.transform).sizeDelta = new Vector2(ColorPanelWidth - 20f, 2f * ColorSwatchSize + 5f);
+        var grid = gridGo.AddComponent<GridLayoutGroup>();
+        grid.cellSize = new Vector2(ColorSwatchSize, ColorSwatchSize);
+        grid.spacing = new Vector2(5f, 5f);
+        grid.childAlignment = TextAnchor.UpperCenter;
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = 6;
+        var gridLayout = gridGo.AddComponent<LayoutElement>();
+        gridLayout.minWidth = ColorPanelWidth - 20f;
+        gridLayout.preferredWidth = ColorPanelWidth - 20f;
+        gridLayout.minHeight = 2f * ColorSwatchSize + 5f;
+        gridLayout.preferredHeight = gridLayout.minHeight;
+
+        foreach (var colorHex in QuizNetworkRuntime.PlayerColorPalette)
+            CreateColorSwatch(gridGo.transform, colorHex);
+
+        ApplyColorPickerVisibility();
+        RefreshColorPicker();
+    }
+
+    private void CreateColorSwatch(Transform parent, string colorHex)
+    {
+        var go = new GameObject($"Color {colorHex}", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        ((RectTransform)go.transform).sizeDelta = new Vector2(ColorSwatchSize, ColorSwatchSize);
+
+        var image = go.AddComponent<Image>();
+        image.color = QuizNetworkRuntime.ColorFromHex(colorHex);
+
+        var outline = go.AddComponent<Outline>();
+        outline.effectColor = Color.white;
+        outline.effectDistance = new Vector2(2f, -2f);
+        outline.enabled = false;
+
+        var button = go.AddComponent<Button>();
+        button.targetGraphic = image;
+        PreserveSwatchTint(button);
+        button.onClick.AddListener(() =>
+        {
+            if (QuizMultiplayerCoordinator.TrySetLocalPlayerColor(colorHex))
+            {
+                colorPickerVisible = false;
+                ApplyColorPickerVisibility();
+                RefreshColorPicker();
+            }
+        });
+
+        colorButtons.Add(button);
+        colorButtonImages.Add(image);
+        colorButtonOutlines.Add(outline);
+    }
+
+    private void RefreshColorPicker()
+    {
+        if (!colorPickerPanel)
+            return;
+
+        string currentColor = QuizMultiplayerCoordinator.LocalPlayerColorHex;
+        for (int i = 0; i < colorButtons.Count; i++)
+        {
+            string colorHex = i < QuizNetworkRuntime.PlayerColorPalette.Length
+                ? QuizNetworkRuntime.NormalizeColorHex(QuizNetworkRuntime.PlayerColorPalette[i])
+                : string.Empty;
+            bool selected = string.Equals(
+                colorHex,
+                currentColor,
+                System.StringComparison.OrdinalIgnoreCase
+            );
+            bool taken = QuizMultiplayerCoordinator.IsPlayerColorTakenByAnother(colorHex);
+
+            if (colorButtons[i])
+                colorButtons[i].gameObject.SetActive(!taken || selected);
+            if (colorButtons[i])
+                colorButtons[i].interactable = !taken || selected;
+            if (colorButtonOutlines[i])
+                colorButtonOutlines[i].enabled = selected;
+            if (colorButtonImages[i])
+                colorButtonImages[i].color = QuizNetworkRuntime.ColorFromHex(colorHex);
+        }
+    }
+
+    private static void PreserveSwatchTint(Button button)
+    {
+        if (!button)
+            return;
+
+        var colors = button.colors;
+        colors.normalColor = Color.white;
+        colors.highlightedColor = Color.white;
+        colors.pressedColor = new Color(0.86f, 0.86f, 0.86f, 1f);
+        colors.selectedColor = Color.white;
+        colors.disabledColor = Color.white;
+        colors.colorMultiplier = 1f;
+        button.colors = colors;
+    }
+
+    private void ApplyColorPickerVisibility()
+    {
+        if (colorPickerPanel)
+            colorPickerPanel.SetActive(colorPickerVisible && QuizNetworkRuntime.IsMultiplayerActive);
     }
 
     private static string FormatPlayerCount(int players)
@@ -1102,11 +1597,13 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private const float MenuChatHeight = 236f;
     private const float MenuChatMessagesHeight = 166f;
     private const float QuizChatWidth = 340f;
-    private const float QuizChatHeight = 128f;
-    private const float QuizChatMessagesHeight = 58f;
-    private const float QuizExpandedChatWidth = 380f;
-    private const float QuizExpandedChatHeight = 304f;
-    private const float QuizExpandedChatMessagesHeight = 234f;
+    private const float QuizChatHeight = 860f;
+    private const float QuizChatMessagesHeight = 790f;
+    private const float QuizExpandedChatWidth = 340f;
+    private const float QuizExpandedChatHeight = 860f;
+    private const float QuizExpandedChatMessagesHeight = 790f;
+    private const float QuizDockRight = 24f;
+    private const float QuizDockTop = 198f;
     private const float PausedChatWidth = 430f;
     private const float PausedChatHeight = 140f;
     private const float PausedChatMessagesHeight = 70f;
@@ -1134,6 +1631,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private Button expandButton;
     private TMP_Text expandButtonLabel;
     private bool expandedInQuiz;
+    private bool fixedHeightDock;
     private float basePanelHeight = 124f;
     private float currentInputHeight = MinInputHeight;
 
@@ -1398,6 +1896,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         CreateHeader();
         CreateMessageList();
         CreateInputRow();
+        CreateResizeHandle();
         ApplyScenePlacement(force: true);
     }
 
@@ -1406,20 +1905,17 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         var rt = (RectTransform)transform;
         string sceneName = SceneManager.GetActiveScene().name;
         bool mainMenu = string.Equals(sceneName, "MainMenu", System.StringComparison.OrdinalIgnoreCase);
-        bool paused = !mainMenu && IsPauseMenuShowing();
-        string layoutKey = mainMenu
-            ? "main-menu"
-            : paused
-                ? (expandedInQuiz ? "quiz-paused-expanded" : "quiz-paused")
-                : (expandedInQuiz ? "quiz-expanded" : "quiz");
+        string layoutKey = mainMenu ? "main-menu" : "quiz-docked";
         if (!force && appliedLayoutScene == layoutKey)
             return;
 
         appliedLayoutScene = layoutKey;
-        SetExpandButtonVisible(!mainMenu);
+        SetExpandButtonVisible(false);
+        fixedHeightDock = !mainMenu;
 
         if (mainMenu)
         {
+            fixedHeightDock = false;
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
@@ -1435,31 +1931,10 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         rt.anchorMin = new Vector2(1f, 1f);
         rt.anchorMax = new Vector2(1f, 1f);
         rt.pivot = new Vector2(1f, 1f);
-        if (paused)
-        {
-            rt.anchoredPosition = new Vector2(-34f, -180f);
-            rt.sizeDelta = new Vector2(
-                PausedChatWidth,
-                expandedInQuiz ? PausedExpandedChatHeight : PausedChatHeight
-            );
-            basePanelHeight = expandedInQuiz ? PausedExpandedChatHeight : PausedChatHeight;
-            SetMessageListHeight(
-                expandedInQuiz ? PausedExpandedChatMessagesHeight : PausedChatMessagesHeight
-            );
-            ApplyPanelHeight();
-            RefreshInputHeight();
-            return;
-        }
-
-        rt.anchoredPosition = new Vector2(-480f, -116f);
-        rt.sizeDelta = new Vector2(
-            expandedInQuiz ? QuizExpandedChatWidth : QuizChatWidth,
-            expandedInQuiz ? QuizExpandedChatHeight : QuizChatHeight
-        );
+        rt.anchoredPosition = new Vector2(-QuizDockRight, -QuizDockTop);
+        rt.sizeDelta = new Vector2(QuizChatWidth, QuizChatHeight);
         basePanelHeight = expandedInQuiz ? QuizExpandedChatHeight : QuizChatHeight;
-        SetMessageListHeight(
-            expandedInQuiz ? QuizExpandedChatMessagesHeight : QuizChatMessagesHeight
-        );
+        SetDockedMessageListHeight();
         ApplyPanelHeight();
         RefreshInputHeight();
     }
@@ -1491,7 +1966,9 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     {
         var rt = (RectTransform)transform;
         var size = rt.sizeDelta;
-        size.y = basePanelHeight + Mathf.Max(0f, currentInputHeight - MinInputHeight);
+        size.y = fixedHeightDock
+            ? basePanelHeight
+            : basePanelHeight + Mathf.Max(0f, currentInputHeight - MinInputHeight);
         rt.sizeDelta = size;
     }
 
@@ -1524,13 +2001,75 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         inputRowLayout.preferredHeight = height;
         inputLayout.minHeight = height;
         inputLayout.preferredHeight = height;
+        if (fixedHeightDock)
+            SetDockedMessageListHeight();
         ApplyPanelHeight();
         LayoutRebuilder.MarkLayoutForRebuild((RectTransform)transform);
+    }
+
+    private void SetDockedMessageListHeight()
+    {
+        var rt = (RectTransform)transform;
+        float available = rt.sizeDelta.y - currentInputHeight - 52f;
+        SetMessageListHeight(Mathf.Max(120f, available));
+    }
+
+    private void DragBy(Vector2 screenDelta)
+    {
+        if (SceneManager.GetActiveScene().name.Equals("MainMenu", System.StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var rt = (RectTransform)transform;
+        float scale = rootCanvas ? rootCanvas.scaleFactor : 1f;
+        rt.anchoredPosition += screenDelta / Mathf.Max(0.01f, scale);
+    }
+
+    private void ResizeBy(Vector2 screenDelta)
+    {
+        if (SceneManager.GetActiveScene().name.Equals("MainMenu", System.StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var rt = (RectTransform)transform;
+        float scale = rootCanvas ? rootCanvas.scaleFactor : 1f;
+        Vector2 delta = screenDelta / Mathf.Max(0.01f, scale);
+        Vector2 size = rt.sizeDelta;
+        size.x = Mathf.Clamp(size.x + delta.x, 260f, 620f);
+        size.y = Mathf.Clamp(size.y - delta.y, 180f, 880f);
+        rt.sizeDelta = size;
+        basePanelHeight = size.y;
+        fixedHeightDock = true;
+        SetDockedMessageListHeight();
+        ApplyPanelHeight();
+        LayoutRebuilder.MarkLayoutForRebuild(rt);
+    }
+
+    private void CreateResizeHandle()
+    {
+        var go = new GameObject("Resize Handle", typeof(RectTransform));
+        go.transform.SetParent(transform, false);
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = new Vector2(1f, 0f);
+        rt.anchorMax = new Vector2(1f, 0f);
+        rt.pivot = new Vector2(1f, 0f);
+        rt.anchoredPosition = new Vector2(-4f, 4f);
+        rt.sizeDelta = new Vector2(18f, 18f);
+
+        var layout = go.AddComponent<LayoutElement>();
+        layout.ignoreLayout = true;
+
+        var image = go.AddComponent<Image>();
+        image.color = new Color(1f, 1f, 1f, 0f);
+        image.raycastTarget = true;
+
+        go.AddComponent<ChatResizeHandle>().Initialize(this);
     }
 
     private void CreateHeader()
     {
         var row = UiObject("Header");
+        var rowImage = row.AddComponent<Image>();
+        rowImage.color = new Color(1f, 1f, 1f, 0f);
+        rowImage.raycastTarget = true;
         var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
         rowLayout.spacing = 6f;
         rowLayout.childAlignment = TextAnchor.MiddleCenter;
@@ -1542,6 +2081,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         var rowElement = row.AddComponent<LayoutElement>();
         rowElement.minHeight = 18f;
         rowElement.preferredHeight = 18f;
+        row.AddComponent<ChatDragHandle>().Initialize(this);
 
         var labelGo = new GameObject("Title", typeof(RectTransform));
         labelGo.transform.SetParent(row.transform, false);
@@ -1931,6 +2471,38 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         }
 
         return sb.ToString().Trim();
+    }
+}
+
+public sealed class ChatDragHandle : MonoBehaviour, IDragHandler
+{
+    private QuizMultiplayerChatOverlay owner;
+
+    public void Initialize(QuizMultiplayerChatOverlay chatOverlay)
+    {
+        owner = chatOverlay;
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (owner)
+            owner.SendMessage("DragBy", eventData.delta, SendMessageOptions.DontRequireReceiver);
+    }
+}
+
+public sealed class ChatResizeHandle : MonoBehaviour, IDragHandler
+{
+    private QuizMultiplayerChatOverlay owner;
+
+    public void Initialize(QuizMultiplayerChatOverlay chatOverlay)
+    {
+        owner = chatOverlay;
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (owner)
+            owner.SendMessage("ResizeBy", eventData.delta, SendMessageOptions.DontRequireReceiver);
     }
 }
 

@@ -18,6 +18,7 @@ public class FinishedDialog : MonoBehaviour
     [SerializeField]
     Button closeBtn;
 
+    private Button collapsedBtn;
     private bool layoutCaptured;
     private Vector3 originalDialogScale;
     private float originalHeaderFontSize;
@@ -46,7 +47,8 @@ public class FinishedDialog : MonoBehaviour
             cg = GetComponent<CanvasGroup>();
         CaptureLayout();
         if (closeBtn)
-            closeBtn.onClick.AddListener(Hide);
+            closeBtn.onClick.AddListener(Collapse);
+        EnsureCollapsedButton();
         Hide();
     }
 
@@ -84,6 +86,74 @@ public class FinishedDialog : MonoBehaviour
                 body.text += $"\n\n{multiplayerStats}";
         }
 
+        cg.alpha = 1f;
+        cg.blocksRaycasts = true;
+        cg.interactable = true;
+        if (collapsedBtn)
+            collapsedBtn.gameObject.SetActive(false);
+    }
+
+    private void EnsureCollapsedButton()
+    {
+        if (collapsedBtn)
+            return;
+
+        var parent = transform.parent ? transform.parent : transform;
+        var go = new GameObject("Show Results Button", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = new Vector2(0.5f, 0f);
+        rt.anchorMax = new Vector2(0.5f, 0f);
+        rt.pivot = new Vector2(0.5f, 0f);
+        rt.anchoredPosition = new Vector2(0f, 18f);
+        rt.sizeDelta = new Vector2(180f, 34f);
+
+        var image = go.AddComponent<Image>();
+        image.color = new Color(0.08f, 0.16f, 0.32f, 0.92f);
+
+        collapsedBtn = go.AddComponent<Button>();
+        collapsedBtn.targetGraphic = image;
+        collapsedBtn.onClick.AddListener(Expand);
+
+        var labelGo = new GameObject("Text", typeof(RectTransform));
+        labelGo.transform.SetParent(go.transform, false);
+        var labelRt = (RectTransform)labelGo.transform;
+        labelRt.anchorMin = Vector2.zero;
+        labelRt.anchorMax = Vector2.one;
+        labelRt.offsetMin = new Vector2(8f, 0f);
+        labelRt.offsetMax = new Vector2(-8f, 0f);
+
+        var label = labelGo.AddComponent<TextMeshProUGUI>();
+        label.text = "Show results";
+        label.fontSize = 18f;
+        label.fontStyle = FontStyles.Bold;
+        label.color = Color.white;
+        label.alignment = TextAlignmentOptions.Center;
+        label.raycastTarget = false;
+        go.SetActive(false);
+    }
+
+    private void Collapse()
+    {
+        if (!cg)
+            cg = GetComponent<CanvasGroup>();
+
+        cg.alpha = 0f;
+        cg.blocksRaycasts = false;
+        cg.interactable = false;
+        if (collapsedBtn)
+            collapsedBtn.gameObject.SetActive(true);
+    }
+
+    private void Expand()
+    {
+        if (!cg)
+            cg = GetComponent<CanvasGroup>();
+
+        gameObject.SetActive(true);
+        transform.SetAsLastSibling();
+        if (collapsedBtn)
+            collapsedBtn.gameObject.SetActive(false);
         cg.alpha = 1f;
         cg.blocksRaycasts = true;
         cg.interactable = true;
@@ -182,5 +252,7 @@ public class FinishedDialog : MonoBehaviour
         cg.alpha = 0f;
         cg.blocksRaycasts = false;
         cg.interactable = false;
+        if (collapsedBtn)
+            collapsedBtn.gameObject.SetActive(false);
     }
 }

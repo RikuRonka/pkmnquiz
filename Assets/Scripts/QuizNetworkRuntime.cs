@@ -24,23 +24,48 @@ public static class QuizNetworkRuntime
     private const string LobbyAppValue = "pkmnquiz";
     private const string LobbyHostNameKey = "host";
     private const string PlayerNameKey = "name";
+    private const string PlayerColorKey = "color";
     private const string QuizSelectionMessage = "pkmnquiz_quiz_selection";
     private const int QuizSelectionMessageSize = 256;
     private const string HostProfilePrefix = "pkmn_host";
     private const string ClientProfilePrefix = "pkmn_join";
+    private const string DefaultPlayerColor = "#6FEA72";
+    public static readonly string[] PlayerColorPalette =
+    {
+        "#5FB52E",
+        "#D6F51F",
+        "#FFFF24",
+        "#FDBB00",
+        "#FF9800",
+        "#FF4B0D",
+        "#FF2418",
+        "#B51650",
+        "#9900B8",
+        "#4300A8",
+        "#0754FF",
+        "#1599C7",
+    };
 
     public static string JoinCode { get; private set; }
     public static string RelayJoinCode { get; private set; }
     public static string PlayerNickname { get; private set; } = "Player";
+    public static string PlayerColorHex { get; private set; } = DefaultPlayerColor;
     public static string LobbyId { get; private set; }
+    public static int ActiveQuizGeneration { get; private set; }
+    public static string ActiveQuizTypeFilter { get; private set; }
+    public static bool HasActiveQuizSelection { get; private set; }
     public static int MaxPlayerCount => MaxRemotePlayers + 1;
     public static int RequiredPlayerCount => MinimumPlayersToStart;
 
     public static bool IsMultiplayerActive =>
-        GameSettings.IsMultiplayer && NetworkManager.Singleton && NetworkManager.Singleton.IsListening;
+        GameSettings.IsMultiplayer
+        && NetworkManager.Singleton
+        && NetworkManager.Singleton.IsListening;
 
     public static bool IsMultiplayerClientOnly =>
-        IsMultiplayerActive && NetworkManager.Singleton.IsClient && !NetworkManager.Singleton.IsServer;
+        IsMultiplayerActive
+        && NetworkManager.Singleton.IsClient
+        && !NetworkManager.Singleton.IsServer;
 
     public static bool IsMultiplayerServer =>
         IsMultiplayerActive && NetworkManager.Singleton.IsServer;
@@ -48,6 +73,11 @@ public static class QuizNetworkRuntime
     public static bool IsHostLobbyReady =>
         IsMultiplayerServer
         && NetworkManager.Singleton.ConnectedClientsIds.Count >= MinimumPlayersToStart;
+
+    public static bool CanReturnToActiveQuiz =>
+        IsMultiplayerClientOnly
+        && HasActiveQuizSelection
+        && SceneManager.GetActiveScene().name.Equals("MainMenu", StringComparison.OrdinalIgnoreCase);
 
     public static event Action<string> StatusChanged;
 
@@ -57,13 +87,24 @@ public static class QuizNetworkRuntime
         public readonly string HostName;
         public readonly int PlayerCount;
         public readonly int MaxPlayers;
+        public readonly IReadOnlyList<string> TakenNames;
+        public readonly IReadOnlyList<string> TakenColors;
 
-        public AvailableLobby(string code, string hostName, int playerCount, int maxPlayers)
+        public AvailableLobby(
+            string code,
+            string hostName,
+            int playerCount,
+            int maxPlayers,
+            IReadOnlyList<string> takenNames = null,
+            IReadOnlyList<string> takenColors = null
+        )
         {
             Code = code ?? string.Empty;
             HostName = NormalizeNickname(hostName);
             PlayerCount = Mathf.Max(0, playerCount);
             MaxPlayers = Mathf.Max(1, maxPlayers);
+            TakenNames = takenNames ?? Array.Empty<string>();
+            TakenColors = takenColors ?? Array.Empty<string>();
         }
     }
 
@@ -71,12 +112,14 @@ public static class QuizNetworkRuntime
     {
         public readonly string Id;
         public readonly string Name;
+        public readonly string ColorHex;
         public readonly bool IsLocalPlayer;
 
-        public LobbyMemberInfo(string id, string name, bool isLocalPlayer)
+        public LobbyMemberInfo(string id, string name, string colorHex, bool isLocalPlayer)
         {
             Id = id ?? string.Empty;
             Name = NormalizeNickname(name);
+            ColorHex = NormalizeColorHex(colorHex);
             IsLocalPlayer = isLocalPlayer;
         }
     }
@@ -84,7 +127,8 @@ public static class QuizNetworkRuntime
     public static async Task<string> StartHostLobbyAsync(
         int generation,
         string typeFilter = null,
-        string nickname = null
+        string nickname = null,
+        string colorHex = null
     )
     {
         var manager = EnsureNetworkManager();
@@ -96,11 +140,12 @@ public static class QuizNetworkRuntime
         }
 
         PlayerNickname = NormalizeNickname(nickname);
+        PlayerColorHex = NormalizeColorHex(colorHex);
         await EnsureServicesReadyAsync(BuildAuthProfile(HostProfilePrefix, PlayerNickname));
 
         var allocation = await RelayService.Instance.CreateAllocationAsync(MaxRemotePlayers);
         RelayJoinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
-        JoinCode = await CreateLobbyForRelayAsync(RelayJoinCode, PlayerNickname);
+        JoinCode = await CreateLobbyForRelayAsync(RelayJoinCode, PlayerNickname, PlayerColorHex);
 
         var transport = manager.GetComponent<UnityTransport>();
         transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, ConnectionType));
@@ -122,10 +167,11 @@ public static class QuizNetworkRuntime
     public static async Task<string> StartHostAndLoadQuizAsync(
         int generation,
         string typeFilter = null,
-        string nickname = null
+        string nickname = null,
+        string colorHex = null
     )
     {
-        var joinCode = await StartHostLobbyAsync(generation, typeFilter, nickname);
+        var joinCode = await StartHostLobbyAsync(generation, typeFilter, nickname, colorHex);
         await LoadHostedQuizAsync(generation, typeFilter);
         return joinCode;
     }
@@ -185,7 +231,11 @@ public static class QuizNetworkRuntime
             SceneManager.LoadScene("Quiz");
     }
 
-    public static async Task StartClientAsync(string joinCode, string nickname = null)
+    public static async Task StartClientAsync(
+        string joinCode,
+        string nickname = null,
+        string colorHex = null
+    )
     {
         if (string.IsNullOrWhiteSpace(joinCode))
             throw new ArgumentException("Lobby selection is required.", nameof(joinCode));
@@ -193,6 +243,7 @@ public static class QuizNetworkRuntime
             throw new ArgumentException("Selected lobby is invalid.", nameof(joinCode));
 
         PlayerNickname = NormalizeNickname(nickname);
+        PlayerColorHex = NormalizeColorHex(colorHex);
 
         var manager = EnsureNetworkManager();
         if (manager.IsListening)
@@ -205,7 +256,11 @@ public static class QuizNetworkRuntime
         await EnsureServicesReadyAsync(BuildAuthProfile(ClientProfilePrefix, PlayerNickname));
 
         JoinCode = joinCode.Trim().ToUpperInvariant();
-        RelayJoinCode = await JoinLobbyAndGetRelayCodeAsync(JoinCode, PlayerNickname);
+        RelayJoinCode = await JoinLobbyAndGetRelayCodeAsync(
+            JoinCode,
+            PlayerNickname,
+            PlayerColorHex
+        );
         var allocation = await RelayService.Instance.JoinAllocationAsync(RelayJoinCode);
 
         var transport = manager.GetComponent<UnityTransport>();
@@ -254,10 +309,51 @@ public static class QuizNetworkRuntime
             if (playerCount == 0 && lobby.Players != null)
                 playerCount = Mathf.Clamp(lobby.Players.Count, 0, maxPlayers);
 
-            results.Add(new AvailableLobby(code, hostName, playerCount, maxPlayers));
+            GetTakenLobbyPlayerData(lobby, hostName, out var takenNames, out var takenColors);
+            results.Add(
+                new AvailableLobby(code, hostName, playerCount, maxPlayers, takenNames, takenColors)
+            );
         }
 
         return results;
+    }
+
+    public static async Task UpdateCurrentLobbyPlayerAsync(string nickname, string colorHex)
+    {
+        if (string.IsNullOrEmpty(LobbyId))
+            return;
+
+        PlayerNickname = NormalizeNickname(nickname);
+        PlayerColorHex = NormalizeColorHex(colorHex);
+
+        string playerId = GetSignedInPlayerId();
+        if (string.IsNullOrEmpty(playerId))
+            return;
+
+        await LobbyService.Instance.UpdatePlayerAsync(
+            LobbyId,
+            playerId,
+            new UpdatePlayerOptions
+            {
+                Data = new Dictionary<string, PlayerDataObject>
+                {
+                    {
+                        PlayerNameKey,
+                        new PlayerDataObject(
+                            PlayerDataObject.VisibilityOptions.Public,
+                            PlayerNickname
+                        )
+                    },
+                    {
+                        PlayerColorKey,
+                        new PlayerDataObject(
+                            PlayerDataObject.VisibilityOptions.Public,
+                            PlayerColorHex
+                        )
+                    },
+                },
+            }
+        );
     }
 
     public static async Task<List<LobbyMemberInfo>> GetCurrentLobbyMembersAsync()
@@ -279,10 +375,11 @@ public static class QuizNetworkRuntime
             string fallbackName =
                 player.Id == lobby.HostId ? GetLobbyData(lobby, LobbyHostNameKey) : "Player";
             string name = GetPlayerName(player, fallbackName);
+            string colorHex = GetPlayerColor(player, DefaultPlayerColor);
             bool isLocalPlayer =
                 !string.IsNullOrEmpty(localPlayerId)
                 && string.Equals(player.Id, localPlayerId, StringComparison.Ordinal);
-            members.Add(new LobbyMemberInfo(player.Id, name, isLocalPlayer));
+            members.Add(new LobbyMemberInfo(player.Id, name, colorHex, isLocalPlayer));
         }
 
         return members;
@@ -313,11 +410,15 @@ public static class QuizNetworkRuntime
         RelayJoinCode = null;
         LobbyId = null;
         PlayerNickname = "Player";
+        PlayerColorHex = DefaultPlayerColor;
+        ActiveQuizGeneration = 0;
+        ActiveQuizTypeFilter = null;
+        HasActiveQuizSelection = false;
         GameSettings.ClearMultiplayer();
         StatusChanged?.Invoke(null);
     }
 
-    public static void ReturnToLobbyMenu()
+    public static void ReturnToLobbyMenu(bool keepActiveQuizSelection = false)
     {
         if (!IsMultiplayerActive)
         {
@@ -330,13 +431,38 @@ public static class QuizNetworkRuntime
         GameSettings.TypeBgColor = null;
         GameSettings.MultiplayerJoinCode = JoinCode ?? GameSettings.MultiplayerJoinCode;
         GameSettings.MultiplayerNickname = PlayerNickname;
+        if (!keepActiveQuizSelection)
+        {
+            ActiveQuizGeneration = 0;
+            ActiveQuizTypeFilter = null;
+            HasActiveQuizSelection = false;
+        }
         StatusChanged?.Invoke(CurrentLobbyStatus());
     }
 
-    private static async Task<string> CreateLobbyForRelayAsync(string relayJoinCode, string nickname)
+    public static bool ReturnToActiveQuiz()
+    {
+        if (!CanReturnToActiveQuiz)
+        {
+            StatusChanged?.Invoke("No active co-op quiz to return to.");
+            return false;
+        }
+
+        ApplyQuizSettings(ActiveQuizGeneration, ActiveQuizTypeFilter);
+        StatusChanged?.Invoke("Returning to co-op quiz...");
+        SceneManager.LoadScene("Quiz");
+        return true;
+    }
+
+    private static async Task<string> CreateLobbyForRelayAsync(
+        string relayJoinCode,
+        string nickname,
+        string colorHex
+    )
     {
         PlayerNickname = NormalizeNickname(nickname);
-        var player = CreateLobbyPlayer(PlayerNickname);
+        PlayerColorHex = NormalizeColorHex(colorHex);
+        var player = CreateLobbyPlayer(PlayerNickname, PlayerColorHex);
 
         for (int attempt = 0; attempt < 20; attempt++)
         {
@@ -391,14 +517,19 @@ public static class QuizNetworkRuntime
         throw new InvalidOperationException("Could not create an open co-op lobby.");
     }
 
-    private static async Task<string> JoinLobbyAndGetRelayCodeAsync(string visibleCode, string nickname)
+    private static async Task<string> JoinLobbyAndGetRelayCodeAsync(
+        string visibleCode,
+        string nickname,
+        string colorHex
+    )
     {
         PlayerNickname = NormalizeNickname(nickname);
+        PlayerColorHex = NormalizeColorHex(colorHex);
         var lobby = await FindLobbyByVisibleCodeAsync(visibleCode);
         if (lobby == null)
             throw new InvalidOperationException("That co-op lobby is no longer available.");
 
-        var player = CreateLobbyPlayer(PlayerNickname);
+        var player = CreateLobbyPlayer(PlayerNickname, PlayerColorHex);
         try
         {
             lobby = await LobbyService.Instance.JoinLobbyByIdAsync(
@@ -476,7 +607,9 @@ public static class QuizNetworkRuntime
         if (lobby?.Data == null || string.IsNullOrEmpty(key))
             return string.Empty;
 
-        return lobby.Data.TryGetValue(key, out var data) ? data?.Value ?? string.Empty : string.Empty;
+        return lobby.Data.TryGetValue(key, out var data)
+            ? data?.Value ?? string.Empty
+            : string.Empty;
     }
 
     private static string GetHostPlayerName(Lobby lobby)
@@ -490,6 +623,34 @@ public static class QuizNetworkRuntime
         host ??= lobby.Players[0];
 
         return GetPlayerName(host, "Host");
+    }
+
+    private static void GetTakenLobbyPlayerData(
+        Lobby lobby,
+        string fallbackHostName,
+        out List<string> names,
+        out List<string> colors
+    )
+    {
+        names = new List<string>();
+        colors = new List<string>();
+
+        if (lobby?.Players == null)
+        {
+            if (!string.IsNullOrWhiteSpace(fallbackHostName))
+                names.Add(NormalizeNickname(fallbackHostName));
+            return;
+        }
+
+        foreach (var player in lobby.Players)
+        {
+            if (player == null)
+                continue;
+
+            string fallback = player.Id == lobby.HostId ? fallbackHostName : "Player";
+            names.Add(GetPlayerName(player, fallback));
+            colors.Add(GetPlayerColor(player, DefaultPlayerColor));
+        }
     }
 
     private static string GetPlayerName(Player player, string fallback)
@@ -506,7 +667,21 @@ public static class QuizNetworkRuntime
         return NormalizeNickname(fallback);
     }
 
-    private static Player CreateLobbyPlayer(string nickname)
+    private static string GetPlayerColor(Player player, string fallback)
+    {
+        if (
+            player?.Data != null
+            && player.Data.TryGetValue(PlayerColorKey, out var colorData)
+            && !string.IsNullOrWhiteSpace(colorData?.Value)
+        )
+        {
+            return NormalizeColorHex(colorData.Value);
+        }
+
+        return NormalizeColorHex(fallback);
+    }
+
+    private static Player CreateLobbyPlayer(string nickname, string colorHex)
     {
         return new Player(
             data: new Dictionary<string, PlayerDataObject>
@@ -514,6 +689,13 @@ public static class QuizNetworkRuntime
                 {
                     PlayerNameKey,
                     new PlayerDataObject(PlayerDataObject.VisibilityOptions.Public, nickname)
+                },
+                {
+                    PlayerColorKey,
+                    new PlayerDataObject(
+                        PlayerDataObject.VisibilityOptions.Public,
+                        NormalizeColorHex(colorHex)
+                    )
                 },
             }
         );
@@ -526,6 +708,45 @@ public static class QuizNetworkRuntime
             nickname = nickname[..14];
 
         return nickname;
+    }
+
+    public static string SetPlayerColorHex(string colorHex)
+    {
+        PlayerColorHex = NormalizeColorHex(colorHex);
+        return PlayerColorHex;
+    }
+
+    public static string NormalizeColorHex(string colorHex)
+    {
+        if (string.IsNullOrWhiteSpace(colorHex))
+            return DefaultPlayerColor;
+
+        colorHex = colorHex.Trim();
+        if (!colorHex.StartsWith("#", StringComparison.Ordinal))
+            colorHex = "#" + colorHex;
+
+        if (!ColorUtility.TryParseHtmlString(colorHex, out _))
+            return DefaultPlayerColor;
+
+        return colorHex.Length >= 7
+            ? colorHex.Substring(0, 7).ToUpperInvariant()
+            : DefaultPlayerColor;
+    }
+
+    public static Color ColorFromHex(string colorHex)
+    {
+        if (ColorUtility.TryParseHtmlString(NormalizeColorHex(colorHex), out var color))
+            return color;
+
+        return Color.white;
+    }
+
+    public static string DefaultColorForClient(ulong clientId)
+    {
+        if (PlayerColorPalette.Length == 0)
+            return DefaultPlayerColor;
+
+        return PlayerColorPalette[(int)(clientId % (ulong)PlayerColorPalette.Length)];
     }
 
     private static bool IsFourDigitCode(string code)
@@ -639,6 +860,12 @@ public static class QuizNetworkRuntime
 
     private static void ApplyQuizSettings(int generation, string typeFilter)
     {
+        ActiveQuizGeneration = generation;
+        ActiveQuizTypeFilter = string.IsNullOrWhiteSpace(typeFilter)
+            ? null
+            : typeFilter.Trim().ToLowerInvariant();
+        HasActiveQuizSelection = true;
+
         if (string.IsNullOrWhiteSpace(typeFilter))
         {
             GameSettings.Generation = generation;
@@ -697,7 +924,9 @@ public static class QuizNetworkRuntime
             await Task.Yield();
 
         if (UnityServices.State == ServicesInitializationState.Uninitialized)
-            await UnityServices.InitializeAsync(new InitializationOptions().SetProfile(authProfile));
+            await UnityServices.InitializeAsync(
+                new InitializationOptions().SetProfile(authProfile)
+            );
 
         if (
             AuthenticationService.Instance.IsSignedIn
