@@ -1,5 +1,5 @@
 {
   "version": "1.2.0",
-  "notes": "1.2.0 - Added player color selection in co-op lobbies and during quizzes - Matched multiplayer names and result highlights to each player's chosen color - Added a draggable and resizable quiz chat panel with reserved grid space on the right - Added a return to quiz flow for clients and clearer notifications when players leave - Improved quiz grid refreshes after rejoining and changing column counts - Fixed section title spacing so titles stay stable when changing cols",
+  "notes": "Added player color selection in co-op lobbies and during quizzes - Matched multiplayer names and result highlights to each player's chosen color - Added a draggable and resizable quiz chat panel with reserved grid space on the right - Added a return to quiz flow for clients and clearer notifications when players leave - Improved quiz grid refreshes after rejoining and changing column counts - Fixed section title spacing so titles stay stable when changing cols",
   "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.0.zip"
 }
