@@ -16,13 +16,14 @@ using UnityEngine.SceneManagement;
 public static class QuizNetworkRuntime
 {
     private const int MaxRemotePlayers = 31;
-    private const int MinimumPlayersToStart = 2;
+    private const int MinimumPlayersToStart = 1;
     private const string ConnectionType = "dtls";
     private const string LobbyCodeKey = "code";
     private const string LobbyRelayKey = "relay";
     private const string LobbyAppKey = "app";
     private const string LobbyAppValue = "pkmnquiz";
     private const string LobbyHostNameKey = "host";
+    private const string LobbyActiveQuizKey = "quiz";
     private const string PlayerNameKey = "name";
     private const string PlayerColorKey = "color";
     private const string QuizSelectionMessage = "pkmnquiz_quiz_selection";
@@ -37,13 +38,13 @@ public static class QuizNetworkRuntime
         "#FFFF24",
         "#FDBB00",
         "#FF9800",
-        "#FF4B0D",
-        "#FF2418",
-        "#B51650",
+        "#FF8A1C",
+        "#FF66C4",
         "#9900B8",
         "#4300A8",
         "#0754FF",
         "#1599C7",
+        "#24D6C8",
     };
 
     public static string JoinCode { get; private set; }
@@ -75,9 +76,15 @@ public static class QuizNetworkRuntime
         && NetworkManager.Singleton.ConnectedClientsIds.Count >= MinimumPlayersToStart;
 
     public static bool CanReturnToActiveQuiz =>
-        IsMultiplayerClientOnly
-        && HasActiveQuizSelection
-        && SceneManager.GetActiveScene().name.Equals("MainMenu", StringComparison.OrdinalIgnoreCase);
+        SceneManager.GetActiveScene().name.Equals("MainMenu", StringComparison.OrdinalIgnoreCase)
+        && (
+            (IsMultiplayerClientOnly && HasActiveQuizSelection)
+            || (
+                IsMultiplayerServer
+                && IsHostLobbyReady
+                && QuizMultiplayerCoordinator.HasSavedQuizSession
+            )
+        );
 
     public static event Action<string> StatusChanged;
 
@@ -85,6 +92,7 @@ public static class QuizNetworkRuntime
     {
         public readonly string Code;
         public readonly string HostName;
+        public readonly string ActiveQuizLabel;
         public readonly int PlayerCount;
         public readonly int MaxPlayers;
         public readonly IReadOnlyList<string> TakenNames;
@@ -95,12 +103,16 @@ public static class QuizNetworkRuntime
             string hostName,
             int playerCount,
             int maxPlayers,
+            string activeQuizLabel = null,
             IReadOnlyList<string> takenNames = null,
             IReadOnlyList<string> takenColors = null
         )
         {
             Code = code ?? string.Empty;
             HostName = NormalizeNickname(hostName);
+            ActiveQuizLabel = string.IsNullOrWhiteSpace(activeQuizLabel)
+                ? string.Empty
+                : activeQuizLabel.Trim();
             PlayerCount = Mathf.Max(0, playerCount);
             MaxPlayers = Mathf.Max(1, maxPlayers);
             TakenNames = takenNames ?? Array.Empty<string>();
@@ -138,6 +150,7 @@ public static class QuizNetworkRuntime
             manager.Shutdown();
             await Task.Yield();
         }
+        QuizMultiplayerCoordinator.ClearSavedQuizSession();
 
         PlayerNickname = NormalizeNickname(nickname);
         PlayerColorHex = NormalizeColorHex(colorHex);
@@ -193,12 +206,6 @@ public static class QuizNetworkRuntime
         if (!IsMultiplayerServer)
             return true;
 
-        if (!IsHostLobbyReady)
-        {
-            StatusChanged?.Invoke("Wait for another player, then choose a quiz.");
-            return true;
-        }
-
         try
         {
             await LoadHostedQuizAsync(generation, typeFilter);
@@ -212,19 +219,33 @@ public static class QuizNetworkRuntime
         return true;
     }
 
-    public static async Task LoadHostedQuizAsync(int generation = 0, string typeFilter = null)
+    public static async Task LoadHostedQuizAsync(
+        int generation = 0,
+        string typeFilter = null,
+        bool restoreSavedSession = false
+    )
     {
         var manager = NetworkManager.Singleton;
         if (!manager || !manager.IsServer)
             throw new InvalidOperationException("Only the co-op host can start the quiz.");
-        if (manager.ConnectedClientsIds.Count < MinimumPlayersToStart)
-            throw new InvalidOperationException("Wait for another player before choosing a quiz.");
+
+        if (restoreSavedSession)
+        {
+            if (!QuizMultiplayerCoordinator.QueueSavedQuizSessionRestore(generation, typeFilter))
+                throw new InvalidOperationException("No saved co-op quiz is available.");
+        }
+        else
+        {
+            QuizMultiplayerCoordinator.QueueSavedQuizSessionRestore(generation, typeFilter);
+        }
 
         ApplyQuizSettings(generation, typeFilter);
+        _ = UpdateLobbyActiveQuizAsync(DescribeQuiz(generation, typeFilter));
         BroadcastQuizSelection(manager, generation, typeFilter);
         StatusChanged?.Invoke($"Starting {DescribeQuiz(generation, typeFilter)} co-op...");
 
         await Task.Yield();
+        GameSettings.ArmQuizLaunch();
         if (manager.SceneManager != null)
             manager.SceneManager.LoadScene("Quiz", LoadSceneMode.Single);
         else
@@ -310,8 +331,17 @@ public static class QuizNetworkRuntime
                 playerCount = Mathf.Clamp(lobby.Players.Count, 0, maxPlayers);
 
             GetTakenLobbyPlayerData(lobby, hostName, out var takenNames, out var takenColors);
+            string activeQuizLabel = GetLobbyData(lobby, LobbyActiveQuizKey);
             results.Add(
-                new AvailableLobby(code, hostName, playerCount, maxPlayers, takenNames, takenColors)
+                new AvailableLobby(
+                    code,
+                    hostName,
+                    playerCount,
+                    maxPlayers,
+                    activeQuizLabel,
+                    takenNames,
+                    takenColors
+                )
             );
         }
 
@@ -392,6 +422,7 @@ public static class QuizNetworkRuntime
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(QuizSelectionMessage);
 
         QuizMultiplayerChatOverlay.ResetSession();
+        QuizMultiplayerCoordinator.ClearSavedQuizSession();
 
         bool wasHost = manager && manager.IsServer;
         string lobbyToDelete = LobbyId;
@@ -431,6 +462,8 @@ public static class QuizNetworkRuntime
         GameSettings.TypeBgColor = null;
         GameSettings.MultiplayerJoinCode = JoinCode ?? GameSettings.MultiplayerJoinCode;
         GameSettings.MultiplayerNickname = PlayerNickname;
+        if (IsMultiplayerServer)
+            _ = UpdateLobbyActiveQuizAsync(string.Empty);
         if (!keepActiveQuizSelection)
         {
             ActiveQuizGeneration = 0;
@@ -438,6 +471,83 @@ public static class QuizNetworkRuntime
             HasActiveQuizSelection = false;
         }
         StatusChanged?.Invoke(CurrentLobbyStatus());
+    }
+
+    public static async Task<bool> ReturnToActiveQuizAsync()
+    {
+        if (!CanReturnToActiveQuiz)
+        {
+            StatusChanged?.Invoke("No active co-op quiz to return to.");
+            return false;
+        }
+
+        if (
+            IsMultiplayerServer
+            && QuizMultiplayerCoordinator.TryGetSavedQuizSelection(
+                out int savedGeneration,
+                out string savedTypeFilter
+            )
+        )
+        {
+            try
+            {
+                StatusChanged?.Invoke("Returning to saved co-op quiz...");
+                await LoadHostedQuizAsync(
+                    savedGeneration,
+                    savedTypeFilter,
+                    restoreSavedSession: true
+                );
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
+                StatusChanged?.Invoke($"Return failed: {ReadableError(ex)}");
+                return false;
+            }
+        }
+
+        if (IsMultiplayerClientOnly && HasActiveQuizSelection)
+        {
+            ApplyQuizSettings(ActiveQuizGeneration, ActiveQuizTypeFilter);
+            StatusChanged?.Invoke("Returning to co-op quiz...");
+            GameSettings.ArmQuizLaunch();
+            SceneManager.LoadScene("Quiz");
+            return true;
+        }
+
+        StatusChanged?.Invoke("No active co-op quiz to return to.");
+        return false;
+    }
+
+    private static async Task UpdateLobbyActiveQuizAsync(string activeQuizLabel)
+    {
+        if (string.IsNullOrEmpty(LobbyId) || !IsMultiplayerServer)
+            return;
+
+        try
+        {
+            await LobbyService.Instance.UpdateLobbyAsync(
+                LobbyId,
+                new UpdateLobbyOptions
+                {
+                    Data = new Dictionary<string, DataObject>
+                    {
+                        {
+                            LobbyActiveQuizKey,
+                            new DataObject(
+                                DataObject.VisibilityOptions.Public,
+                                activeQuizLabel ?? string.Empty
+                            )
+                        },
+                    },
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Co-op] Failed to update lobby quiz label: {ReadableError(ex)}");
+        }
     }
 
     public static bool ReturnToActiveQuiz()
@@ -448,9 +558,7 @@ public static class QuizNetworkRuntime
             return false;
         }
 
-        ApplyQuizSettings(ActiveQuizGeneration, ActiveQuizTypeFilter);
-        StatusChanged?.Invoke("Returning to co-op quiz...");
-        SceneManager.LoadScene("Quiz");
+        _ = ReturnToActiveQuizAsync();
         return true;
     }
 
@@ -495,6 +603,10 @@ public static class QuizNetworkRuntime
                     {
                         LobbyHostNameKey,
                         new DataObject(DataObject.VisibilityOptions.Public, PlayerNickname)
+                    },
+                    {
+                        LobbyActiveQuizKey,
+                        new DataObject(DataObject.VisibilityOptions.Public, string.Empty)
                     },
                     {
                         LobbyRelayKey,
@@ -865,6 +977,7 @@ public static class QuizNetworkRuntime
             ? null
             : typeFilter.Trim().ToLowerInvariant();
         HasActiveQuizSelection = true;
+        GameSettings.ArmQuizLaunch();
 
         if (string.IsNullOrWhiteSpace(typeFilter))
         {

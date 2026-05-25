@@ -173,6 +173,7 @@ public class LoadingManager : MonoBehaviour
             SetProgress(0f);
             SetVisible(true);
 
+            GameSettings.ArmQuizLaunch();
             var op = SceneManager.LoadSceneAsync("Quiz", LoadSceneMode.Single);
             op.allowSceneActivation = true;
 

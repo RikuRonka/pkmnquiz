@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
-  "notes": "Added player color selection in co-op lobbies and during quizzes - Matched multiplayer names and result highlights to each player's chosen color - Added a draggable and resizable quiz chat panel with reserved grid space on the right - Added a return to quiz flow for clients and clearer notifications when players leave - Improved quiz grid refreshes after rejoining and changing column counts - Fixed section title spacing so titles stay stable when changing cols",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.0.zip"
+  "version": "1.2.1",
+  "notes": "Co-op quiz progress is now remembered per quiz when the host returns to the lobby, including guessed Pokémon, shadows, revealed types, timers, scores, and multiple saved quizzes - Solo quiz progress is now remembered per quiz until the game is restarted - Hosts can start co-op quizzes alone, players can join after the quiz starts, and lobby rows now show which quiz the host is in - Added per-player quiz background color slider with black, pink, and turquoise support, and fixed its placement on every quiz type - Nicknames are now required before hosting or joining co-op - Improved lobby refreshes, quiz join notifications, and return-to-quiz behavior - The game now always starts on the main menu instead of sometimes opening Gen 1 directly",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.1.zip"
 }

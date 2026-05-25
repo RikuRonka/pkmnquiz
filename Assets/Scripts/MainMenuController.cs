@@ -30,6 +30,7 @@ public class MainMenuController : MonoBehaviour
         QuizNetworkRuntime.Shutdown();
         GameSettings.Generation = 0;
         GameSettings.TypeFilter = null;
+        GameSettings.ArmQuizLaunch();
         SceneManager.LoadScene("Quiz");
     }
 
@@ -46,6 +47,7 @@ public class MainMenuController : MonoBehaviour
         QuizNetworkRuntime.Shutdown();
         GameSettings.Generation = gen;
         GameSettings.TypeFilter = null;
+        GameSettings.ArmQuizLaunch();
         SceneManager.LoadScene("Quiz");
     }
 
@@ -62,6 +64,7 @@ public class MainMenuController : MonoBehaviour
         QuizNetworkRuntime.Shutdown();
         GameSettings.Generation = null;
         GameSettings.TypeFilter = new[] { typeName };
+        GameSettings.ArmQuizLaunch();
         SceneManager.LoadScene("Quiz");
     }
 

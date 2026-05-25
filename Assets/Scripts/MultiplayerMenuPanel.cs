@@ -21,6 +21,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     private const float LobbyListHeight = 106f;
     private const float LobbyEntryHeight = 28f;
     private const float LobbyEntryJoinWidth = 60f;
+    private const float LobbyBrowserRefreshInterval = 2.5f;
     private const int MaxVisibleLobbyRows = 3;
     private const string ReadyActionText = "Choose a quiz button.";
     private const string PlayerCountColor = "#7DD3FC";
@@ -59,10 +60,13 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     private string rawStatusMessage;
     private readonly Dictionary<string, string> observedLobbyMembers = new();
     private bool lobbyMemberSnapshotRunning;
+    private bool lobbyBrowserAutoRefresh;
+    private bool lobbyBrowserRefreshRunning;
     private bool pendingLobbyJoinNotice;
     private int pendingLobbyJoinNoticeCount;
     private string selectedColorHex = QuizNetworkRuntime.PlayerColorHex;
     private float nextLobbyMemberRefresh;
+    private float nextLobbyBrowserRefresh;
     private static string sessionNickname = string.Empty;
 
     public static void EnsureInScene()
@@ -117,6 +121,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
     private void Awake()
     {
+        Application.runInBackground = true;
         BuildUi();
         QuizNetworkRuntime.StatusChanged += SetStatus;
     }
@@ -151,7 +156,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
         CreateLabel("Co-op lobby", 18f, FontStyles.Bold, 24f);
         statusLabel = CreateLabel(
-            "Host a lobby, then choose a quiz after another player joins.",
+            "Host a lobby, then choose a quiz. Other players can join anytime.",
             13f,
             FontStyles.Normal,
             52f
@@ -168,6 +173,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         PlayerPrefs.DeleteKey(NicknamePrefsKey);
         PlayerPrefs.Save();
         nicknameInput.SetTextWithoutNotify(sessionNickname);
+        nicknameInput.onValueChanged.AddListener(_ => ApplyInteractivity());
         selectedColorHex = QuizNetworkRuntime.SetPlayerColorHex(QuizNetworkRuntime.PlayerColorHex);
         CreateColorPickerPanel();
         hostButton = CreateButton("Host co-op lobby", OnHostClicked, HostButtonColor);
@@ -531,12 +537,14 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
     private async void OnHostClicked()
     {
+        if (!TryGetRequiredNickname(out var nickname))
+            return;
+
         SetBusy(true);
         SetStatus("Creating co-op lobby...");
 
         try
         {
-            var nickname = CurrentNickname();
             await QuizNetworkRuntime.StartHostLobbyAsync(
                 0,
                 nickname: nickname,
@@ -544,6 +552,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
             );
             hostingLobby = true;
             joinedLobby = false;
+            lobbyBrowserAutoRefresh = false;
             SetBusy(false);
             RefreshLobbyUi();
         }
@@ -560,8 +569,21 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         if (operationBusy)
             return;
 
-        SetBusy(true);
-        SetStatus("Looking for open co-op lobbies...");
+        lobbyBrowserAutoRefresh = true;
+        await RefreshLobbyBrowserAsync(showStatus: true, setBusy: true);
+    }
+
+    private async Task RefreshLobbyBrowserAsync(bool showStatus, bool setBusy)
+    {
+        if (lobbyBrowserRefreshRunning)
+            return;
+
+        lobbyBrowserRefreshRunning = true;
+        if (setBusy)
+        {
+            SetBusy(true);
+            SetStatus("Looking for open co-op lobbies...");
+        }
 
         try
         {
@@ -569,30 +591,48 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
             QuizNetworkRuntime.SetPlayerColorHex(selectedColorHex);
             var lobbies = await QuizNetworkRuntime.FindAvailableLobbiesAsync(nickname);
             PopulateLobbyList(lobbies);
-            if (lobbies.Count == 0)
-                SetStatus("No open co-op lobbies found.");
-            else if (lobbies.Count > MaxVisibleLobbyRows)
-                SetStatus($"Found {lobbies.Count} open co-op lobbies. Showing first {MaxVisibleLobbyRows}.");
-            else
-                SetStatus($"Found {lobbies.Count} open co-op lobby{(lobbies.Count == 1 ? "" : "ies")}.");
+            nextLobbyBrowserRefresh = Time.unscaledTime + LobbyBrowserRefreshInterval;
+
+            if (showStatus)
+            {
+                if (lobbies.Count == 0)
+                    SetStatus("No open co-op lobbies found.");
+                else if (lobbies.Count > MaxVisibleLobbyRows)
+                    SetStatus(
+                        $"Found {lobbies.Count} open co-op lobbies. Showing first {MaxVisibleLobbyRows}."
+                    );
+                else
+                    SetStatus(
+                        $"Found {lobbies.Count} open co-op lobby{(lobbies.Count == 1 ? "" : "ies")}."
+                    );
+            }
         }
         catch (Exception ex)
         {
             Debug.LogException(ex);
-            SetStatus($"Lobby search failed: {ReadableError(ex)}");
+            if (showStatus)
+                SetStatus($"Lobby search failed: {ReadableError(ex)}");
         }
         finally
         {
-            SetBusy(false);
+            if (setBusy)
+                SetBusy(false);
+            lobbyBrowserRefreshRunning = false;
         }
     }
 
-    private void OnReturnToQuizClicked()
+    private async void OnReturnToQuizClicked()
     {
         if (operationBusy)
             return;
 
-        QuizNetworkRuntime.ReturnToActiveQuiz();
+        SetBusy(true);
+        bool returning = await QuizNetworkRuntime.ReturnToActiveQuizAsync();
+        if (!returning)
+        {
+            SetBusy(false);
+            RefreshLobbyUi();
+        }
     }
 
     private async void OnBrowserLobbyClicked(QuizNetworkRuntime.AvailableLobby lobby)
@@ -605,12 +645,14 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
     private async Task JoinCodeAsync(QuizNetworkRuntime.AvailableLobby lobby)
     {
+        if (!TryGetRequiredNickname(out var nickname))
+            return;
+
         SetBusy(true);
         SetStatus("Joining co-op lobby...");
 
         try
         {
-            var nickname = CurrentNickname();
             if (LobbyHasNickname(lobby, nickname))
             {
                 SetStatus("That nickname is already taken in this lobby.");
@@ -623,6 +665,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
             await QuizNetworkRuntime.StartClientAsync(lobby.Code, nickname, selectedColorHex);
             hostingLobby = false;
             joinedLobby = true;
+            lobbyBrowserAutoRefresh = false;
             SetBusy(false);
             RefreshLobbyUi();
         }
@@ -718,13 +761,19 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
         var label = labelGo.AddComponent<TextMeshProUGUI>();
         string host = QuizNetworkRuntime.NormalizeNickname(lobby.HostName);
+        string quizText = string.IsNullOrWhiteSpace(lobby.ActiveQuizLabel)
+            ? string.Empty
+            : $"  <color=#CFFAFE>In: {EscapeRichText(lobby.ActiveQuizLabel)}</color>  ";
         label.text =
             $"{EscapeRichText(host)}  "
+            + quizText
             + $"Players: <color={PlayerCountColor}><b>{lobby.PlayerCount}</b></color>";
         label.fontSize = 12f;
         label.fontStyle = FontStyles.Bold;
         label.color = Color.white;
         label.alignment = TextAlignmentOptions.MidlineLeft;
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.overflowMode = TextOverflowModes.Ellipsis;
         label.richText = true;
         label.raycastTarget = false;
 
@@ -766,7 +815,8 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         QuizNetworkRuntime.Shutdown();
         hostingLobby = false;
         joinedLobby = false;
-        SetStatus("Host a lobby, then choose a quiz after another player joins.");
+        lobbyBrowserAutoRefresh = false;
+        SetStatus("Host a lobby, then choose a quiz. Other players can join anytime.");
         lastObservedPlayerCount = -1;
         SetBusy(false);
         RefreshLobbyUi();
@@ -937,17 +987,14 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
             hostingLobby = false;
             joinedLobby = false;
             observedLobbyMembers.Clear();
-            SetStatus("Host a lobby, then choose a quiz after another player joins.");
+            SetStatus("Host a lobby, then choose a quiz. Other players can join anytime.");
         }
 
         if (hostingLobby && manager && manager.IsServer)
         {
             int players = manager.ConnectedClientsIds.Count;
             MaybeShowHostJoinNotice(players);
-            string nextStep =
-                players >= QuizNetworkRuntime.RequiredPlayerCount
-                    ? "Choose a quiz button."
-                    : "Waiting for players.";
+            string nextStep = "Choose a quiz button.";
             SetStatus($"Co-op lobby | Players: {players} | {nextStep}");
         }
         else if (joinedLobby && manager && manager.IsClient && !manager.IsServer)
@@ -967,6 +1014,16 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         {
             QueueLobbyMemberSnapshot(false);
             nextLobbyMemberRefresh = Time.unscaledTime + 2.5f;
+        }
+
+        if (
+            !IsInLobby()
+            && lobbyBrowserAutoRefresh
+            && !operationBusy
+            && Time.unscaledTime >= nextLobbyBrowserRefresh
+        )
+        {
+            _ = RefreshLobbyBrowserAsync(showStatus: false, setBusy: false);
         }
 
         ApplyInteractivity();
@@ -1136,8 +1193,34 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
     private string CurrentNickname()
     {
-        sessionNickname = QuizNetworkRuntime.NormalizeNickname(nicknameInput ? nicknameInput.text : null);
+        string rawNickname = nicknameInput ? nicknameInput.text : sessionNickname;
+        if (string.IsNullOrWhiteSpace(rawNickname))
+            return string.IsNullOrWhiteSpace(sessionNickname) ? "Player" : sessionNickname;
+
+        sessionNickname = QuizNetworkRuntime.NormalizeNickname(rawNickname);
         return sessionNickname;
+    }
+
+    private bool TryGetRequiredNickname(out string nickname)
+    {
+        string rawNickname = nicknameInput ? nicknameInput.text : null;
+        if (string.IsNullOrWhiteSpace(rawNickname))
+        {
+            nickname = string.Empty;
+            SetStatus("Enter a nickname before joining a lobby.");
+            if (nicknameInput)
+            {
+                nicknameInput.ActivateInputField();
+                nicknameInput.Select();
+            }
+            return false;
+        }
+
+        nickname = QuizNetworkRuntime.NormalizeNickname(rawNickname);
+        sessionNickname = nickname;
+        if (nicknameInput)
+            nicknameInput.SetTextWithoutNotify(nickname);
+        return true;
     }
 
     private bool IsInLobby()

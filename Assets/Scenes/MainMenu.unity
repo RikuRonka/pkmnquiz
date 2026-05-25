@@ -4976,7 +4976,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PatchNotesView
   notesText: {fileID: 1239978752}
-  patchNotes: "1.2.0\n- Added player color selection in co-op lobbies and during
+  patchNotes: "1.2.1\n- Co-op quiz progress is now remembered per quiz when
+    the host returns to the lobby, including guessed Pok\xE9mon, shadows, revealed
+    types, timers, scores, and multiple saved quizzes\n- Solo quiz progress is
+    now remembered per quiz until the game is restarted\n- Hosts can start co-op
+    quizzes alone, and players can join after the quiz has already started\n-
+    Lobby rows now show which quiz the host is in and refresh while the lobby browser
+    is open\n- Added per-player quiz background color slider with black, pink,
+    and turquoise support\n- Fixed the background color slider placement on gen,
+    full, type, and Mega Evolutions quizzes\n- Nicknames are now required before
+    hosting or joining co-op\n- Improved quiz join/leave notifications and return-to-quiz
+    behavior\n- The game now always starts on the main menu instead of sometimes
+    opening Gen 1 directly\n\n1.2.0\n- Added player color selection in co-op lobbies and during
     quizzes\n- Matched multiplayer names and result highlights to each player's chosen
     color\n- Added a draggable and resizable quiz chat panel with reserved grid space
     on the right\n- Added a return-to-quiz flow for clients and clearer notifications

@@ -28,6 +28,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     private static QuizMultiplayerCoordinator instance;
     private static List<PlayerScore> latestScoreboard = new();
     private static readonly Dictionary<ulong, string> latestPlayerColors = new();
+    private static readonly Dictionary<string, SavedQuizSession> savedQuizSessions = new();
+    private static string latestSavedQuizSessionKey;
+    private static string restoreSavedQuizSessionKey;
 
     private QuizManager quiz;
     private NetworkManager manager;
@@ -46,6 +49,94 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
     public static bool IsActive => QuizNetworkRuntime.IsMultiplayerActive;
     public static bool IsClientOnly => QuizNetworkRuntime.IsMultiplayerClientOnly;
+    public static bool HasSavedQuizSession => savedQuizSessions.Count > 0;
+
+    public static bool TryGetSavedQuizSelection(out int generation, out string typeFilter)
+    {
+        if (!TryGetLatestSavedQuizSession(out var session))
+        {
+            generation = 0;
+            typeFilter = null;
+            return false;
+        }
+
+        generation = session.Generation;
+        typeFilter = session.TypeFilter;
+        return true;
+    }
+
+    public static bool QueueSavedQuizSessionRestore(int generation, string typeFilter)
+    {
+        string key = SavedQuizSession.KeyFor(generation, typeFilter);
+        if (!savedQuizSessions.ContainsKey(key))
+            return false;
+
+        restoreSavedQuizSessionKey = key;
+        return true;
+    }
+
+    public static void ClearSavedQuizSession()
+    {
+        savedQuizSessions.Clear();
+        latestSavedQuizSessionKey = null;
+        restoreSavedQuizSessionKey = null;
+    }
+
+    public static void ClearSavedQuizSession(int generation, string typeFilter)
+    {
+        string key = SavedQuizSession.KeyFor(generation, typeFilter);
+        savedQuizSessions.Remove(key);
+        if (string.Equals(latestSavedQuizSessionKey, key, System.StringComparison.Ordinal))
+            latestSavedQuizSessionKey = null;
+        if (string.Equals(restoreSavedQuizSessionKey, key, System.StringComparison.Ordinal))
+            restoreSavedQuizSessionKey = null;
+    }
+
+    public static void ClearSavedQuizSession(QuizManager quizManager)
+    {
+        if (!quizManager)
+            return;
+
+        ClearSavedQuizSession(quizManager.CurrentQuizGeneration, quizManager.CurrentTypeFilter);
+    }
+
+    public static void SaveCurrentQuizSessionForLobby(QuizManager quizManager = null)
+    {
+        if (!quizManager)
+            quizManager = FindFirstObjectByType<QuizManager>();
+        if (!quizManager)
+            return;
+
+        if (quizManager.IsQuizFinished)
+        {
+            ClearSavedQuizSession(quizManager);
+            return;
+        }
+
+        IReadOnlyList<PlayerScore> scoreboard = instance
+            ? instance.BuildScoreboard()
+            : latestScoreboard;
+        IReadOnlyDictionary<int, ulong> solvedOwners = instance
+            ? instance.solvedByClientId
+            : null;
+
+        var session = new SavedQuizSession(
+            quizManager.CurrentQuizGeneration,
+            quizManager.CurrentTypeFilter,
+            quizManager.SolvedIds,
+            quizManager.HintedIds,
+            quizManager.ShadowedIds,
+            quizManager.ElapsedSeconds,
+            quizManager.IsQuizRunning,
+            scoreboard,
+            solvedOwners
+        );
+        string key = session.Key;
+        savedQuizSessions[key] = session;
+        latestSavedQuizSessionKey = key;
+        if (string.Equals(restoreSavedQuizSessionKey, key, System.StringComparison.Ordinal))
+            restoreSavedQuizSessionKey = null;
+    }
 
     public static Color GetEndStateColorForPokemon(int pokemonId, bool guessed)
     {
@@ -242,6 +333,11 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
                 QuizNetworkRuntime.PlayerColorHex
             );
             MarkCurrentClientsAsAlreadyPresent();
+            if (!TryRestoreSavedQuizSessionForCurrentQuiz())
+            {
+                ResetScores();
+                solvedByClientId.Clear();
+            }
             BroadcastScoreboard();
         }
         else if (manager && manager.IsClient)
@@ -431,6 +527,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
         if (action == CoopAction.ReturnToMenu)
         {
+            SaveCurrentQuizSessionForLobby();
             BroadcastAction(action, 0);
             BeginReturnToMenu(0.15f);
             return;
@@ -468,9 +565,11 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
                 quiz.ApplyNetworkReset();
                 ResetScores();
                 solvedByClientId.Clear();
+                ClearSavedQuizSession(quiz);
                 break;
             case CoopAction.GiveUp:
                 quiz.ApplyNetworkGiveUp();
+                ClearSavedQuizSession(quiz);
                 break;
             default:
                 return;
@@ -625,6 +724,101 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
         foreach (var id in solvedIds)
             solvedByClientId[id] = solverClientId;
+    }
+
+    private void SaveCurrentQuizSessionForLobby()
+    {
+        if (!quiz)
+            quiz = FindFirstObjectByType<QuizManager>();
+        SaveCurrentQuizSessionForLobby(quiz);
+    }
+
+    private bool TryRestoreSavedQuizSessionForCurrentQuiz()
+    {
+        if (string.IsNullOrEmpty(restoreSavedQuizSessionKey) || !quiz)
+            return false;
+
+        if (!savedQuizSessions.TryGetValue(restoreSavedQuizSessionKey, out var session))
+        {
+            restoreSavedQuizSessionKey = null;
+            return false;
+        }
+
+        restoreSavedQuizSessionKey = null;
+        if (!session.Matches(quiz.CurrentQuizGeneration, quiz.CurrentTypeFilter))
+            return false;
+
+        var connectedClientIds = new HashSet<ulong>();
+        if (manager)
+        {
+            foreach (var clientId in manager.ConnectedClientsIds)
+                connectedClientIds.Add(clientId);
+        }
+
+        RestoreSavedScoreboard(session.Scoreboard, connectedClientIds);
+
+        solvedByClientId.Clear();
+        foreach (var kv in session.SolvedOwners)
+        {
+            if (connectedClientIds.Count > 0 && !connectedClientIds.Contains(kv.Value))
+                continue;
+
+            solvedByClientId[kv.Key] = kv.Value;
+        }
+
+        quiz.ApplySavedMultiplayerSession(
+            session.SolvedIds,
+            session.HintedIds,
+            session.ShadowedIds,
+            session.Elapsed,
+            session.Running
+        );
+        savedQuizSessions.Remove(session.Key);
+        if (string.Equals(latestSavedQuizSessionKey, session.Key, System.StringComparison.Ordinal))
+            latestSavedQuizSessionKey = null;
+        return true;
+    }
+
+    private void RestoreSavedScoreboard(
+        IReadOnlyList<PlayerScore> scoreboard,
+        HashSet<ulong> connectedClientIds
+    )
+    {
+        if (scoreboard == null)
+            return;
+
+        foreach (var score in scoreboard)
+        {
+            if (connectedClientIds.Count > 0 && !connectedClientIds.Contains(score.ClientId))
+                continue;
+
+            EnsurePlayer(score.ClientId, score.Name, score.ColorHex);
+            playerScores[score.ClientId] = score.Count;
+            playerTypeHints[score.ClientId] = score.TypeHints;
+            playerShadows[score.ClientId] = score.Shadows;
+        }
+    }
+
+    private static bool TryGetLatestSavedQuizSession(out SavedQuizSession session)
+    {
+        if (
+            !string.IsNullOrEmpty(latestSavedQuizSessionKey)
+            && savedQuizSessions.TryGetValue(latestSavedQuizSessionKey, out session)
+        )
+        {
+            return true;
+        }
+
+        foreach (var kv in savedQuizSessions)
+        {
+            latestSavedQuizSessionKey = kv.Key;
+            session = kv.Value;
+            return true;
+        }
+
+        latestSavedQuizSessionKey = null;
+        session = null;
+        return false;
     }
 
     private void SendStateRequest()
@@ -951,11 +1145,13 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         if (!quiz)
             quiz = FindFirstObjectByType<QuizManager>();
 
+        string destination = IsQuizSceneActive() ? "quiz" : "lobby";
+        string message = $"{QuizNetworkRuntime.NormalizeNickname(playerName)} joined the {destination}.";
         if (quiz && quiz.toast)
-            quiz.toast.Show(
-                $"{QuizNetworkRuntime.NormalizeNickname(playerName)} joined the game.",
-                2.5f
-            );
+            quiz.toast.Show(message, 2.5f);
+
+        if (IsQuizSceneActive())
+            BroadcastPlayerNotice(message, false, clientId);
     }
 
     private List<PlayerScore> BuildScoreboard()
@@ -1247,6 +1443,69 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             TypeHints = Mathf.Max(0, typeHints);
             Shadows = Mathf.Max(0, shadows);
         }
+    }
+
+    private sealed class SavedQuizSession
+    {
+        public readonly int Generation;
+        public readonly string TypeFilter;
+        public readonly string Key;
+        public readonly List<int> SolvedIds;
+        public readonly List<int> HintedIds;
+        public readonly List<int> ShadowedIds;
+        public readonly float Elapsed;
+        public readonly bool Running;
+        public readonly List<PlayerScore> Scoreboard;
+        public readonly Dictionary<int, ulong> SolvedOwners;
+
+        public SavedQuizSession(
+            int generation,
+            string typeFilter,
+            IReadOnlyCollection<int> solvedIds,
+            IReadOnlyCollection<int> hintedIds,
+            IReadOnlyCollection<int> shadowedIds,
+            float elapsed,
+            bool running,
+            IReadOnlyList<PlayerScore> scoreboard,
+            IReadOnlyDictionary<int, ulong> solvedOwners
+        )
+        {
+            Generation = generation;
+            TypeFilter = NormalizeSavedTypeFilter(typeFilter);
+            Key = KeyFor(generation, typeFilter);
+            SolvedIds = solvedIds == null ? new List<int>() : new List<int>(solvedIds);
+            HintedIds = hintedIds == null ? new List<int>() : new List<int>(hintedIds);
+            ShadowedIds = shadowedIds == null ? new List<int>() : new List<int>(shadowedIds);
+            Elapsed = Mathf.Max(0f, elapsed);
+            Running = running;
+            Scoreboard = scoreboard == null
+                ? new List<PlayerScore>()
+                : new List<PlayerScore>(scoreboard);
+            SolvedOwners = new Dictionary<int, ulong>();
+            if (solvedOwners != null)
+                foreach (var kv in solvedOwners)
+                    SolvedOwners[kv.Key] = kv.Value;
+        }
+
+        public bool Matches(int generation, string typeFilter)
+        {
+            return Generation == generation
+                && string.Equals(
+                    TypeFilter,
+                    NormalizeSavedTypeFilter(typeFilter),
+                    System.StringComparison.OrdinalIgnoreCase
+                );
+        }
+
+        public static string KeyFor(int generation, string typeFilter)
+        {
+            return $"{generation}|{NormalizeSavedTypeFilter(typeFilter) ?? string.Empty}";
+        }
+    }
+
+    private static string NormalizeSavedTypeFilter(string typeFilter)
+    {
+        return string.IsNullOrWhiteSpace(typeFilter) ? null : typeFilter.Trim().ToLowerInvariant();
     }
 
     private void BeginReturnToMenu(float delay)

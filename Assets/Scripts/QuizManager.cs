@@ -69,6 +69,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     public string CurrentTypeFilter => selectedType;
     public float ElapsedSeconds => elapsed;
     public bool IsQuizRunning => running;
+    public bool IsQuizFinished => IsComplete() || (finishedDialog && finishedDialog.IsShowing);
 
     private float elapsed;
     private bool running;
@@ -135,9 +136,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     }
 
     const string KEY_PAUSE_ON_FOCUS_LOSS = "pause_on_focus_loss";
+    const string KEY_BACKGROUND_COLOR_VALUE = "quiz_background_color_value";
     private const int BaseContentTopPadding = 32;
     private const int MultiplayerContentTopPadding = 32;
     private const float MultiplayerGridRightPaddingMin = 390f;
+    private const float BackgroundColorSliderWidth = 220f;
+    private const float BackgroundColorSliderHeight = 20f;
+    private const float BackgroundColorSliderRightPadding = 12f;
+    private const float BackgroundColorSliderHeaderCenterOffset = 26f;
+    private const float BackgroundColorBlackStop = 0.08f;
+    private const float BackgroundColorRainbowStart = 0.13f;
     bool _pauseOnFocusLossEnabled = true;
 
     public SectionHeader sectionHeaderPrefab;
@@ -169,7 +177,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private bool _scrollRectOffsetsCaptured;
     private bool _multiplayerRightDockApplied;
     private bool _endStateBordersShowing;
+    private Slider backgroundColorSlider;
+    private Image scrollBackgroundImage;
+    private Texture2D backgroundColorGradientTexture;
+    private Sprite backgroundColorGradientSprite;
     private readonly List<SectionGroup> _sections = new();
+    private static readonly Dictionary<string, LocalQuizSession> localQuizSessions = new();
     int _hintUsedCount;
     int _shadowUsedCount;
 
@@ -208,6 +221,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<string, int> lumioseByBaseName = new();
     private readonly Dictionary<string, int> hyperspaceByBaseName = new();
     private readonly HashSet<int> shadowed = new();
+    private bool redirectingToMainMenu;
 
     [SerializeField]
     Toggle spellingHelpToggle;
@@ -259,6 +273,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private void Awake()
     {
         Application.runInBackground = true;
+        if (ShouldRedirectAccidentalQuizStartup())
+        {
+            redirectingToMainMenu = true;
+            SceneManager.LoadScene("MainMenu");
+            return;
+        }
+
         PokemonDatabase.Instance.LoadIfNeeded();
         var dupes = PokemonDatabase
             .Instance.All()
@@ -642,6 +663,285 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             sec.SetTitle(Helpers.GetGenTitle(generation), isMain: true, icon: null);
     }
 
+    private void AttachBackgroundColorSlider(SectionGroup main)
+    {
+        if (!main || !main.headerRect)
+            return;
+
+        DestroyBackgroundColorSlider();
+        var parent = GetBackgroundColorSliderParent(main);
+        if (!parent)
+            return;
+
+        var root = new GameObject("Background Color Slider", typeof(RectTransform));
+        root.transform.SetParent(parent, false);
+        root.transform.SetAsLastSibling();
+        var rootRt = (RectTransform)root.transform;
+        rootRt.sizeDelta = new Vector2(BackgroundColorSliderWidth, BackgroundColorSliderHeight);
+        PositionBackgroundColorSlider(rootRt, parent == scrollRect?.viewport);
+
+        var trackGo = new GameObject("Palette Track", typeof(RectTransform));
+        trackGo.transform.SetParent(root.transform, false);
+        var trackRt = (RectTransform)trackGo.transform;
+        trackRt.anchorMin = new Vector2(0f, 0.5f);
+        trackRt.anchorMax = new Vector2(1f, 0.5f);
+        trackRt.pivot = new Vector2(0.5f, 0.5f);
+        trackRt.sizeDelta = new Vector2(0f, 10f);
+        trackRt.anchoredPosition = Vector2.zero;
+
+        var trackImage = trackGo.AddComponent<Image>();
+        trackImage.sprite = GetBackgroundColorGradientSprite();
+        trackImage.type = Image.Type.Simple;
+
+        var slideAreaGo = new GameObject("Handle Slide Area", typeof(RectTransform));
+        slideAreaGo.transform.SetParent(root.transform, false);
+        var slideAreaRt = (RectTransform)slideAreaGo.transform;
+        slideAreaRt.anchorMin = Vector2.zero;
+        slideAreaRt.anchorMax = Vector2.one;
+        slideAreaRt.offsetMin = new Vector2(7f, 0f);
+        slideAreaRt.offsetMax = new Vector2(-7f, 0f);
+
+        var handleGo = new GameObject("Handle", typeof(RectTransform));
+        handleGo.transform.SetParent(slideAreaGo.transform, false);
+        var handleRt = (RectTransform)handleGo.transform;
+        handleRt.sizeDelta = new Vector2(14f, 24f);
+
+        var handleImage = handleGo.AddComponent<Image>();
+        handleImage.color = Color.white;
+        var handleOutline = handleGo.AddComponent<Outline>();
+        handleOutline.effectColor = new Color(0f, 0f, 0f, 0.65f);
+        handleOutline.effectDistance = new Vector2(1.5f, -1.5f);
+
+        backgroundColorSlider = root.AddComponent<Slider>();
+        backgroundColorSlider.minValue = 0f;
+        backgroundColorSlider.maxValue = 1f;
+        backgroundColorSlider.wholeNumbers = false;
+        backgroundColorSlider.direction = Slider.Direction.LeftToRight;
+        backgroundColorSlider.fillRect = null;
+        backgroundColorSlider.handleRect = handleRt;
+        backgroundColorSlider.targetGraphic = handleImage;
+        backgroundColorSlider.SetValueWithoutNotify(CurrentLocalBackgroundHue());
+        backgroundColorSlider.onValueChanged.AddListener(OnBackgroundColorSliderChanged);
+    }
+
+    private RectTransform GetBackgroundColorSliderParent(SectionGroup main)
+    {
+        if (scrollRect && scrollRect.viewport)
+            return scrollRect.viewport;
+
+        return main ? main.headerRect : null;
+    }
+
+    private void PositionBackgroundColorSlider(RectTransform sliderRt, bool anchoredToViewport)
+    {
+        if (!sliderRt)
+            return;
+
+        if (anchoredToViewport)
+        {
+            sliderRt.anchorMin = sliderRt.anchorMax = new Vector2(1f, 1f);
+            sliderRt.pivot = new Vector2(1f, 0.5f);
+            float topPadding = _appliedContentTopPadding >= 0
+                ? _appliedContentTopPadding
+                : BaseContentTopPadding;
+            sliderRt.anchoredPosition = new Vector2(
+                -BackgroundColorSliderRightPadding,
+                -(topPadding + BackgroundColorSliderHeaderCenterOffset)
+            );
+            return;
+        }
+
+        sliderRt.anchorMin = sliderRt.anchorMax = new Vector2(1f, 0.5f);
+        sliderRt.pivot = new Vector2(1f, 0.5f);
+        sliderRt.anchoredPosition = new Vector2(-BackgroundColorSliderRightPadding, 0f);
+    }
+
+    private void DestroyBackgroundColorSlider()
+    {
+        if (!backgroundColorSlider)
+            return;
+
+        var sliderObject = backgroundColorSlider.gameObject;
+        backgroundColorSlider = null;
+        if (Application.isPlaying)
+            Destroy(sliderObject);
+        else
+            DestroyImmediate(sliderObject);
+    }
+
+    private void OnBackgroundColorSliderChanged(float hue)
+    {
+        hue = Mathf.Clamp01(hue);
+        ApplyLocalBackgroundColor(hue);
+        PlayerPrefs.SetFloat(KEY_BACKGROUND_COLOR_VALUE, hue);
+    }
+
+    private void ApplySavedLocalBackgroundColor()
+    {
+        if (!PlayerPrefs.HasKey(KEY_BACKGROUND_COLOR_VALUE))
+            return;
+
+        ApplyLocalBackgroundColor(PlayerPrefs.GetFloat(KEY_BACKGROUND_COLOR_VALUE));
+    }
+
+    private void ApplyLocalBackgroundColor(float value)
+    {
+        ApplyQuizBackgroundColor(BackgroundColorFromSliderValue(value));
+    }
+
+    private float CurrentLocalBackgroundHue()
+    {
+        if (PlayerPrefs.HasKey(KEY_BACKGROUND_COLOR_VALUE))
+            return Mathf.Clamp01(PlayerPrefs.GetFloat(KEY_BACKGROUND_COLOR_VALUE));
+
+        var currentBackground = GetPrimaryQuizBackgroundImage();
+        if (currentBackground)
+        {
+            Color.RGBToHSV(currentBackground.color, out float hue, out _, out float value);
+            if (value <= 0.05f)
+                return 0f;
+
+            return Mathf.Lerp(BackgroundColorRainbowStart, 1f, Mathf.Clamp01(hue));
+        }
+
+        return 0.55f;
+    }
+
+    private static Color BackgroundColorFromSliderValue(float value)
+    {
+        value = Mathf.Clamp01(value);
+        if (value <= BackgroundColorBlackStop)
+            return Color.black;
+
+        var firstColor = Color.HSVToRGB(0f, 0.42f, 1f);
+        if (value < BackgroundColorRainbowStart)
+        {
+            float blend = Mathf.InverseLerp(
+                BackgroundColorBlackStop,
+                BackgroundColorRainbowStart,
+                value
+            );
+            return Color.Lerp(Color.black, firstColor, blend);
+        }
+
+        float hue = Mathf.InverseLerp(BackgroundColorRainbowStart, 1f, value);
+        return Color.HSVToRGB(hue, 0.42f, 1f);
+    }
+
+    private void ApplyQuizBackgroundColor(Color color)
+    {
+        foreach (var image in EnumerateQuizBackgroundImages())
+            image.color = color;
+    }
+
+    private Image GetPrimaryQuizBackgroundImage()
+    {
+        if (scrollRect)
+        {
+            if (scrollRect.viewport && scrollRect.viewport.TryGetComponent(out Image viewportImage))
+                return viewportImage;
+
+            if (scrollRect.TryGetComponent(out Image scrollImage))
+                return scrollImage;
+
+            if (content && content.TryGetComponent(out Image contentImage))
+                return contentImage;
+        }
+
+        return backgroundImage;
+    }
+
+    private IEnumerable<Image> EnumerateQuizBackgroundImages()
+    {
+        var seen = new HashSet<Image>();
+
+        void Add(Image image)
+        {
+            if (image)
+                seen.Add(image);
+        }
+
+        Add(backgroundImage);
+
+        if (scrollRect)
+        {
+            if (scrollRect.TryGetComponent(out Image scrollImage))
+                Add(scrollImage);
+
+            if (scrollRect.viewport && scrollRect.viewport.TryGetComponent(out Image viewportImage))
+                Add(viewportImage);
+
+            if (content && content.TryGetComponent(out Image contentImage))
+                Add(contentImage);
+
+            if (seen.Count <= (backgroundImage ? 1 : 0))
+                Add(EnsureScrollBackgroundImage());
+        }
+
+        foreach (var image in seen)
+            yield return image;
+    }
+
+    private Image EnsureScrollBackgroundImage()
+    {
+        if (scrollBackgroundImage)
+            return scrollBackgroundImage;
+
+        RectTransform host = scrollRect
+            ? scrollRect.viewport ?? scrollRect.transform as RectTransform
+            : null;
+        if (!host)
+            return null;
+
+        scrollBackgroundImage = host.gameObject.GetComponent<Image>();
+        if (!scrollBackgroundImage)
+            scrollBackgroundImage = host.gameObject.AddComponent<Image>();
+
+        scrollBackgroundImage.raycastTarget = true;
+        return scrollBackgroundImage;
+    }
+
+    private Sprite GetBackgroundColorGradientSprite()
+    {
+        if (backgroundColorGradientSprite)
+            return backgroundColorGradientSprite;
+
+        const int width = 192;
+        backgroundColorGradientTexture = new Texture2D(width, 1, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave,
+        };
+
+        for (int x = 0; x < width; x++)
+        {
+            float hue = width <= 1 ? 0f : x / (float)(width - 1);
+            backgroundColorGradientTexture.SetPixel(x, 0, BackgroundColorFromSliderValue(hue));
+        }
+
+        backgroundColorGradientTexture.Apply();
+        backgroundColorGradientSprite = Sprite.Create(
+            backgroundColorGradientTexture,
+            new Rect(0f, 0f, width, 1f),
+            new Vector2(0.5f, 0.5f),
+            100f
+        );
+        backgroundColorGradientSprite.hideFlags = HideFlags.HideAndDontSave;
+        return backgroundColorGradientSprite;
+    }
+
+    private void DestroyBackgroundColorGradient()
+    {
+        if (backgroundColorGradientSprite)
+            Destroy(backgroundColorGradientSprite);
+        if (backgroundColorGradientTexture)
+            Destroy(backgroundColorGradientTexture);
+
+        backgroundColorGradientSprite = null;
+        backgroundColorGradientTexture = null;
+    }
+
     private bool IsDialogOpen()
     {
         if (!confirmDialog)
@@ -703,6 +1003,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void Start()
     {
+        if (redirectingToMainMenu)
+            return;
+
         if (GameSettings.Generation.HasValue)
             generation = GameSettings.Generation.Value;
 
@@ -719,6 +1022,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             selectedType = null;
         }
 
+        ApplySavedLocalBackgroundColor();
         _pauseOnFocusLossEnabled = PlayerPrefs.GetInt(KEY_PAUSE_ON_FOCUS_LOSS, 1) == 1;
 
         EnsureLoader();
@@ -769,6 +1073,19 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             alwaysScrollToggle.onValueChanged.RemoveAllListeners();
             alwaysScrollToggle.onValueChanged.AddListener(OnAlwaysScrollToggleChanged);
         }
+    }
+
+    private static bool ShouldRedirectAccidentalQuizStartup()
+    {
+#if UNITY_EDITOR
+        GameSettings.ConsumeQuizLaunchArm();
+        return false;
+#else
+        if (GameSettings.ConsumeQuizLaunchArm())
+            return false;
+
+        return !GameSettings.IsMultiplayer && !QuizNetworkRuntime.IsMultiplayerActive;
+#endif
     }
 
     void OnAlwaysScrollToggleChanged(bool on)
@@ -992,6 +1309,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (QuizMultiplayerCoordinator.RequestReset())
                 return;
 
+            ClearLocalQuizSession();
             ResetGame();
         }
 
@@ -1119,6 +1437,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         void LeaveNow()
         {
+            if (QuizNetworkRuntime.IsMultiplayerServer)
+                QuizMultiplayerCoordinator.SaveCurrentQuizSessionForLobby(this);
+
             if (QuizMultiplayerCoordinator.RequestReturnToMenu())
                 return;
 
@@ -1131,6 +1452,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return;
             }
 
+            SaveLocalQuizSession();
             QuizNetworkRuntime.Shutdown();
             SceneManager.LoadScene("MainMenu");
         }
@@ -1176,9 +1498,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return ("Go to main menu?", "This quiz is finished. Go back to the main menu?", "Go to menu");
 
         return (
-            "Leave quiz?",
-            "Your current solo quiz progress will be lost. Go back to the main menu?",
-            "Yes, leave"
+            "Go to main menu?",
+            "Your current solo quiz progress will be saved until you restart the game. Go back to the main menu?",
+            "Go to menu"
         );
     }
 
@@ -1283,6 +1605,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private void OnDestroy()
     {
         StopAllCoroutines();
+        DestroyBackgroundColorSlider();
+        DestroyBackgroundColorGradient();
     }
 
     private void RebuildGrid()
@@ -1321,6 +1645,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         foreach (Transform c in content)
             Destroy(c.gameObject);
+        DestroyBackgroundColorSlider();
         cardById.Clear();
         pokemonById.Clear();
         solved.Clear();
@@ -1356,6 +1681,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         var main = Instantiate(sectionGroupPrefab, content);
         main.EnsureLayout();
         SetMainTitle(main);
+        AttachBackgroundColorSlider(main);
         _sections.Add(main);
 
         SectionGroup megaKalosGen = null,
@@ -3249,6 +3575,98 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         );
     }
 
+    public void ApplySavedMultiplayerSession(
+        IReadOnlyList<int> solvedIds,
+        IReadOnlyList<int> hintedIds,
+        IReadOnlyList<int> shadowedIds,
+        float savedElapsed,
+        bool savedRunning
+    )
+    {
+        var solvedSnapshot = solvedIds != null ? new List<int>(solvedIds) : new List<int>();
+        var hintedSnapshot = hintedIds != null ? new List<int>(hintedIds) : new List<int>();
+        var shadowedSnapshot = shadowedIds != null ? new List<int>(shadowedIds) : new List<int>();
+
+        elapsed = Mathf.Max(0f, savedElapsed);
+        SetTimerText();
+        ApplyNetworkHintState(hintedSnapshot, shadowedSnapshot);
+        ApplyNetworkSolvedIds(solvedSnapshot, clearInput: false, playSound: false);
+        running = savedRunning && !IsComplete();
+        if (!running && !IsComplete())
+            running = true;
+
+        if (guessInput)
+            guessInput.interactable = running;
+
+        UpdateScore();
+        RefreshNetworkGridLayout();
+        ApplyMultiplayerUiState();
+
+        if (running)
+            RefocusGuess();
+    }
+
+    private void SaveLocalQuizSession()
+    {
+        if (!IsLocalQuizSessionAllowed())
+            return;
+
+        string key = LocalQuizSession.KeyFor(generation, selectedType);
+        if (
+            IsQuizFinished
+            || (solved.Count == 0 && hinted.Count == 0 && shadowed.Count == 0 && elapsed <= 0.05f)
+        )
+        {
+            localQuizSessions.Remove(key);
+            return;
+        }
+
+        localQuizSessions[key] = new LocalQuizSession(
+            generation,
+            selectedType,
+            solved,
+            hinted,
+            shadowed,
+            elapsed,
+            running
+        );
+    }
+
+    private bool TryRestoreLocalQuizSession()
+    {
+        if (!IsLocalQuizSessionAllowed())
+            return false;
+
+        string key = LocalQuizSession.KeyFor(generation, selectedType);
+        if (!localQuizSessions.TryGetValue(key, out var session))
+            return false;
+
+        if (!session.Matches(generation, selectedType))
+            return false;
+
+        ApplySavedMultiplayerSession(
+            session.SolvedIds,
+            session.HintedIds,
+            session.ShadowedIds,
+            session.Elapsed,
+            session.Running
+        );
+        return true;
+    }
+
+    private void ClearLocalQuizSession()
+    {
+        if (!IsLocalQuizSessionAllowed())
+            return;
+
+        localQuizSessions.Remove(LocalQuizSession.KeyFor(generation, selectedType));
+    }
+
+    private static bool IsLocalQuizSessionAllowed()
+    {
+        return !QuizNetworkRuntime.IsMultiplayerActive && !GameSettings.IsMultiplayer;
+    }
+
     private IEnumerator CoApplyNetworkState(
         int networkGeneration,
         string normalizedType,
@@ -3503,6 +3921,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!IsComplete())
             return;
 
+        ClearLocalQuizSession();
         running = false;
         if (guessInput)
             guessInput.interactable = false;
@@ -4225,6 +4644,56 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         return 1f - (fromTopPx / scrollable);
     }
 
+    private sealed class LocalQuizSession
+    {
+        public readonly int Generation;
+        public readonly string TypeFilter;
+        public readonly List<int> SolvedIds;
+        public readonly List<int> HintedIds;
+        public readonly List<int> ShadowedIds;
+        public readonly float Elapsed;
+        public readonly bool Running;
+
+        public LocalQuizSession(
+            int generation,
+            string typeFilter,
+            IReadOnlyCollection<int> solvedIds,
+            IReadOnlyCollection<int> hintedIds,
+            IReadOnlyCollection<int> shadowedIds,
+            float elapsed,
+            bool running
+        )
+        {
+            Generation = generation;
+            TypeFilter = NormalizeTypeFilter(typeFilter);
+            SolvedIds = solvedIds == null ? new List<int>() : new List<int>(solvedIds);
+            HintedIds = hintedIds == null ? new List<int>() : new List<int>(hintedIds);
+            ShadowedIds = shadowedIds == null ? new List<int>() : new List<int>(shadowedIds);
+            Elapsed = Mathf.Max(0f, elapsed);
+            Running = running;
+        }
+
+        public bool Matches(int generation, string typeFilter)
+        {
+            return Generation == generation
+                && string.Equals(
+                    TypeFilter,
+                    NormalizeTypeFilter(typeFilter),
+                    StringComparison.OrdinalIgnoreCase
+                );
+        }
+
+        public static string KeyFor(int generation, string typeFilter)
+        {
+            return $"{generation}|{NormalizeTypeFilter(typeFilter) ?? string.Empty}";
+        }
+
+        private static string NormalizeTypeFilter(string typeFilter)
+        {
+            return string.IsNullOrWhiteSpace(typeFilter) ? null : typeFilter.Trim().ToLowerInvariant();
+        }
+    }
+
     private static bool IsExactNameOrAlias(string text, Pokemon p)
     {
         var k = GuessNormalizer.Key(text);
@@ -4298,6 +4767,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void RevealAll()
     {
+        ClearLocalQuizSession();
         var guessedIds = new HashSet<int>(solved);
 
         foreach (var kv in cardById)
@@ -4386,6 +4856,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         ApplyContentTopPadding(preserveScroll: false);
         ApplyMultiplayerRightDock(multiplayerUi, preserveScroll: false);
         RebuildGrid();
+        TryRestoreLocalQuizSession();
         if (!pauseMenu || !pauseMenu.IsShowing)
             SetGridVisible(true);
         Step(0.90f);
