@@ -232,6 +232,9 @@ public class LoadingManager : MonoBehaviour
 
     void OnSceneLoaded(Scene s, LoadSceneMode m)
     {
+        if (_loadCo != null && s.name == "Quiz")
+            return;
+
         _loadCo = null;
         SetProgress(0f);
         SetVisible(false, immediate: true);

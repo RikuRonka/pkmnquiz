@@ -21,18 +21,19 @@ public class UpdaterRunner : MonoBehaviour
         "https://raw.githubusercontent.com/RikuRonka/pkmnquiz/refs/heads/main/latest.json";
 
     [SerializeField]
-    string gameExeName = "pkmnquiz.exe"; // Your exe filename
+    string gameExeName = "pkmnquiz.exe";
 
     [SerializeField]
-    string updaterExeName = "Updater.exe"; // Must be next to game exe
+    string updaterExeName = "Updater.exe";
 
     [SerializeField]
-    int updaterWaitMs = 800; // small delay before file ops
+    int updaterWaitMs = 800;
 
     public event Action OnNoUpdate;
     public event Action<UpdateInfo> OnUpdateFound;
-    public event Action<float> OnDownloadProgress; // 0..1
-    public event Action<string> OnStatus; // optional logs for UI
+    public event Action<float> OnDownloadProgress;
+    public event Action<string> OnStatus;
+    public event Action<string> OnCheckFailed;
     UpdateInfo _pending;
 
     public void CheckForUpdate() => StartCoroutine(CheckCo());
@@ -40,7 +41,6 @@ public class UpdaterRunner : MonoBehaviour
     IEnumerator CheckCo()
     {
 #if UNITY_EDITOR
-
         string local = Path.Combine(
             Directory.GetParent(Application.dataPath)!.FullName,
             "latest.json"
@@ -51,49 +51,69 @@ public class UpdaterRunner : MonoBehaviour
             var info = JsonUtility.FromJson<UpdateInfo>(json);
             if (info != null && !string.IsNullOrEmpty(info.version))
             {
-                _pending = info;
-
-                var current = new Version(Application.version);
-                var latest = new Version(info.version);
-
-                if (latest > current)
-                    OnUpdateFound?.Invoke(info);
-                else
-                    OnNoUpdate?.Invoke();
-
-                yield break; // don’t hit the network while in Editor
+                FinishUpdateCheck(info);
+                yield break;
             }
         }
 #endif
+        string url = $"{manifestUrl}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+
+        using var req = UnityWebRequest.Get(url);
+        req.timeout = 15;
+        req.SetRequestHeader("User-Agent", "pkmnquiz-updater");
+        req.SetRequestHeader("Accept", "application/json");
+        yield return req.SendWebRequest();
+
+        if (req.result != UnityWebRequest.Result.Success)
         {
-            string url = $"{manifestUrl}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+            UnityEngine.Debug.LogWarning(
+                $"Update check failed [{req.responseCode}] {req.error} URL: {url}"
+            );
+            OnCheckFailed?.Invoke("Update check failed");
+            yield break;
+        }
 
-            using var req = UnityWebRequest.Get(url);
-            req.timeout = 15;
-            req.SetRequestHeader("User-Agent", "pkmnquiz-updater");
-            req.SetRequestHeader("Accept", "application/json");
-            yield return req.SendWebRequest();
+        var remoteInfo = JsonUtility.FromJson<UpdateInfo>(req.downloadHandler.text);
+        if (remoteInfo == null || string.IsNullOrEmpty(remoteInfo.version))
+        {
+            OnCheckFailed?.Invoke("Invalid update info");
+            yield break;
+        }
 
-            if (req.result != UnityWebRequest.Result.Success)
-            {
-                UnityEngine.Debug.LogWarning(
-                    $"Update check failed [{req.responseCode}] {req.error} URL: {url}"
-                );
-                yield break;
-            }
+        FinishUpdateCheck(remoteInfo);
+    }
 
-            var info = JsonUtility.FromJson<UpdateInfo>(req.downloadHandler.text);
-            if (info == null || string.IsNullOrEmpty(info.version))
-                yield break;
-            _pending = info;
+    void FinishUpdateCheck(UpdateInfo info)
+    {
+        _pending = info;
 
+        if (!TryIsNewerVersion(info.version, out bool newer))
+        {
+            OnCheckFailed?.Invoke("Version check failed");
+            return;
+        }
+
+        if (newer)
+            OnUpdateFound?.Invoke(info);
+        else
+            OnNoUpdate?.Invoke();
+    }
+
+    static bool TryIsNewerVersion(string latestVersion, out bool newer)
+    {
+        newer = false;
+
+        try
+        {
             var current = new Version(Application.version);
-            var latest = new Version(info.version);
-
-            if (latest > current)
-                OnUpdateFound?.Invoke(info);
-            else
-                OnNoUpdate?.Invoke();
+            var latest = new Version(latestVersion);
+            newer = latest > current;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            UnityEngine.Debug.LogWarning($"Update version comparison failed: {ex.Message}");
+            return false;
         }
     }
 
@@ -104,12 +124,13 @@ public class UpdaterRunner : MonoBehaviour
             UnityEngine.Debug.LogWarning("No pending update.");
             return;
         }
+
         StartCoroutine(DownloadAndRun(_pending));
     }
 
     IEnumerator DownloadAndRun(UpdateInfo info)
     {
-        OnStatus?.Invoke("Downloading update…");
+        OnStatus?.Invoke("Downloading update...");
 
         string tempZip = Path.Combine(
             Path.GetTempPath(),
@@ -119,13 +140,14 @@ public class UpdaterRunner : MonoBehaviour
         using (var req = UnityWebRequest.Get(info.url))
         {
             req.downloadHandler = new DownloadHandlerFile(tempZip);
-            req.timeout = 300; // big file
+            req.timeout = 300;
             var op = req.SendWebRequest();
             while (!op.isDone)
             {
                 OnDownloadProgress?.Invoke(req.downloadProgress);
                 yield return null;
             }
+
             if (req.result != UnityWebRequest.Result.Success)
             {
                 UnityEngine.Debug.LogError($"Download failed: {req.error}");
@@ -133,7 +155,7 @@ public class UpdaterRunner : MonoBehaviour
             }
         }
 
-        string gameDir = Path.GetDirectoryName(Application.dataPath)!; // for IL2CPP it’s …/_Data/.., but the exe dir is one up
+        string gameDir = Path.GetDirectoryName(Application.dataPath)!;
         if (Application.platform == RuntimePlatform.WindowsPlayer)
         {
             var maybeExeDir = Directory.GetParent(Application.dataPath)?.FullName;
@@ -151,7 +173,7 @@ public class UpdaterRunner : MonoBehaviour
         var args =
             $"--zip \"{tempZip}\" --target \"{gameDir}\" --exe \"{gameExeName}\" --waitms {updaterWaitMs}";
 
-        OnStatus?.Invoke("Applying update…");
+        OnStatus?.Invoke("Applying update...");
 
         try
         {

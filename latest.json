@@ -1,5 +1,5 @@
 {
-  "version": "1.2.2",
-  "notes": "- Singleplayer quiz progress now saves to disk and is restored after restarting the game, including guesses, timer, hints, shadows, and completed quizzes - Added a main menu Reset quiz progress button with a typed reset confirmation - Added P as a pause shortcut outside text fields - Fixed co-op quiz re-entry sometimes syncing the timer but not guessed Pokemon - Fixed already-guessed Mega Evolution entries not clearing the input or showing feedback - Improved co-op join/start handling after Netcode shutdowns and replaced the misleading missing Netcode setup message",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.2.zip"
+  "version": "1.2.3",
+  "notes": "- Check updates now performs a manual update check and reports when no update is available - Full Quiz now loads correctly again - Reset quiz progress now shows only quizzes with guessed Pokemon, lists guessed count and elapsed time, and supports resetting one quiz at a time with confirmation - Singleplayer progress now starts saving only after at least one Pokemon has been guessed - Improved background color slider placement in singleplayer and co-op so it stays fixed while scrolling - Improved co-op chat placement and removed the message character limit - Added app/taskbar notification and sound when someone joins a co-op lobby - Cleaned up co-op lobby player colors and UI overlap around patch notes/reset controls",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.3.zip"
 }

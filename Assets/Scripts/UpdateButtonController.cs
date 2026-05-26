@@ -24,30 +24,26 @@ public class UpdateButtonController
     public Color checkingColor = new(0.25f, 0.45f, 0.75f);
 
     UpdateInfo _pending;
+    bool _checking;
 
     void Awake()
     {
         if (!button)
             button = GetComponent<Button>();
-        currentVersionLabel.SetText($"v{Application.version}");
+        if (currentVersionLabel)
+            currentVersionLabel.SetText($"v{Application.version}");
         button.onClick.AddListener(OnClick);
 
-        checker.OnNoUpdate += () =>
+        if (checker)
         {
-            _pending = null;
-            SetVisual("No updates available", okColor, false);
-        };
-        checker.OnUpdateFound += info =>
-        {
-            _pending = info;
-            SetVisual("Updates available!", readyColor, true);
-        };
-        checker.OnDownloadProgress += p =>
-            SetVisual($"Downloading {p * 100f:0}%", checkingColor, false);
-        checker.OnStatus += s => label.SetText(s);
+            checker.OnNoUpdate += OnNoUpdate;
+            checker.OnUpdateFound += OnFound;
+            checker.OnDownloadProgress += OnProgress;
+            checker.OnStatus += OnStatusText;
+            checker.OnCheckFailed += OnCheckFailed;
+        }
 
-        SetVisual("Checking updates…", checkingColor, false);
-        checker.CheckForUpdate();
+        SetVisual("Check updates", okColor, true);
     }
 
     void SetVisual(string text, Color c, bool interactable)
@@ -56,41 +52,83 @@ public class UpdateButtonController
             label.text = text;
         if (buttonBg)
             buttonBg.color = c;
-        button.interactable = interactable;
+        if (button)
+            button.interactable = interactable;
     }
 
     void OnDestroy()
     {
         if (checker == null)
             return;
+
         checker.OnNoUpdate -= OnNoUpdate;
         checker.OnUpdateFound -= OnFound;
         checker.OnDownloadProgress -= OnProgress;
         checker.OnStatus -= OnStatusText;
+        checker.OnCheckFailed -= OnCheckFailed;
     }
 
-    void OnNoUpdate() => SetVisual("No updates available", okColor, false);
+    void OnNoUpdate()
+    {
+        _checking = false;
+        _pending = null;
+        SetVisual("No updates available", okColor, true);
+    }
 
     void OnFound(UpdateInfo i)
     {
+        _checking = false;
         _pending = i;
         SetVisual("Updates available!", readyColor, true);
     }
 
     void OnProgress(float p) => SetVisual($"Downloading {p * 100f:0}%", checkingColor, false);
 
-    void OnStatusText(string s) => label.SetText(s);
+    void OnStatusText(string s)
+    {
+        if (label)
+            label.SetText(s);
+    }
+
+    void OnCheckFailed(string message)
+    {
+        _checking = false;
+        _pending = null;
+        SetVisual(string.IsNullOrWhiteSpace(message) ? "Check failed" : message, okColor, true);
+    }
 
     private void OnClick()
     {
+        if (_checking)
+            return;
+
+        if (_pending == null)
+        {
+            BeginCheck();
+            return;
+        }
+
 #if UNITY_EDITOR
         Debug.LogWarning("Updater disabled in Editor.");
 #else
-        if (_pending == null)
-            return;
-        SetVisual("Preparing update…", checkingColor, false);
+        SetVisual("Preparing update...", checkingColor, false);
         checker.StartUpdate();
 #endif
+    }
+
+    private void BeginCheck()
+    {
+        if (!checker)
+        {
+            SetVisual("Updater missing", okColor, false);
+            return;
+        }
+
+        _checking = true;
+        _pending = null;
+        TooltipManager.Instance?.Hide();
+        SetVisual("Checking updates...", checkingColor, false);
+        checker.CheckForUpdate();
     }
 
     public void OnPointerEnter(PointerEventData e)
@@ -98,13 +136,13 @@ public class UpdateButtonController
         if (_pending == null)
             return;
 
-        var anchor = (RectTransform)button.transform; // the "Full quiz" button RectTransform
+        var anchor = (RectTransform)button.transform;
         TooltipManager.Instance?.ShowUpdateUnder(
             anchor,
             version: $"v{_pending.version}",
             notes: _pending.notes,
             gapY: 10f,
-            centerToAnchor: false // set true if you prefer centered
+            centerToAnchor: false
         );
     }
 
@@ -112,6 +150,6 @@ public class UpdateButtonController
 
     public void OnPointerExit(PointerEventData e)
     {
-        TooltipManager.Instance.Hide();
+        TooltipManager.Instance?.Hide();
     }
 }

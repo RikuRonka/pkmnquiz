@@ -139,11 +139,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     const string KEY_BACKGROUND_COLOR_VALUE = "quiz_background_color_value";
     private const int BaseContentTopPadding = 32;
     private const int MultiplayerContentTopPadding = 32;
+    private const float SingleplayerHeaderExtraHeight = 24f;
     private const float MultiplayerGridRightPaddingMin = 390f;
     private const float BackgroundColorSliderWidth = 220f;
     private const float BackgroundColorSliderHeight = 20f;
     private const float BackgroundColorSliderRightPadding = 12f;
-    private const float BackgroundColorSliderHeaderCenterOffset = 26f;
+    private const float BackgroundColorSliderTopPadding = 94f;
+    private const float BackgroundColorSliderMultiplayerRightPadding = 24f;
+    private const float BackgroundColorSliderMultiplayerTopPadding = 174f;
     private const float BackgroundColorBlackStop = 0.08f;
     private const float BackgroundColorRainbowStart = 0.13f;
     bool _pauseOnFocusLossEnabled = true;
@@ -173,9 +176,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private Vector2 _originalViewportOffsetMax;
     private Vector2 _originalScrollRectOffsetMin;
     private Vector2 _originalScrollRectOffsetMax;
+    private RectTransform _backgroundImageRt;
+    private Vector2 _originalBackgroundImageOffsetMin;
+    private Vector2 _originalBackgroundImageOffsetMax;
     private bool _viewportOffsetsCaptured;
     private bool _scrollRectOffsetsCaptured;
+    private bool _backgroundImageOffsetsCaptured;
     private bool _multiplayerRightDockApplied;
+    private bool _singleplayerHeaderExtraApplied;
     private bool _endStateBordersShowing;
     private Slider backgroundColorSlider;
     private Image scrollBackgroundImage;
@@ -678,7 +686,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         root.transform.SetAsLastSibling();
         var rootRt = (RectTransform)root.transform;
         rootRt.sizeDelta = new Vector2(BackgroundColorSliderWidth, BackgroundColorSliderHeight);
-        PositionBackgroundColorSlider(rootRt, parent == scrollRect?.viewport);
+        PositionBackgroundColorSlider(rootRt, parent != main.headerRect);
 
         var trackGo = new GameObject("Palette Track", typeof(RectTransform));
         trackGo.transform.SetParent(root.transform, false);
@@ -726,28 +734,33 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private RectTransform GetBackgroundColorSliderParent(SectionGroup main)
     {
-        if (scrollRect && scrollRect.viewport)
-            return scrollRect.viewport;
+        var canvas = scrollRect ? scrollRect.GetComponentInParent<Canvas>() : null;
+        if (!canvas && backgroundImage)
+            canvas = backgroundImage.GetComponentInParent<Canvas>();
+        if (canvas && canvas.transform is RectTransform canvasRt)
+            return canvasRt;
 
         return main ? main.headerRect : null;
     }
 
-    private void PositionBackgroundColorSlider(RectTransform sliderRt, bool anchoredToViewport)
+    private void PositionBackgroundColorSlider(RectTransform sliderRt, bool anchoredToFixedCanvas)
     {
         if (!sliderRt)
             return;
 
-        if (anchoredToViewport)
+        if (anchoredToFixedCanvas)
         {
+            bool multiplayerUi = QuizNetworkRuntime.IsMultiplayerActive || GameSettings.IsMultiplayer;
+            float rightPadding = multiplayerUi
+                ? BackgroundColorSliderMultiplayerRightPadding
+                : BackgroundColorSliderRightPadding;
+            float topPadding = multiplayerUi
+                ? BackgroundColorSliderMultiplayerTopPadding
+                : BackgroundColorSliderTopPadding;
+
             sliderRt.anchorMin = sliderRt.anchorMax = new Vector2(1f, 1f);
-            sliderRt.pivot = new Vector2(1f, 0.5f);
-            float topPadding = _appliedContentTopPadding >= 0
-                ? _appliedContentTopPadding
-                : BaseContentTopPadding;
-            sliderRt.anchoredPosition = new Vector2(
-                -BackgroundColorSliderRightPadding,
-                -(topPadding + BackgroundColorSliderHeaderCenterOffset)
-            );
+            sliderRt.pivot = new Vector2(1f, 1f);
+            sliderRt.anchoredPosition = new Vector2(-rightPadding, -topPadding);
             return;
         }
 
@@ -1028,12 +1041,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         EnsureLoader();
         SetSpellingHelp(null);
         bool loaderIsBuildingThisScene =
-            LoadingManager.Instance
-            && LoadingManager.Instance.IsLoading
-            && (
-                LoadingManager.Instance.PendingGen != 0
-                || !string.IsNullOrEmpty(LoadingManager.Instance.PendingType)
-            );
+            LoadingManager.Instance && LoadingManager.Instance.IsLoading;
 
         if (!loaderIsBuildingThisScene)
             _localBuildRoutine = StartCoroutine(LocalBuildWithOverlay());
@@ -2763,7 +2771,24 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             _multiplayerRightDockApplied = false;
         }
 
-        if (_multiplayerRightDockApplied == enabled)
+        var backgroundRt = backgroundImage ? backgroundImage.rectTransform : null;
+        if (!_backgroundImageOffsetsCaptured || _backgroundImageRt != backgroundRt)
+        {
+            _backgroundImageRt = backgroundRt;
+            if (_backgroundImageRt)
+            {
+                _originalBackgroundImageOffsetMin = _backgroundImageRt.offsetMin;
+                _originalBackgroundImageOffsetMax = _backgroundImageRt.offsetMax;
+            }
+            _backgroundImageOffsetsCaptured = true;
+            _singleplayerHeaderExtraApplied = false;
+        }
+
+        bool singleplayerHeaderExtra = !enabled;
+        if (
+            _multiplayerRightDockApplied == enabled
+            && _singleplayerHeaderExtraApplied == singleplayerHeaderExtra
+        )
             return;
 
         float scrollOffsetY = 0f;
@@ -2776,6 +2801,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
         _scrollViewportRt.offsetMin = _originalViewportOffsetMin;
         _scrollViewportRt.offsetMax = _originalViewportOffsetMax;
+        if (_backgroundImageRt)
+        {
+            _backgroundImageRt.offsetMin = _originalBackgroundImageOffsetMin;
+            _backgroundImageRt.offsetMax = _originalBackgroundImageOffsetMax;
+        }
+
         float rightPadding = Mathf.Max(
             MultiplayerGridRightPaddingMin,
             (
@@ -2800,7 +2831,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 );
             }
         }
+        else
+        {
+            ApplyAdditionalTopOffset(_scrollRectRt ? _scrollRectRt : _scrollViewportRt, SingleplayerHeaderExtraHeight);
+            ApplyAdditionalTopOffset(_backgroundImageRt, SingleplayerHeaderExtraHeight);
+        }
+
         _multiplayerRightDockApplied = enabled;
+        _singleplayerHeaderExtraApplied = singleplayerHeaderExtra;
 
         Canvas.ForceUpdateCanvases();
         if (_scrollRectRt)
@@ -2809,6 +2847,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (hasScrollSnapshot)
             RestoreScrollOffsetAfterLayout(scrollOffsetY);
+    }
+
+    private static void ApplyAdditionalTopOffset(RectTransform rt, float offset)
+    {
+        if (!rt)
+            return;
+
+        var offsetMax = rt.offsetMax;
+        offsetMax.y -= offset;
+        rt.offsetMax = offsetMax;
     }
 
     private void CancelGridTransientCoroutines()
@@ -3661,12 +3709,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             _localSessionDiscarded = false;
         }
 
-        if (
-            solved.Count == 0
-            && hinted.Count == 0
-            && shadowed.Count == 0
-            && elapsed <= 0.05f
-        )
+        if (solved.Count == 0)
         {
             SingleplayerQuizProgressStore.Remove(generation, selectedType);
             return;

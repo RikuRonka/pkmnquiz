@@ -18,8 +18,9 @@ public class MainMenuController : MonoBehaviour
             : FullScreenMode.Windowed;
         if (fullQuizBtn)
         {
-            fullQuizBtn.onClick.RemoveAllListeners();
-            fullQuizBtn.onClick.AddListener(() => PlayFullQuiz());
+            fullQuizBtn.onClick.RemoveListener(PlayFullQuiz);
+            if (fullQuizBtn.onClick.GetPersistentEventCount() == 0)
+                fullQuizBtn.onClick.AddListener(PlayFullQuiz);
         }
     }
 

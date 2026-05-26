@@ -24,6 +24,14 @@ public static class SingleplayerQuizProgressStore
             return;
 
         EnsureLoaded();
+        session.Normalize();
+        if (!session.HasStarted)
+        {
+            if (sessions.Remove(session.Key))
+                WriteFile();
+            return;
+        }
+
         sessions[session.Key] = session;
         WriteFile();
     }
@@ -51,6 +59,47 @@ public static class SingleplayerQuizProgressStore
         }
     }
 
+    public static bool HasAnyProgress()
+    {
+        EnsureLoaded();
+        foreach (var session in sessions.Values)
+        {
+            if (session != null && session.HasStarted)
+                return true;
+        }
+
+        return false;
+    }
+
+    public static List<Session> GetSessionsSnapshot()
+    {
+        EnsureLoaded();
+        var snapshot = new List<Session>(sessions.Count);
+        foreach (var session in sessions.Values)
+        {
+            if (session == null || !session.IsValid)
+                continue;
+
+            session.Normalize();
+            if (!session.HasStarted)
+                continue;
+
+            snapshot.Add(
+                new Session(
+                    session.generation,
+                    session.typeFilter,
+                    session.solvedIds,
+                    session.hintedIds,
+                    session.shadowedIds,
+                    session.elapsed,
+                    session.running
+                )
+            );
+        }
+
+        return snapshot;
+    }
+
     private static void EnsureLoaded()
     {
         if (loaded)
@@ -72,14 +121,27 @@ public static class SingleplayerQuizProgressStore
             if (data?.sessions == null)
                 return;
 
+            bool discardedSessions = false;
             foreach (var session in data.sessions)
             {
                 if (session == null || !session.IsValid)
+                {
+                    discardedSessions = true;
                     continue;
+                }
 
                 session.Normalize();
+                if (!session.HasStarted)
+                {
+                    discardedSessions = true;
+                    continue;
+                }
+
                 sessions[session.Key] = session;
             }
+
+            if (discardedSessions)
+                WriteFile();
         }
         catch (Exception ex)
         {
@@ -92,6 +154,13 @@ public static class SingleplayerQuizProgressStore
     {
         try
         {
+            if (sessions.Count == 0)
+            {
+                if (File.Exists(SavePath))
+                    File.Delete(SavePath);
+                return;
+            }
+
             Directory.CreateDirectory(Application.persistentDataPath);
             var data = new FileData
             {
@@ -126,6 +195,7 @@ public static class SingleplayerQuizProgressStore
 
         public string Key => KeyFor(generation, typeFilter);
         public bool IsValid => generation >= 0;
+        public bool HasStarted => solvedIds != null && solvedIds.Count > 0;
 
         public Session() { }
 

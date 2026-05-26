@@ -2100,8 +2100,8 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 320349529}
   m_HandleRect: {fileID: 320349528}
   m_Direction: 2
-  m_Value: 1
-  m_Size: 1
+  m_Value: 0
+  m_Size: 0.4
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -3928,7 +3928,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -0.00009918213}
+  m_AnchoredPosition: {x: 0, y: -0.00012207031}
   m_SizeDelta: {x: 0, y: 90}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!114 &543477989
@@ -4976,25 +4976,35 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PatchNotesView
   notesText: {fileID: 1239978752}
-  patchNotes: "1.2.2\n- Singleplayer quiz progress now saves to disk and is
-    restored after restarting the game, including guesses, timer, hints, shadows,
-    and completed quizzes\n- Added a main menu Reset quiz progress button with
-    a typed reset confirmation\n- Added P as a pause shortcut outside text fields\n-
-    Fixed co-op quiz re-entry sometimes syncing the timer but not guessed Pokemon\n-
-    Fixed already-guessed Mega Evolution entries not clearing the input or showing
-    feedback\n- Improved co-op join/start handling after Netcode shutdowns and
-    replaced the misleading missing Netcode setup message\n\n1.2.1\n- Co-op quiz progress is now remembered per quiz when
-    the host returns to the lobby, including guessed Pok\xE9mon, shadows, revealed
-    types, timers, scores, and multiple saved quizzes\n- Solo quiz progress is
-    now remembered per quiz until the game is restarted\n- Hosts can start co-op
-    quizzes alone, and players can join after the quiz has already started\n-
-    Lobby rows now show which quiz the host is in and refresh while the lobby browser
-    is open\n- Added per-player quiz background color slider with black, pink,
-    and turquoise support\n- Fixed the background color slider placement on gen,
-    full, type, and Mega Evolutions quizzes\n- Nicknames are now required before
-    hosting or joining co-op\n- Improved quiz join/leave notifications and return-to-quiz
-    behavior\n- The game now always starts on the main menu instead of sometimes
-    opening Gen 1 directly\n\n1.2.0\n- Added player color selection in co-op lobbies and during
+  patchNotes: "1.2.3\n- Check updates now performs a manual update check and reports
+    when no update is available\n- Full Quiz now loads correctly again\n- Reset quiz
+    progress now shows only quizzes with guessed Pokemon, lists guessed count and
+    elapsed time, and supports resetting one quiz at a time with confirmation\n-
+    Singleplayer progress now starts saving only after at least one Pokemon has
+    been guessed\n- Improved background color slider placement in singleplayer
+    and co-op so it stays fixed while scrolling\n- Improved co-op chat placement
+    and removed the message character limit\n- Added app/taskbar notification and
+    sound when someone joins a co-op lobby\n- Cleaned up co-op lobby player colors
+    and UI overlap around patch notes/reset controls\n\n1.2.2\n- Singleplayer
+    quiz progress now saves to disk and is restored
+    after restarting the game, including guesses, timer, hints, shadows, and completed
+    quizzes\n- Added a main menu Reset quiz progress button with a typed reset confirmation\n-
+    Added P as a pause shortcut outside text fields\n- Fixed co-op quiz re-entry
+    sometimes syncing the timer but not guessed Pokemon\n- Fixed already-guessed
+    Mega Evolution entries not clearing the input or showing feedback\n- Improved
+    co-op join/start handling after Netcode shutdowns and replaced the misleading
+    missing Netcode setup message\n\n1.2.1\n- Co-op quiz progress is now remembered
+    per quiz when the host returns to the lobby, including guessed Pok\xE9mon, shadows,
+    revealed types, timers, scores, and multiple saved quizzes\n- Solo quiz progress
+    is now remembered per quiz until the game is restarted\n- Hosts can start co-op
+    quizzes alone, and players can join after the quiz has already started\n- Lobby
+    rows now show which quiz the host is in and refresh while the lobby browser is
+    open\n- Added per-player quiz background color slider with black, pink, and turquoise
+    support\n- Fixed the background color slider placement on gen, full, type, and
+    Mega Evolutions quizzes\n- Nicknames are now required before hosting or joining
+    co-op\n- Improved quiz join/leave notifications and return-to-quiz behavior\n-
+    The game now always starts on the main menu instead of sometimes opening Gen
+    1 directly\n\n1.2.0\n- Added player color selection in co-op lobbies and during
     quizzes\n- Matched multiplayer names and result highlights to each player's chosen
     color\n- Added a draggable and resizable quiz chat panel with reserved grid space
     on the right\n- Added a return-to-quiz flow for clients and clearer notifications

@@ -1189,6 +1189,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
         string destination = IsQuizSceneActive() ? "quiz" : "lobby";
         string message = $"{QuizNetworkRuntime.NormalizeNickname(playerName)} joined the {destination}.";
+        WindowsAppNotifier.NotifyLobbyJoin();
+
         if (quiz && quiz.toast)
             quiz.toast.Show(message, 2.5f);
 
@@ -1926,7 +1928,6 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private const string ChatBroadcastMessage = "pkmnquiz_chat";
     private const int MessageSize = 1024;
     private const int MaxChatLines = 64;
-    private const int MaxMessageLength = 180;
     private const float MinInputHeight = 28f;
     private const float MaxInputHeight = 72f;
     private const float InputVerticalPadding = 8f;
@@ -1934,13 +1935,13 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private const float MenuChatHeight = 236f;
     private const float MenuChatMessagesHeight = 166f;
     private const float QuizChatWidth = 340f;
-    private const float QuizChatHeight = 860f;
-    private const float QuizChatMessagesHeight = 790f;
+    private const float QuizChatHeight = 800f;
+    private const float QuizChatMessagesHeight = 730f;
     private const float QuizExpandedChatWidth = 340f;
-    private const float QuizExpandedChatHeight = 860f;
-    private const float QuizExpandedChatMessagesHeight = 790f;
+    private const float QuizExpandedChatHeight = 800f;
+    private const float QuizExpandedChatMessagesHeight = 730f;
     private const float QuizDockRight = 24f;
-    private const float QuizDockTop = 198f;
+    private const float QuizDockTop = 214f;
     private const float PausedChatWidth = 430f;
     private const float PausedChatHeight = 140f;
     private const float PausedChatMessagesHeight = 70f;
@@ -2156,7 +2157,10 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             return;
         }
 
-        using var writer = new FastBufferWriter(MessageSize, Allocator.Temp);
+        using var writer = new FastBufferWriter(
+            ChatWriterCapacity(QuizNetworkRuntime.PlayerNickname, message),
+            Allocator.Temp
+        );
         writer.WriteValueSafe(QuizNetworkRuntime.PlayerNickname);
         writer.WriteValueSafe(message);
         manager.CustomMessagingManager.SendNamedMessage(ChatRequestMessage, 0UL, writer);
@@ -2182,7 +2186,10 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         string timestamp = CurrentTimestamp();
         AppendLine(timestamp, senderClientId, senderName, message);
 
-        using var writer = new FastBufferWriter(MessageSize, Allocator.Temp);
+        using var writer = new FastBufferWriter(
+            ChatWriterCapacity(timestamp, senderName, message) + sizeof(ulong),
+            Allocator.Temp
+        );
         writer.WriteValueSafe(senderClientId);
         writer.WriteValueSafe(timestamp);
         writer.WriteValueSafe(senderName);
@@ -2256,7 +2263,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(207f, -782f);
+            rt.anchoredPosition = new Vector2(252f, -782f);
             rt.sizeDelta = new Vector2(MenuChatWidth, MenuChatHeight);
             basePanelHeight = MenuChatHeight;
             SetMessageListHeight(MenuChatMessagesHeight);
@@ -2577,7 +2584,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         inputLayout.flexibleWidth = 1f;
 
         var input = go.AddComponent<TMP_InputField>();
-        input.characterLimit = MaxMessageLength;
+        input.characterLimit = 0;
         input.contentType = TMP_InputField.ContentType.Standard;
         input.lineType = TMP_InputField.LineType.MultiLineSubmit;
         input.richText = false;
@@ -2785,8 +2792,6 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             return string.Empty;
 
         message = message.Trim();
-        if (message.Length > MaxMessageLength)
-            message = message[..MaxMessageLength];
 
         System.Text.StringBuilder sb = new(message.Length);
         bool lastWasSpace = false;
@@ -2808,6 +2813,15 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         }
 
         return sb.ToString().Trim();
+    }
+
+    private static int ChatWriterCapacity(params string[] values)
+    {
+        int needed = 32;
+        foreach (string value in values)
+            needed += 8 + System.Text.Encoding.UTF8.GetByteCount(value ?? string.Empty);
+
+        return Mathf.Max(MessageSize, needed);
     }
 }
 

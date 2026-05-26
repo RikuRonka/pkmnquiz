@@ -1177,6 +1177,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
         hostNoticeLabel.text = message;
         hostNoticeLabel.gameObject.SetActive(true);
+        WindowsAppNotifier.NotifyLobbyJoin();
 
         if (hostNoticeRoutine != null)
             StopCoroutine(hostNoticeRoutine);
@@ -1229,4 +1230,89 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         return hostingLobby || joinedLobby || networkActive;
     }
 
+}
+
+public static class WindowsAppNotifier
+{
+    private const float NotificationCooldownSeconds = 0.75f;
+    private static float lastNotificationTime = -1000f;
+
+    public static void NotifyLobbyJoin()
+    {
+        if (Time.unscaledTime - lastNotificationTime < NotificationCooldownSeconds)
+            return;
+
+        lastNotificationTime = Time.unscaledTime;
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        FlashTaskbar();
+        MessageBeep(MessageBeepType.Notification);
+#endif
+    }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+    private const uint FlashwAll = 0x00000003;
+    private const uint FlashwTimernofg = 0x0000000C;
+
+    private enum MessageBeepType : uint
+    {
+        Notification = 0x00000040,
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct FlashWindowInfo
+    {
+        public uint cbSize;
+        public IntPtr hwnd;
+        public uint dwFlags;
+        public uint uCount;
+        public uint dwTimeout;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool FlashWindowEx(ref FlashWindowInfo info);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool MessageBeep(MessageBeepType type);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetActiveWindow();
+
+    private static void FlashTaskbar()
+    {
+        IntPtr windowHandle = GetMainWindowHandle();
+        if (windowHandle == IntPtr.Zero)
+            return;
+
+        var info = new FlashWindowInfo
+        {
+            cbSize = Convert.ToUInt32(
+                System.Runtime.InteropServices.Marshal.SizeOf<FlashWindowInfo>()
+            ),
+            hwnd = windowHandle,
+            dwFlags = FlashwAll | FlashwTimernofg,
+            uCount = 0,
+            dwTimeout = 0,
+        };
+
+        FlashWindowEx(ref info);
+    }
+
+    private static IntPtr GetMainWindowHandle()
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetCurrentProcess();
+            process.Refresh();
+            if (process.MainWindowHandle != IntPtr.Zero)
+                return process.MainWindowHandle;
+        }
+        catch
+        {
+            // Fall back to Unity's current active window below.
+        }
+
+        return GetActiveWindow();
+    }
+#endif
 }
