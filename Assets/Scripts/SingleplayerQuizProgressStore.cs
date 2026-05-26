@@ -1,0 +1,180 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using UnityEngine;
+
+public static class SingleplayerQuizProgressStore
+{
+    private const int CurrentVersion = 1;
+    private const string SaveFileName = "singleplayer_quiz_progress.json";
+    private static readonly Dictionary<string, Session> sessions = new();
+    private static bool loaded;
+
+    public static string SavePath => Path.Combine(Application.persistentDataPath, SaveFileName);
+
+    public static bool TryGet(int generation, string typeFilter, out Session session)
+    {
+        EnsureLoaded();
+        return sessions.TryGetValue(Session.KeyFor(generation, typeFilter), out session);
+    }
+
+    public static void Save(Session session)
+    {
+        if (session == null)
+            return;
+
+        EnsureLoaded();
+        sessions[session.Key] = session;
+        WriteFile();
+    }
+
+    public static void Remove(int generation, string typeFilter)
+    {
+        EnsureLoaded();
+        if (sessions.Remove(Session.KeyFor(generation, typeFilter)))
+            WriteFile();
+    }
+
+    public static void ClearAll()
+    {
+        loaded = true;
+        sessions.Clear();
+
+        try
+        {
+            if (File.Exists(SavePath))
+                File.Delete(SavePath);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Progress] Failed to delete save file: {ex.Message}");
+        }
+    }
+
+    private static void EnsureLoaded()
+    {
+        if (loaded)
+            return;
+
+        loaded = true;
+        sessions.Clear();
+
+        try
+        {
+            if (!File.Exists(SavePath))
+                return;
+
+            string json = File.ReadAllText(SavePath);
+            if (string.IsNullOrWhiteSpace(json))
+                return;
+
+            var data = JsonUtility.FromJson<FileData>(json);
+            if (data?.sessions == null)
+                return;
+
+            foreach (var session in data.sessions)
+            {
+                if (session == null || !session.IsValid)
+                    continue;
+
+                session.Normalize();
+                sessions[session.Key] = session;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Progress] Failed to load save file: {ex.Message}");
+            sessions.Clear();
+        }
+    }
+
+    private static void WriteFile()
+    {
+        try
+        {
+            Directory.CreateDirectory(Application.persistentDataPath);
+            var data = new FileData
+            {
+                version = CurrentVersion,
+                sessions = new List<Session>(sessions.Values),
+            };
+            File.WriteAllText(SavePath, JsonUtility.ToJson(data, prettyPrint: true));
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Progress] Failed to write save file: {ex.Message}");
+        }
+    }
+
+    [Serializable]
+    private sealed class FileData
+    {
+        public int version = CurrentVersion;
+        public List<Session> sessions = new();
+    }
+
+    [Serializable]
+    public sealed class Session
+    {
+        public int generation;
+        public string typeFilter;
+        public List<int> solvedIds = new();
+        public List<int> hintedIds = new();
+        public List<int> shadowedIds = new();
+        public float elapsed;
+        public bool running;
+
+        public string Key => KeyFor(generation, typeFilter);
+        public bool IsValid => generation >= 0;
+
+        public Session() { }
+
+        public Session(
+            int generation,
+            string typeFilter,
+            IReadOnlyCollection<int> solvedIds,
+            IReadOnlyCollection<int> hintedIds,
+            IReadOnlyCollection<int> shadowedIds,
+            float elapsed,
+            bool running
+        )
+        {
+            this.generation = generation;
+            this.typeFilter = NormalizeTypeFilter(typeFilter);
+            this.solvedIds = solvedIds == null ? new List<int>() : new List<int>(solvedIds);
+            this.hintedIds = hintedIds == null ? new List<int>() : new List<int>(hintedIds);
+            this.shadowedIds = shadowedIds == null ? new List<int>() : new List<int>(shadowedIds);
+            this.elapsed = Mathf.Max(0f, elapsed);
+            this.running = running;
+        }
+
+        public bool Matches(int generation, string typeFilter)
+        {
+            return this.generation == generation
+                && string.Equals(
+                    this.typeFilter,
+                    NormalizeTypeFilter(typeFilter),
+                    StringComparison.OrdinalIgnoreCase
+                );
+        }
+
+        public void Normalize()
+        {
+            typeFilter = NormalizeTypeFilter(typeFilter);
+            solvedIds ??= new List<int>();
+            hintedIds ??= new List<int>();
+            shadowedIds ??= new List<int>();
+            elapsed = Mathf.Max(0f, elapsed);
+        }
+
+        public static string KeyFor(int generation, string typeFilter)
+        {
+            return $"{generation}|{NormalizeTypeFilter(typeFilter) ?? string.Empty}";
+        }
+
+        private static string NormalizeTypeFilter(string typeFilter)
+        {
+            return string.IsNullOrWhiteSpace(typeFilter) ? null : typeFilter.Trim().ToLowerInvariant();
+        }
+    }
+}

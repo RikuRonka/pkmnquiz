@@ -143,13 +143,7 @@ public static class QuizNetworkRuntime
         string colorHex = null
     )
     {
-        var manager = EnsureNetworkManager();
-        if (manager.IsListening)
-        {
-            QuizMultiplayerChatOverlay.ResetSession();
-            manager.Shutdown();
-            await Task.Yield();
-        }
+        var manager = await PrepareNetworkManagerForNewSessionAsync();
         QuizMultiplayerCoordinator.ClearSavedQuizSession();
 
         PlayerNickname = NormalizeNickname(nickname);
@@ -266,13 +260,7 @@ public static class QuizNetworkRuntime
         PlayerNickname = NormalizeNickname(nickname);
         PlayerColorHex = NormalizeColorHex(colorHex);
 
-        var manager = EnsureNetworkManager();
-        if (manager.IsListening)
-        {
-            QuizMultiplayerChatOverlay.ResetSession();
-            manager.Shutdown();
-            await Task.Yield();
-        }
+        var manager = await PrepareNetworkManagerForNewSessionAsync();
 
         await EnsureServicesReadyAsync(BuildAuthProfile(ClientProfilePrefix, PlayerNickname));
 
@@ -1113,6 +1101,47 @@ public static class QuizNetworkRuntime
         manager.NetworkConfig.PlayerPrefab = null;
 
         return manager;
+    }
+
+    private static async Task<NetworkManager> PrepareNetworkManagerForNewSessionAsync()
+    {
+        var manager = EnsureNetworkManager();
+        if (manager.IsListening || manager.ShutdownInProgress)
+        {
+            QuizMultiplayerChatOverlay.ResetSession();
+            manager.Shutdown();
+
+            const int maxFrames = 120;
+            int frames = 0;
+            while (
+                manager
+                && (manager.IsListening || manager.ShutdownInProgress)
+                && frames++ < maxFrames
+            )
+            {
+                await Task.Yield();
+            }
+
+            if (manager && (manager.IsListening || manager.ShutdownInProgress))
+                throw new InvalidOperationException("Netcode shutdown did not finish. Try again.");
+
+            manager = EnsureNetworkManager();
+        }
+
+        ValidateNetworkManager(manager);
+        return manager;
+    }
+
+    private static void ValidateNetworkManager(NetworkManager manager)
+    {
+        if (!manager)
+            throw new InvalidOperationException("Netcode NetworkManager is missing.");
+
+        if (manager.NetworkConfig == null)
+            throw new InvalidOperationException("Netcode NetworkConfig is missing.");
+
+        if (!manager.GetComponent<UnityTransport>())
+            throw new InvalidOperationException("Netcode UnityTransport is missing.");
     }
 }
 

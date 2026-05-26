@@ -9,6 +9,7 @@ public class MainMenuController : MonoBehaviour
     void Awake()
     {
         MultiplayerMenuPanel.EnsureInScene();
+        SingleplayerProgressResetPanel.EnsureInScene();
 
         bool fullscreen = PlayerPrefs.GetInt("fullscreen", 1) == 1;
         Screen.fullScreen = fullscreen;

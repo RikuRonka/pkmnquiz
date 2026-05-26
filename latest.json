@@ -1,5 +1,5 @@
 {
-  "version": "1.2.1",
-  "notes": "Co-op quiz progress is now remembered per quiz when the host returns to the lobby, including guessed Pokémon, shadows, revealed types, timers, scores, and multiple saved quizzes - Solo quiz progress is now remembered per quiz until the game is restarted - Hosts can start co-op quizzes alone, players can join after the quiz starts, and lobby rows now show which quiz the host is in - Added per-player quiz background color slider with black, pink, and turquoise support, and fixed its placement on every quiz type - Nicknames are now required before hosting or joining co-op - Improved lobby refreshes, quiz join notifications, and return-to-quiz behavior - The game now always starts on the main menu instead of sometimes opening Gen 1 directly",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.1.zip"
+  "version": "1.2.2",
+  "notes": "- Singleplayer quiz progress now saves to disk and is restored after restarting the game, including guesses, timer, hints, shadows, and completed quizzes - Added a main menu Reset quiz progress button with a typed reset confirmation - Added P as a pause shortcut outside text fields - Fixed co-op quiz re-entry sometimes syncing the timer but not guessed Pokemon - Fixed already-guessed Mega Evolution entries not clearing the input or showing feedback - Improved co-op join/start handling after Netcode shutdowns and replaced the misleading missing Netcode setup message",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.2.zip"
 }

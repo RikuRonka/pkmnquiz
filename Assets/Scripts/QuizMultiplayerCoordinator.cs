@@ -39,6 +39,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     private bool returningToMenu;
     private float nextStateRequest;
     private float nextTimerSync;
+    private NetworkStateSnapshot pendingState;
     private readonly Dictionary<ulong, string> playerNames = new();
     private readonly Dictionary<ulong, string> playerColors = new();
     private readonly Dictionary<ulong, int> playerScores = new();
@@ -342,8 +343,13 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         }
         else if (manager && manager.IsClient)
         {
+            stateReceived = false;
+            nextStateRequest = 0f;
             SendNickname();
-            SendStateRequest();
+            if (pendingState != null)
+                ApplyNetworkStateSnapshot(pendingState);
+            else
+                SendStateRequest();
         }
     }
 
@@ -930,26 +936,62 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         var shadowedIds = ReadIds(reader);
         var scoreboard = ReadScoreboard(reader);
         var solvedOwners = ReadSolvedOwners(reader);
-        stateReceived = true;
-        solvedByClientId.Clear();
-        foreach (var kv in solvedOwners)
-            solvedByClientId[kv.Key] = kv.Value;
-
-        if (!quiz)
-            quiz = FindFirstObjectByType<QuizManager>();
-        if (!quiz)
-            return;
-
-        ApplyScoreboard(scoreboard);
-        quiz.ApplyNetworkState(
+        var snapshot = new NetworkStateSnapshot(
             generation,
             typeFilter,
             solvedIds,
             hintedIds,
             shadowedIds,
             elapsed,
-            isRunning
+            isRunning,
+            scoreboard,
+            solvedOwners
         );
+
+        if (!quiz)
+            quiz = FindFirstObjectByType<QuizManager>();
+        if (!quiz)
+        {
+            pendingState = snapshot;
+            stateReceived = false;
+            nextStateRequest = 0f;
+            return;
+        }
+
+        ApplyNetworkStateSnapshot(snapshot);
+    }
+
+    private void ApplyNetworkStateSnapshot(NetworkStateSnapshot snapshot)
+    {
+        if (snapshot == null)
+            return;
+
+        if (!quiz)
+            quiz = FindFirstObjectByType<QuizManager>();
+        if (!quiz)
+        {
+            pendingState = snapshot;
+            stateReceived = false;
+            nextStateRequest = 0f;
+            return;
+        }
+
+        pendingState = null;
+        solvedByClientId.Clear();
+        foreach (var kv in snapshot.SolvedOwners)
+            solvedByClientId[kv.Key] = kv.Value;
+
+        ApplyScoreboard(snapshot.Scoreboard);
+        quiz.ApplyNetworkState(
+            snapshot.Generation,
+            snapshot.TypeFilter,
+            snapshot.SolvedIds,
+            snapshot.HintedIds,
+            snapshot.ShadowedIds,
+            snapshot.Elapsed,
+            snapshot.Running
+        );
+        stateReceived = true;
     }
 
     private void BroadcastTimer()
@@ -1416,6 +1458,42 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         }
 
         return ids;
+    }
+
+    private sealed class NetworkStateSnapshot
+    {
+        public readonly int Generation;
+        public readonly string TypeFilter;
+        public readonly List<int> SolvedIds;
+        public readonly List<int> HintedIds;
+        public readonly List<int> ShadowedIds;
+        public readonly float Elapsed;
+        public readonly bool Running;
+        public readonly List<PlayerScore> Scoreboard;
+        public readonly Dictionary<int, ulong> SolvedOwners;
+
+        public NetworkStateSnapshot(
+            int generation,
+            string typeFilter,
+            List<int> solvedIds,
+            List<int> hintedIds,
+            List<int> shadowedIds,
+            float elapsed,
+            bool running,
+            List<PlayerScore> scoreboard,
+            Dictionary<int, ulong> solvedOwners
+        )
+        {
+            Generation = generation;
+            TypeFilter = typeFilter;
+            SolvedIds = solvedIds ?? new List<int>();
+            HintedIds = hintedIds ?? new List<int>();
+            ShadowedIds = shadowedIds ?? new List<int>();
+            Elapsed = Mathf.Max(0f, elapsed);
+            Running = running;
+            Scoreboard = scoreboard ?? new List<PlayerScore>();
+            SolvedOwners = solvedOwners ?? new Dictionary<int, ulong>();
+        }
     }
 
     private readonly struct PlayerScore

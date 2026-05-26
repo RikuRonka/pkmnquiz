@@ -182,7 +182,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private Texture2D backgroundColorGradientTexture;
     private Sprite backgroundColorGradientSprite;
     private readonly List<SectionGroup> _sections = new();
-    private static readonly Dictionary<string, LocalQuizSession> localQuizSessions = new();
     int _hintUsedCount;
     int _shadowUsedCount;
 
@@ -231,6 +230,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     bool _alwaysScrollEnabled = true;
     private bool _testRunning;
     private bool _testCancel;
+    private bool _localSessionDiscarded;
 
     [Header("Audio")]
     [SerializeField]
@@ -1094,7 +1094,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         PlayerPrefs.SetInt(KEY_ALWAYS_SCROLL, on ? 1 : 0);
     }
 
-    private void OnApplicationQuit() => PlayerPrefs.Save();
+    private void OnApplicationQuit()
+    {
+        SaveLocalQuizSession();
+        PlayerPrefs.Save();
+    }
 
     void OnPauseOnFocusLossToggleChanged(bool on)
     {
@@ -1154,8 +1158,23 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
             TogglePause();
         }
+
+        if (kb != null && kb.pKey.wasPressedThisFrame && !IsTextInputFocused())
+        {
+            if (IsDialogOpen())
+                return;
+
+            TogglePause();
+        }
 #else
         if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (IsDialogOpen())
+                return;
+            TogglePause();
+        }
+
+        if (UnityEngine.Input.GetKeyDown(KeyCode.P) && !IsTextInputFocused())
         {
             if (IsDialogOpen())
                 return;
@@ -1175,6 +1194,19 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             HandleKeyboardScroll();
             HandleKeyboardColumns();
         }
+    }
+
+    private bool IsTextInputFocused()
+    {
+        if (guessInput && guessInput.isFocused)
+            return true;
+
+        var selected = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
+        if (!selected)
+            return false;
+
+        var input = selected.GetComponentInParent<TMP_InputField>();
+        return input && input.interactable && input.isFocused;
     }
 
     private void RevealByBaseIds(params int[] baseIds)
@@ -1208,25 +1240,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         if (any)
+        {
             UpdateScore();
+            SaveLocalQuizSession();
+        }
 
         RefocusGuess();
 
-        if (IsComplete())
-        {
-            running = false;
-            if (guessInput)
-                guessInput.interactable = false;
-            if (finishedDialog)
-                finishedDialog.Show(
-                    solved.Count,
-                    cardById.Count,
-                    TimeSpan.FromSeconds(elapsed),
-                    gaveUp: false,
-                    hintsUsed: _hintUsedCount,
-                    shadowsUsed: _shadowUsedCount
-                );
-        }
+        ShowFinishedIfComplete();
     }
 
     private void ShowNotInQuiz(string name, Pokemon p = null)
@@ -1262,7 +1283,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         );
         CaptureNetworkGuessFeedback(feedback);
 
-        if (_processingNetworkGuess && toast)
+        if (toast)
             toast.Show(feedback.Message, feedback.Duration);
     }
 
@@ -1559,6 +1580,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!commit)
             return true;
 
+        bool anyNew = false;
+
         foreach (var p in matches)
         {
             if (solved.Contains(p.id))
@@ -1574,9 +1597,25 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
             OnPokemonSolved?.Invoke(p);
             PlayCorrect();
+            anyNew = true;
+        }
+
+        if (!anyNew)
+        {
+            var target = matches.FirstOrDefault();
+            CaptureAlreadyGuessedFeedback(target);
+            if (target != null && cardById.TryGetValue(target.id, out var already))
+            {
+                already.FlashHighlight();
+                MaybeScrollTo(target);
+            }
+            PlayDuplicate();
+            RefocusGuess();
+            return true;
         }
 
         UpdateScore();
+        SaveLocalQuizSession();
         RefocusGuess();
         ShowFinishedIfComplete();
 
@@ -1598,6 +1637,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void OnDisable()
     {
+        SaveLocalQuizSession();
         StopAllCoroutines();
         PlayerPrefs.Save();
     }
@@ -3070,6 +3110,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             shadowed.Add(pickId);
             targetCard.SetShadowMode(true);
             _shadowUsedCount++;
+            SaveLocalQuizSession();
             return pickId;
         }
 
@@ -3265,6 +3306,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         hinted.Add(pickId);
         card.ShowTypeHint(p.types);
         _hintUsedCount++;
+        SaveLocalQuizSession();
         return true;
     }
 
@@ -3611,24 +3653,35 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!IsLocalQuizSessionAllowed())
             return;
 
-        string key = LocalQuizSession.KeyFor(generation, selectedType);
+        if (_localSessionDiscarded)
+        {
+            if (!running)
+                return;
+
+            _localSessionDiscarded = false;
+        }
+
         if (
-            IsQuizFinished
-            || (solved.Count == 0 && hinted.Count == 0 && shadowed.Count == 0 && elapsed <= 0.05f)
+            solved.Count == 0
+            && hinted.Count == 0
+            && shadowed.Count == 0
+            && elapsed <= 0.05f
         )
         {
-            localQuizSessions.Remove(key);
+            SingleplayerQuizProgressStore.Remove(generation, selectedType);
             return;
         }
 
-        localQuizSessions[key] = new LocalQuizSession(
-            generation,
-            selectedType,
-            solved,
-            hinted,
-            shadowed,
-            elapsed,
-            running
+        SingleplayerQuizProgressStore.Save(
+            new SingleplayerQuizProgressStore.Session(
+                generation,
+                selectedType,
+                solved,
+                hinted,
+                shadowed,
+                elapsed,
+                running
+            )
         );
     }
 
@@ -3637,19 +3690,19 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!IsLocalQuizSessionAllowed())
             return false;
 
-        string key = LocalQuizSession.KeyFor(generation, selectedType);
-        if (!localQuizSessions.TryGetValue(key, out var session))
+        if (!SingleplayerQuizProgressStore.TryGet(generation, selectedType, out var session))
             return false;
 
         if (!session.Matches(generation, selectedType))
             return false;
 
+        _localSessionDiscarded = false;
         ApplySavedMultiplayerSession(
-            session.SolvedIds,
-            session.HintedIds,
-            session.ShadowedIds,
-            session.Elapsed,
-            session.Running
+            session.solvedIds,
+            session.hintedIds,
+            session.shadowedIds,
+            session.elapsed,
+            session.running
         );
         return true;
     }
@@ -3659,7 +3712,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!IsLocalQuizSessionAllowed())
             return;
 
-        localQuizSessions.Remove(LocalQuizSession.KeyFor(generation, selectedType));
+        _localSessionDiscarded = true;
+        SingleplayerQuizProgressStore.Remove(generation, selectedType);
     }
 
     private static bool IsLocalQuizSessionAllowed()
@@ -3886,6 +3940,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         shadowed.Add(id);
         card.SetShadowMode(true);
         _shadowUsedCount++;
+        SaveLocalQuizSession();
     }
 
     public int ApplyNetworkRevealType()
@@ -3921,12 +3976,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!IsComplete())
             return;
 
-        ClearLocalQuizSession();
         running = false;
         if (guessInput)
             guessInput.interactable = false;
 
         ApplyEndStateCardBorders();
+        SaveLocalQuizSession();
 
         if (finishedDialog)
             finishedDialog.Show(
@@ -4439,23 +4494,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         UpdateScore();
+        SaveLocalQuizSession();
         RefocusGuess();
 
-        if (IsComplete())
-        {
-            running = false;
-            if (guessInput)
-                guessInput.interactable = false;
-
-            finishedDialog.Show(
-                guessed: solved.Count,
-                total: cardById.Count,
-                elapsed: TimeSpan.FromSeconds(elapsed),
-                gaveUp: false,
-                hintsUsed: _hintUsedCount,
-                shadowsUsed: _shadowUsedCount
-            );
-        }
+        ShowFinishedIfComplete();
     }
 
     private void RevealAllByBaseId(int baseId)
@@ -4485,26 +4527,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         if (any)
+        {
             UpdateScore();
+            SaveLocalQuizSession();
+        }
 
         RefocusGuess();
 
-        if (IsComplete())
-        {
-            running = false;
-            if (guessInput)
-                guessInput.interactable = false;
-
-            if (finishedDialog)
-                finishedDialog.Show(
-                    solved.Count,
-                    cardById.Count,
-                    TimeSpan.FromSeconds(elapsed),
-                    gaveUp: false,
-                    hintsUsed: _hintUsedCount,
-                    shadowsUsed: _shadowUsedCount
-                );
-        }
+        ShowFinishedIfComplete();
     }
 
     private void OnApplicationFocus(bool hasFocus)
@@ -4642,56 +4672,6 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         fromTopPx = Mathf.Clamp(fromTopPx - padPx, 0f, scrollable);
 
         return 1f - (fromTopPx / scrollable);
-    }
-
-    private sealed class LocalQuizSession
-    {
-        public readonly int Generation;
-        public readonly string TypeFilter;
-        public readonly List<int> SolvedIds;
-        public readonly List<int> HintedIds;
-        public readonly List<int> ShadowedIds;
-        public readonly float Elapsed;
-        public readonly bool Running;
-
-        public LocalQuizSession(
-            int generation,
-            string typeFilter,
-            IReadOnlyCollection<int> solvedIds,
-            IReadOnlyCollection<int> hintedIds,
-            IReadOnlyCollection<int> shadowedIds,
-            float elapsed,
-            bool running
-        )
-        {
-            Generation = generation;
-            TypeFilter = NormalizeTypeFilter(typeFilter);
-            SolvedIds = solvedIds == null ? new List<int>() : new List<int>(solvedIds);
-            HintedIds = hintedIds == null ? new List<int>() : new List<int>(hintedIds);
-            ShadowedIds = shadowedIds == null ? new List<int>() : new List<int>(shadowedIds);
-            Elapsed = Mathf.Max(0f, elapsed);
-            Running = running;
-        }
-
-        public bool Matches(int generation, string typeFilter)
-        {
-            return Generation == generation
-                && string.Equals(
-                    TypeFilter,
-                    NormalizeTypeFilter(typeFilter),
-                    StringComparison.OrdinalIgnoreCase
-                );
-        }
-
-        public static string KeyFor(int generation, string typeFilter)
-        {
-            return $"{generation}|{NormalizeTypeFilter(typeFilter) ?? string.Empty}";
-        }
-
-        private static string NormalizeTypeFilter(string typeFilter)
-        {
-            return string.IsNullOrWhiteSpace(typeFilter) ? null : typeFilter.Trim().ToLowerInvariant();
-        }
     }
 
     private static bool IsExactNameOrAlias(string text, Pokemon p)

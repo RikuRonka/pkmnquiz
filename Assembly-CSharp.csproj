@@ -57,6 +57,7 @@
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextSelector_A.cs" />
     <Compile Include="Assets\Scripts\SpriteLibrary.cs" />
     <Compile Include="Assets\Scripts\DexOrder.cs" />
+    <Compile Include="Assets\Scripts\SingleplayerQuizProgressStore.cs" />
     <Compile Include="Assets\Scripts\TypeFilterButton.cs" />
     <Compile Include="Assets\Scripts\QuizManager.cs" />
     <Compile Include="Assets\Scripts\FinishedDialog.cs" />
@@ -95,6 +96,7 @@
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexShakeA.cs" />
     <Compile Include="Assets\Scripts\MusicUIController.cs" />
     <Compile Include="Assets\Scripts\ClickOnDown.cs" />
+    <Compile Include="Assets\Scripts\SingleplayerProgressResetPanel.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark01_UGUI.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\SimpleScript.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark04.cs" />

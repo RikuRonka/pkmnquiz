@@ -948,7 +948,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
             return "Unknown error";
 
         if (ex is NullReferenceException)
-            return "missing Netcode setup";
+            return "Unexpected setup error. Check the Unity Console for details.";
 
         return string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message;
     }

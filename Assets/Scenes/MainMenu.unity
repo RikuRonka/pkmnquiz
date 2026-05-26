@@ -4976,7 +4976,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PatchNotesView
   notesText: {fileID: 1239978752}
-  patchNotes: "1.2.1\n- Co-op quiz progress is now remembered per quiz when
+  patchNotes: "1.2.2\n- Singleplayer quiz progress now saves to disk and is
+    restored after restarting the game, including guesses, timer, hints, shadows,
+    and completed quizzes\n- Added a main menu Reset quiz progress button with
+    a typed reset confirmation\n- Added P as a pause shortcut outside text fields\n-
+    Fixed co-op quiz re-entry sometimes syncing the timer but not guessed Pokemon\n-
+    Fixed already-guessed Mega Evolution entries not clearing the input or showing
+    feedback\n- Improved co-op join/start handling after Netcode shutdowns and
+    replaced the misleading missing Netcode setup message\n\n1.2.1\n- Co-op quiz progress is now remembered per quiz when
     the host returns to the lobby, including guessed Pok\xE9mon, shadows, revealed
     types, timers, scores, and multiple saved quizzes\n- Solo quiz progress is
     now remembered per quiz until the game is restarted\n- Hosts can start co-op
