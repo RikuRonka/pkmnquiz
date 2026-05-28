@@ -49,6 +49,12 @@ public class SectionGroup : MonoBehaviour
         CardCount = Mathf.Max(0, n);
     }
 
+    public void SetTitleColor(Color color)
+    {
+        if (titleText)
+            titleText.color = color;
+    }
+
     public void UpdateHeaderForCols(int cols, int minCols, int maxCols)
     {
         if (!titleText)

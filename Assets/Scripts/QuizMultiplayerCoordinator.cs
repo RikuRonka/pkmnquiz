@@ -4,6 +4,7 @@ using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -120,11 +121,12 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         IReadOnlyDictionary<int, ulong> solvedOwners = instance
             ? instance.solvedByClientId
             : null;
+        var solvedIds = BuildSolvedIdsSnapshot(quizManager.SolvedIds, solvedOwners);
 
         var session = new SavedQuizSession(
             quizManager.CurrentQuizGeneration,
             quizManager.CurrentTypeFilter,
-            quizManager.SolvedIds,
+            solvedIds,
             quizManager.HintedIds,
             quizManager.ShadowedIds,
             quizManager.ElapsedSeconds,
@@ -137,6 +139,30 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         latestSavedQuizSessionKey = key;
         if (string.Equals(restoreSavedQuizSessionKey, key, System.StringComparison.Ordinal))
             restoreSavedQuizSessionKey = null;
+    }
+
+    private static List<int> BuildSolvedIdsSnapshot(
+        IReadOnlyCollection<int> solvedIds,
+        IReadOnlyDictionary<int, ulong> solvedOwners
+    )
+    {
+        var ids = new HashSet<int>();
+
+        if (solvedIds != null)
+        {
+            foreach (var id in solvedIds)
+                ids.Add(id);
+        }
+
+        if (solvedOwners != null)
+        {
+            foreach (var id in solvedOwners.Keys)
+                ids.Add(id);
+        }
+
+        var snapshot = new List<int>(ids);
+        snapshot.Sort();
+        return snapshot;
     }
 
     public static Color GetEndStateColorForPokemon(int pokemonId, bool guessed)
@@ -750,9 +776,14 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             return false;
         }
 
-        restoreSavedQuizSessionKey = null;
         if (!session.Matches(quiz.CurrentQuizGeneration, quiz.CurrentTypeFilter))
+        {
+            if (!quiz.IsReadyForSavedMultiplayerSessionRestore)
+                return true;
+
+            restoreSavedQuizSessionKey = null;
             return false;
+        }
 
         var connectedClientIds = new HashSet<ulong>();
         if (manager)
@@ -773,12 +804,17 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         }
 
         quiz.ApplySavedMultiplayerSession(
-            session.SolvedIds,
+            session.SolvedIdsForRestore(),
             session.HintedIds,
             session.ShadowedIds,
             session.Elapsed,
             session.Running
         );
+
+        if (quiz.HasPendingSavedMultiplayerSessionRestore)
+            return true;
+
+        restoreSavedQuizSessionKey = null;
         savedQuizSessions.Remove(session.Key);
         if (string.Equals(latestSavedQuizSessionKey, session.Key, System.StringComparison.Ordinal))
             latestSavedQuizSessionKey = null;
@@ -917,7 +953,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         writer.WriteValueSafe(quiz.CurrentTypeFilter ?? string.Empty);
         writer.WriteValueSafe(quiz.ElapsedSeconds);
         writer.WriteValueSafe(quiz.IsQuizRunning);
-        WriteIds(writer, quiz.SolvedIds);
+        WriteIds(writer, BuildSolvedIdsSnapshot(quiz.SolvedIds, solvedByClientId));
         WriteIds(writer, quiz.HintedIds);
         WriteIds(writer, quiz.ShadowedIds);
         WriteScoreboard(writer, BuildScoreboard());
@@ -1077,6 +1113,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     {
         var scoreboard = BuildScoreboard();
         ApplyScoreboard(scoreboard);
+
+        if (!manager || !manager.IsListening || !manager.IsServer || manager.CustomMessagingManager == null)
+            return;
 
         using var writer = new FastBufferWriter(MessageSize, Allocator.Temp);
         WriteScoreboard(writer, scoreboard);
@@ -1488,13 +1527,13 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         {
             Generation = generation;
             TypeFilter = typeFilter;
-            SolvedIds = solvedIds ?? new List<int>();
             HintedIds = hintedIds ?? new List<int>();
             ShadowedIds = shadowedIds ?? new List<int>();
             Elapsed = Mathf.Max(0f, elapsed);
             Running = running;
             Scoreboard = scoreboard ?? new List<PlayerScore>();
             SolvedOwners = solvedOwners ?? new Dictionary<int, ulong>();
+            SolvedIds = BuildSolvedIdsSnapshot(solvedIds, SolvedOwners);
         }
     }
 
@@ -1553,7 +1592,6 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             Generation = generation;
             TypeFilter = NormalizeSavedTypeFilter(typeFilter);
             Key = KeyFor(generation, typeFilter);
-            SolvedIds = solvedIds == null ? new List<int>() : new List<int>(solvedIds);
             HintedIds = hintedIds == null ? new List<int>() : new List<int>(hintedIds);
             ShadowedIds = shadowedIds == null ? new List<int>() : new List<int>(shadowedIds);
             Elapsed = Mathf.Max(0f, elapsed);
@@ -1565,6 +1603,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             if (solvedOwners != null)
                 foreach (var kv in solvedOwners)
                     SolvedOwners[kv.Key] = kv.Value;
+            SolvedIds = BuildSolvedIdsSnapshot(solvedIds, SolvedOwners);
         }
 
         public bool Matches(int generation, string typeFilter)
@@ -1580,6 +1619,11 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         public static string KeyFor(int generation, string typeFilter)
         {
             return $"{generation}|{NormalizeSavedTypeFilter(typeFilter) ?? string.Empty}";
+        }
+
+        public List<int> SolvedIdsForRestore()
+        {
+            return BuildSolvedIdsSnapshot(SolvedIds, SolvedOwners);
         }
     }
 
@@ -1629,6 +1673,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour, IPointerClickHandler
 {
     private const string PlayerCountColor = "#7DD3FC";
+    private const float QuizSidePanelWidth = 390f;
+    private const float QuizSidePanelX = -1.200012f;
+    private const float QuizSidePanelY = -112f;
     private const float ColorPanelWidth = 176f;
     private const float ColorPanelHeight = 118f;
     private const float ColorSwatchSize = 18f;
@@ -1698,8 +1745,8 @@ public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour, IPointerClickH
         rt.anchorMin = new Vector2(1f, 1f);
         rt.anchorMax = new Vector2(1f, 1f);
         rt.pivot = new Vector2(1f, 1f);
-        rt.anchoredPosition = new Vector2(-8f, -112f);
-        rt.sizeDelta = new Vector2(390f, 54f);
+        rt.anchoredPosition = new Vector2(QuizSidePanelX, QuizSidePanelY);
+        rt.sizeDelta = new Vector2(QuizSidePanelWidth, 54f);
 
         var background = gameObject.AddComponent<Image>();
         background.color = new Color(0.12f, 0.14f, 0.17f, 0.78f);
@@ -1926,32 +1973,48 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 {
     private const string ChatRequestMessage = "pkmnquiz_chat_request";
     private const string ChatBroadcastMessage = "pkmnquiz_chat";
-    private const int MessageSize = 1024;
-    private const int MaxChatLines = 64;
+    private const string ChatImageRequestMessage = "pkmnquiz_chat_image_request";
+    private const string ChatImageBroadcastMessage = "pkmnquiz_chat_image";
+    private const int MessageSize = 32768;
+    private const int MaxChatMessageChunkBytes = 24000;
+    private const int MaxImageChunkBytes = 24000;
+    private const int MaxEncodedImageBytes = 4 * 1024 * 1024;
+    private const int MaxImageDimension = 4096;
+    private const int MaxChatLines = 256;
+    private const int MaxStoredChatImages = 64;
     private const float MinInputHeight = 28f;
     private const float MaxInputHeight = 72f;
     private const float InputVerticalPadding = 8f;
     private const float MenuChatWidth = 360f;
     private const float MenuChatHeight = 236f;
     private const float MenuChatMessagesHeight = 166f;
-    private const float QuizChatWidth = 340f;
+    private const float QuizChatWidth = 390f;
     private const float QuizChatHeight = 800f;
     private const float QuizChatMessagesHeight = 730f;
-    private const float QuizExpandedChatWidth = 340f;
+    private const float QuizExpandedChatWidth = 390f;
     private const float QuizExpandedChatHeight = 800f;
     private const float QuizExpandedChatMessagesHeight = 730f;
-    private const float QuizDockRight = 24f;
-    private const float QuizDockTop = 214f;
+    private const float QuizDockX = 1.099976f;
+    private const float QuizDockY = -214f;
     private const float PausedChatWidth = 430f;
     private const float PausedChatHeight = 140f;
     private const float PausedChatMessagesHeight = 70f;
     private const float PausedExpandedChatHeight = 330f;
     private const float PausedExpandedChatMessagesHeight = 260f;
+    private static readonly string[] SupportedImageExtensions =
+    {
+        ".png",
+        ".jpg",
+        ".jpeg",
+    };
 
     private static QuizMultiplayerChatOverlay instance;
     private static bool overlayVisible = true;
 
     private readonly List<GameObject> lineObjects = new();
+    private readonly Dictionary<string, PendingChatImage> pendingImages = new();
+    private readonly Dictionary<string, ChatImagePayload> imagesById = new();
+    private readonly Queue<string> imageIdOrder = new();
     private Canvas rootCanvas;
     private CanvasGroup canvasGroup;
     private NetworkManager manager;
@@ -1968,6 +2031,10 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private Button sendButton;
     private Button expandButton;
     private TMP_Text expandButtonLabel;
+    private GameObject imageModalRoot;
+    private RectTransform imageModalPanelRect;
+    private TMP_Text imageModalTitle;
+    private Image imageModalImage;
     private bool expandedInQuiz;
     private bool fixedHeightDock;
     private float basePanelHeight = 124f;
@@ -2055,6 +2122,13 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private void OnDestroy()
     {
         UnregisterHandlers();
+        foreach (var payload in imagesById.Values)
+            payload?.Destroy();
+        imagesById.Clear();
+        imageIdOrder.Clear();
+        pendingImages.Clear();
+        if (imageModalRoot)
+            Destroy(imageModalRoot);
 
         if (instance == this)
             instance = null;
@@ -2065,9 +2139,12 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         if (!QuizNetworkRuntime.IsMultiplayerActive)
             return;
 
+        ChatWindowsDropBridge.Ensure();
         ApplyOverlayVisibility();
         RegisterHandlers();
         ApplyScenePlacement();
+        HandleImagePasteShortcut();
+        HandleDroppedImageFiles();
         RefreshSendButton();
         RefreshInputHeight();
     }
@@ -2103,11 +2180,19 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
                 ChatRequestMessage,
                 OnChatRequestMessage
             );
+            manager.CustomMessagingManager.RegisterNamedMessageHandler(
+                ChatImageRequestMessage,
+                OnChatImageRequestMessage
+            );
         }
 
         manager.CustomMessagingManager.RegisterNamedMessageHandler(
             ChatBroadcastMessage,
             OnChatBroadcastMessage
+        );
+        manager.CustomMessagingManager.RegisterNamedMessageHandler(
+            ChatImageBroadcastMessage,
+            OnChatImageBroadcastMessage
         );
         registered = true;
     }
@@ -2123,9 +2208,13 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         }
 
         if (registeredAsServer)
+        {
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(ChatRequestMessage);
+            manager.CustomMessagingManager.UnregisterNamedMessageHandler(ChatImageRequestMessage);
+        }
 
         manager.CustomMessagingManager.UnregisterNamedMessageHandler(ChatBroadcastMessage);
+        manager.CustomMessagingManager.UnregisterNamedMessageHandler(ChatImageBroadcastMessage);
         registered = false;
         manager = null;
         registeredAsServer = false;
@@ -2151,19 +2240,125 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         RefreshSendButton();
         RefreshInputHeight();
 
+        foreach (string chunk in SplitMessageForTransport(message))
+        {
+            if (manager.IsServer)
+            {
+                RelayChatLine(manager.LocalClientId, QuizNetworkRuntime.PlayerNickname, chunk);
+                continue;
+            }
+
+            using var writer = new FastBufferWriter(
+                ChatWriterCapacity(QuizNetworkRuntime.PlayerNickname, chunk),
+                Allocator.Temp
+            );
+            writer.WriteValueSafe(QuizNetworkRuntime.PlayerNickname);
+            writer.WriteValueSafe(chunk);
+            manager.CustomMessagingManager.SendNamedMessage(ChatRequestMessage, 0UL, writer);
+        }
+    }
+
+    private void SendImageBytes(byte[] sourceBytes, string sourceName)
+    {
+        if (!manager || !manager.IsListening)
+            RegisterHandlers();
+        if (!manager || !manager.IsListening)
+            return;
+
+        if (!TryPrepareImagePayload(sourceBytes, sourceName, out var payload))
+            return;
+
         if (manager.IsServer)
         {
-            RelayChatLine(manager.LocalClientId, QuizNetworkRuntime.PlayerNickname, message);
+            RelayChatImage(
+                manager.LocalClientId,
+                QuizNetworkRuntime.PlayerNickname,
+                payload.FileName,
+                payload.Width,
+                payload.Height,
+                payload.Bytes
+            );
             return;
         }
 
-        using var writer = new FastBufferWriter(
-            ChatWriterCapacity(QuizNetworkRuntime.PlayerNickname, message),
-            Allocator.Temp
-        );
-        writer.WriteValueSafe(QuizNetworkRuntime.PlayerNickname);
-        writer.WriteValueSafe(message);
-        manager.CustomMessagingManager.SendNamedMessage(ChatRequestMessage, 0UL, writer);
+        string imageId = System.Guid.NewGuid().ToString("N");
+        int totalChunks = Mathf.Max(1, Mathf.CeilToInt(payload.Bytes.Length / (float)MaxImageChunkBytes));
+        for (int i = 0; i < totalChunks; i++)
+        {
+            int start = i * MaxImageChunkBytes;
+            int chunkLength = Mathf.Min(MaxImageChunkBytes, payload.Bytes.Length - start);
+            using var writer = new FastBufferWriter(
+                ChatWriterCapacity(QuizNetworkRuntime.PlayerNickname, imageId, payload.FileName)
+                    + chunkLength
+                    + 96,
+                Allocator.Temp
+            );
+            writer.WriteValueSafe(QuizNetworkRuntime.PlayerNickname);
+            writer.WriteValueSafe(imageId);
+            writer.WriteValueSafe(payload.FileName);
+            writer.WriteValueSafe(payload.Width);
+            writer.WriteValueSafe(payload.Height);
+            writer.WriteValueSafe(totalChunks);
+            writer.WriteValueSafe(i);
+            writer.WriteValueSafe(chunkLength);
+            writer.WriteBytesSafe(payload.Bytes, chunkLength, start);
+            manager.CustomMessagingManager.SendNamedMessage(
+                ChatImageRequestMessage,
+                0UL,
+                writer,
+                NetworkDelivery.ReliableFragmentedSequenced
+            );
+        }
+    }
+
+    private void HandleImagePasteShortcut()
+    {
+        if (!inputField || !inputField.isFocused)
+            return;
+        if (!WasPastePressedThisFrame())
+            return;
+
+        if (ChatClipboardImageReader.TryGetImageBytes(out var imageBytes, out var sourceName))
+            SendImageBytes(imageBytes, sourceName);
+    }
+
+    private void HandleDroppedImageFiles()
+    {
+        foreach (string path in ChatWindowsDropBridge.DrainDroppedFiles())
+            TrySendImageFile(path);
+    }
+
+    private void TrySendImageFile(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
+            return;
+        if (!IsSupportedImagePath(path))
+            return;
+
+        try
+        {
+            SendImageBytes(System.IO.File.ReadAllBytes(path), System.IO.Path.GetFileName(path));
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[Chat] Failed to send image file: {ex.Message}");
+        }
+    }
+
+    private static bool WasPastePressedThisFrame()
+    {
+#if ENABLE_INPUT_SYSTEM
+        var kb = Keyboard.current;
+        return kb != null
+            && kb.vKey.wasPressedThisFrame
+            && (kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed || kb.leftCommandKey.isPressed || kb.rightCommandKey.isPressed);
+#else
+        return UnityEngine.Input.GetKeyDown(KeyCode.V)
+            && (UnityEngine.Input.GetKey(KeyCode.LeftControl)
+                || UnityEngine.Input.GetKey(KeyCode.RightControl)
+                || UnityEngine.Input.GetKey(KeyCode.LeftCommand)
+                || UnityEngine.Input.GetKey(KeyCode.RightCommand));
+#endif
     }
 
     private void OnChatRequestMessage(ulong senderClientId, FastBufferReader reader)
@@ -2213,6 +2408,160 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             ResolveDisplayName(chatSenderClientId, senderName),
             message
         );
+    }
+
+    private void OnChatImageRequestMessage(ulong senderClientId, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out string requestedName);
+        reader.ReadValueSafe(out string imageId);
+        reader.ReadValueSafe(out string fileName);
+        reader.ReadValueSafe(out int width);
+        reader.ReadValueSafe(out int height);
+        reader.ReadValueSafe(out int totalChunks);
+        reader.ReadValueSafe(out int chunkIndex);
+        reader.ReadValueSafe(out int chunkLength);
+        if (chunkLength <= 0 || chunkLength > MaxImageChunkBytes)
+            return;
+        byte[] chunk = new byte[chunkLength];
+        reader.ReadBytesSafe(ref chunk, chunkLength);
+
+        if (!TryAcceptImageChunk(
+            $"request:{senderClientId}:{imageId}",
+            senderClientId,
+            requestedName,
+            null,
+            imageId,
+            fileName,
+            width,
+            height,
+            totalChunks,
+            chunkIndex,
+            chunk,
+            out var complete
+        ))
+        {
+            return;
+        }
+
+        RelayChatImage(
+            senderClientId,
+            requestedName,
+            complete.FileName,
+            complete.Width,
+            complete.Height,
+            complete.Bytes
+        );
+    }
+
+    private void OnChatImageBroadcastMessage(ulong senderClientId, FastBufferReader reader)
+    {
+        if (manager && manager.IsServer)
+            return;
+
+        reader.ReadValueSafe(out ulong chatSenderClientId);
+        reader.ReadValueSafe(out string timestamp);
+        reader.ReadValueSafe(out string senderName);
+        reader.ReadValueSafe(out string imageId);
+        reader.ReadValueSafe(out string fileName);
+        reader.ReadValueSafe(out int width);
+        reader.ReadValueSafe(out int height);
+        reader.ReadValueSafe(out int totalChunks);
+        reader.ReadValueSafe(out int chunkIndex);
+        reader.ReadValueSafe(out int chunkLength);
+        if (chunkLength <= 0 || chunkLength > MaxImageChunkBytes)
+            return;
+        byte[] chunk = new byte[chunkLength];
+        reader.ReadBytesSafe(ref chunk, chunkLength);
+
+        if (!TryAcceptImageChunk(
+            $"broadcast:{imageId}",
+            chatSenderClientId,
+            senderName,
+            timestamp,
+            imageId,
+            fileName,
+            width,
+            height,
+            totalChunks,
+            chunkIndex,
+            chunk,
+            out var complete
+        ))
+        {
+            return;
+        }
+
+        AppendImageLine(
+            complete.Timestamp,
+            complete.SenderClientId,
+            ResolveDisplayName(complete.SenderClientId, complete.SenderName),
+            complete.ImageId,
+            complete.FileName,
+            complete.Width,
+            complete.Height,
+            complete.Bytes
+        );
+    }
+
+    private void RelayChatImage(
+        ulong senderClientId,
+        string requestedName,
+        string fileName,
+        int width,
+        int height,
+        byte[] imageBytes
+    )
+    {
+        if (!manager || !manager.IsServer || manager.CustomMessagingManager == null)
+            return;
+        if (imageBytes == null || imageBytes.Length == 0)
+            return;
+
+        string senderName = ResolveDisplayName(senderClientId, requestedName);
+        string timestamp = CurrentTimestamp();
+        string imageId = System.Guid.NewGuid().ToString("N");
+
+        AppendImageLine(timestamp, senderClientId, senderName, imageId, fileName, width, height, imageBytes);
+        BroadcastChatImage(senderClientId, timestamp, senderName, imageId, fileName, width, height, imageBytes);
+    }
+
+    private void BroadcastChatImage(
+        ulong senderClientId,
+        string timestamp,
+        string senderName,
+        string imageId,
+        string fileName,
+        int width,
+        int height,
+        byte[] imageBytes
+    )
+    {
+        int totalChunks = Mathf.Max(1, Mathf.CeilToInt(imageBytes.Length / (float)MaxImageChunkBytes));
+        for (int i = 0; i < totalChunks; i++)
+        {
+            int start = i * MaxImageChunkBytes;
+            int chunkLength = Mathf.Min(MaxImageChunkBytes, imageBytes.Length - start);
+            using var writer = new FastBufferWriter(
+                ChatWriterCapacity(timestamp, senderName, imageId, fileName) + chunkLength + 96,
+                Allocator.Temp
+            );
+            writer.WriteValueSafe(senderClientId);
+            writer.WriteValueSafe(timestamp);
+            writer.WriteValueSafe(senderName);
+            writer.WriteValueSafe(imageId);
+            writer.WriteValueSafe(fileName ?? "image.jpg");
+            writer.WriteValueSafe(width);
+            writer.WriteValueSafe(height);
+            writer.WriteValueSafe(totalChunks);
+            writer.WriteValueSafe(i);
+            writer.WriteValueSafe(chunkLength);
+            writer.WriteBytesSafe(imageBytes, chunkLength, start);
+            manager.CustomMessagingManager.SendNamedMessageToAll(
+                ChatImageBroadcastMessage,
+                writer,
+                NetworkDelivery.ReliableFragmentedSequenced
+            );
+        }
     }
 
     private void BuildUi()
@@ -2275,8 +2624,11 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         rt.anchorMin = new Vector2(1f, 1f);
         rt.anchorMax = new Vector2(1f, 1f);
         rt.pivot = new Vector2(1f, 1f);
-        rt.anchoredPosition = new Vector2(-QuizDockRight, -QuizDockTop);
-        rt.sizeDelta = new Vector2(QuizChatWidth, QuizChatHeight);
+        rt.anchoredPosition = new Vector2(QuizDockX, QuizDockY);
+        rt.sizeDelta = new Vector2(
+            expandedInQuiz ? QuizExpandedChatWidth : QuizChatWidth,
+            QuizChatHeight
+        );
         basePanelHeight = expandedInQuiz ? QuizExpandedChatHeight : QuizChatHeight;
         SetDockedMessageListHeight();
         ApplyPanelHeight();
@@ -2704,18 +3056,114 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         label.text =
             $"{QuizMultiplayerCoordinator.EscapeRichText(timestamp)} "
             + $"{QuizMultiplayerCoordinator.FormatColoredPlayerName(senderClientId, senderName)}: "
-            + QuizMultiplayerCoordinator.EscapeRichText(message);
+            + FormatMessageWithLinks(message);
         label.fontSize = 12f;
         label.color = new Color(0.91f, 0.96f, 1f, 1f);
         label.alignment = TextAlignmentOptions.Left;
         label.textWrappingMode = TextWrappingModes.Normal;
         label.richText = true;
-        label.raycastTarget = false;
+        label.raycastTarget = true;
 
         var layout = lineGo.AddComponent<LayoutElement>();
         layout.minHeight = 15f;
         layout.preferredHeight = 15f;
         lineGo.AddComponent<ChatLinePreferredHeight>().Configure(label, layout, 15f, 3f);
+        lineGo.AddComponent<ChatLineInteraction>()
+            .Configure(label, $"{timestamp} {senderName}: {message}");
+
+        lineObjects.Add(lineGo);
+        while (lineObjects.Count > MaxChatLines)
+        {
+            var old = lineObjects[0];
+            lineObjects.RemoveAt(0);
+            if (old)
+                Destroy(old);
+        }
+
+        StartCoroutine(CoScrollToBottom());
+    }
+
+    private void AppendImageLine(
+        string timestamp,
+        ulong senderClientId,
+        string senderName,
+        string imageId,
+        string fileName,
+        int width,
+        int height,
+        byte[] imageBytes
+    )
+    {
+        timestamp = NormalizeTimestamp(timestamp);
+        senderName = NormalizeSenderName(senderName);
+        imageId = string.IsNullOrWhiteSpace(imageId) ? System.Guid.NewGuid().ToString("N") : imageId;
+        fileName = SanitizeImageFileName(fileName);
+        if (imageBytes == null || imageBytes.Length == 0 || !lineContainer)
+            return;
+
+        if (!TryCreateImagePayload(imageId, fileName, width, height, imageBytes, out var payload))
+            return;
+
+        StoreImagePayload(payload);
+
+        var lineGo = new GameObject("Image Message", typeof(RectTransform));
+        lineGo.transform.SetParent(lineContainer, false);
+
+        var lineImage = lineGo.AddComponent<Image>();
+        lineImage.color = new Color(0f, 0f, 0f, 0.12f);
+
+        var vertical = lineGo.AddComponent<VerticalLayoutGroup>();
+        vertical.spacing = 4f;
+        vertical.padding = new RectOffset(0, 0, 2, 4);
+        vertical.childAlignment = TextAnchor.UpperLeft;
+        vertical.childControlWidth = true;
+        vertical.childControlHeight = true;
+        vertical.childForceExpandWidth = true;
+        vertical.childForceExpandHeight = false;
+
+        var headerGo = new GameObject("Header", typeof(RectTransform));
+        headerGo.transform.SetParent(lineGo.transform, false);
+        var header = headerGo.AddComponent<TextMeshProUGUI>();
+        TmpCjkFontFallback.ApplyTo(header);
+        header.text =
+            $"{QuizMultiplayerCoordinator.EscapeRichText(timestamp)} "
+            + $"{QuizMultiplayerCoordinator.FormatColoredPlayerName(senderClientId, senderName)}: "
+            + $"<color=#7DD3FC><u>{QuizMultiplayerCoordinator.EscapeRichText(fileName)}</u></color>";
+        header.fontSize = 12f;
+        header.color = new Color(0.91f, 0.96f, 1f, 1f);
+        header.richText = true;
+        header.raycastTarget = false;
+        var headerLayout = headerGo.AddComponent<LayoutElement>();
+        headerLayout.minHeight = 15f;
+        headerLayout.preferredHeight = 15f;
+
+        var buttonGo = new GameObject("Preview", typeof(RectTransform));
+        buttonGo.transform.SetParent(lineGo.transform, false);
+        var preview = buttonGo.AddComponent<Image>();
+        preview.sprite = payload.Sprite;
+        preview.preserveAspect = true;
+        preview.color = Color.white;
+        var button = buttonGo.AddComponent<Button>();
+        button.targetGraphic = preview;
+        button.onClick.AddListener(() => ShowImageModal(payload.ImageId));
+        float maxWidth = Mathf.Max(120f, ((RectTransform)transform).sizeDelta.x - 28f);
+        float aspect = payload.Width > 0 && payload.Height > 0
+            ? payload.Width / (float)payload.Height
+            : 1f;
+        float previewWidth = Mathf.Min(maxWidth, Mathf.Max(96f, payload.Width));
+        float previewHeight = Mathf.Clamp(previewWidth / Mathf.Max(0.01f, aspect), 72f, 150f);
+        if (previewHeight >= 150f)
+            previewWidth = previewHeight * aspect;
+
+        var previewLayout = buttonGo.AddComponent<LayoutElement>();
+        previewLayout.minHeight = previewHeight;
+        previewLayout.preferredHeight = previewHeight;
+        previewLayout.minWidth = previewWidth;
+        previewLayout.preferredWidth = previewWidth;
+
+        var lineLayout = lineGo.AddComponent<LayoutElement>();
+        lineLayout.minHeight = previewHeight + 24f;
+        lineLayout.preferredHeight = previewHeight + 24f;
 
         lineObjects.Add(lineGo);
         while (lineObjects.Count > MaxChatLines)
@@ -2735,6 +3183,419 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         Canvas.ForceUpdateCanvases();
         if (scrollRect)
             scrollRect.verticalNormalizedPosition = 0f;
+    }
+
+    private bool TryAcceptImageChunk(
+        string key,
+        ulong senderClientId,
+        string senderName,
+        string timestamp,
+        string imageId,
+        string fileName,
+        int width,
+        int height,
+        int totalChunks,
+        int chunkIndex,
+        byte[] chunk,
+        out PendingChatImage complete
+    )
+    {
+        complete = null;
+        if (
+            string.IsNullOrWhiteSpace(key)
+            || string.IsNullOrWhiteSpace(imageId)
+            || totalChunks <= 0
+            || totalChunks > MaxAllowedImageChunks()
+            || chunkIndex < 0
+            || chunkIndex >= totalChunks
+            || chunk == null
+            || chunk.Length <= 0
+            || chunk.Length > MaxImageChunkBytes
+        )
+        {
+            return false;
+        }
+
+        if (!pendingImages.TryGetValue(key, out var pending))
+        {
+            pending = new PendingChatImage(
+                senderClientId,
+                senderName,
+                timestamp,
+                imageId,
+                SanitizeImageFileName(fileName),
+                Mathf.Max(1, width),
+                Mathf.Max(1, height),
+                totalChunks
+            );
+            pendingImages[key] = pending;
+        }
+
+        pending.Chunks[chunkIndex] = chunk;
+        if (!pending.IsComplete)
+            return false;
+
+        pendingImages.Remove(key);
+        int byteCount = 0;
+        for (int i = 0; i < pending.Chunks.Length; i++)
+        {
+            byteCount += pending.Chunks[i].Length;
+            if (byteCount > MaxEncodedImageBytes)
+                return false;
+        }
+
+        if (byteCount <= 0)
+            return false;
+
+        byte[] bytes = new byte[byteCount];
+        int offset = 0;
+        for (int i = 0; i < pending.Chunks.Length; i++)
+        {
+            byte[] part = pending.Chunks[i];
+            System.Buffer.BlockCopy(part, 0, bytes, offset, part.Length);
+            offset += part.Length;
+        }
+
+        pending.Bytes = bytes;
+        complete = pending;
+        return true;
+    }
+
+    private bool TryPrepareImagePayload(
+        byte[] sourceBytes,
+        string sourceName,
+        out PreparedChatImage payload
+    )
+    {
+        payload = default;
+        if (sourceBytes == null || sourceBytes.Length == 0)
+            return false;
+
+        var source = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        if (!source.LoadImage(sourceBytes))
+        {
+            Destroy(source);
+            return false;
+        }
+
+        int srcW = source.width;
+        int srcH = source.height;
+        if (
+            sourceBytes.Length <= MaxEncodedImageBytes
+            && Mathf.Max(srcW, srcH) <= MaxImageDimension
+        )
+        {
+            payload = new PreparedChatImage(
+                SanitizeImageFileName(sourceName, GuessImageExtension(sourceBytes)),
+                srcW,
+                srcH,
+                sourceBytes
+            );
+            Destroy(source);
+            return true;
+        }
+
+        Texture2D resized = null;
+        Texture2D working = source;
+        float scale = Mathf.Min(1f, MaxImageDimension / (float)Mathf.Max(srcW, srcH));
+        int outW = Mathf.Max(1, Mathf.RoundToInt(srcW * scale));
+        int outH = Mathf.Max(1, Mathf.RoundToInt(srcH * scale));
+        if (outW != srcW || outH != srcH)
+        {
+            resized = ResizeTexture(source, outW, outH);
+            working = resized;
+        }
+
+        byte[] encoded = null;
+        int quality = 88;
+        while (quality >= 58)
+        {
+            encoded = working.EncodeToJPG(quality);
+            if (encoded != null && encoded.Length <= MaxEncodedImageBytes)
+                break;
+            quality -= 10;
+        }
+
+        while (encoded != null && encoded.Length > MaxEncodedImageBytes && outW > 160 && outH > 160)
+        {
+            outW = Mathf.Max(1, Mathf.RoundToInt(outW * 0.82f));
+            outH = Mathf.Max(1, Mathf.RoundToInt(outH * 0.82f));
+            if (resized)
+                Destroy(resized);
+            resized = ResizeTexture(source, outW, outH);
+            working = resized;
+            encoded = working.EncodeToJPG(52);
+        }
+
+        if (resized)
+            Destroy(resized);
+        Destroy(source);
+
+        if (encoded == null || encoded.Length == 0 || encoded.Length > MaxEncodedImageBytes)
+            return false;
+
+        payload = new PreparedChatImage(
+            SanitizeImageFileName(ChangeImageExtension(sourceName, ".jpg"), ".jpg"),
+            outW,
+            outH,
+            encoded
+        );
+        return true;
+    }
+
+    private static Texture2D ResizeTexture(Texture2D source, int width, int height)
+    {
+        var rt = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+        var previous = RenderTexture.active;
+        Graphics.Blit(source, rt);
+        RenderTexture.active = rt;
+        var resized = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        resized.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
+        resized.Apply();
+        RenderTexture.active = previous;
+        RenderTexture.ReleaseTemporary(rt);
+        return resized;
+    }
+
+    private bool TryCreateImagePayload(
+        string imageId,
+        string fileName,
+        int width,
+        int height,
+        byte[] imageBytes,
+        out ChatImagePayload payload
+    )
+    {
+        payload = null;
+        var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        if (!tex.LoadImage(imageBytes))
+        {
+            Destroy(tex);
+            return false;
+        }
+
+        var sprite = Sprite.Create(
+            tex,
+            new Rect(0f, 0f, tex.width, tex.height),
+            new Vector2(0.5f, 0.5f),
+            100f
+        );
+        payload = new ChatImagePayload(
+            imageId,
+            SanitizeImageFileName(fileName),
+            Mathf.Max(width, tex.width),
+            Mathf.Max(height, tex.height),
+            tex,
+            sprite
+        );
+        return true;
+    }
+
+    private void StoreImagePayload(ChatImagePayload payload)
+    {
+        if (payload == null)
+            return;
+
+        if (imagesById.TryGetValue(payload.ImageId, out var existing))
+            existing.Destroy();
+
+        imagesById[payload.ImageId] = payload;
+        imageIdOrder.Enqueue(payload.ImageId);
+
+        while (imageIdOrder.Count > MaxStoredChatImages)
+        {
+            string oldId = imageIdOrder.Dequeue();
+            if (imagesById.Remove(oldId, out var oldPayload))
+                oldPayload.Destroy();
+        }
+    }
+
+    private void ShowImageModal(string imageId)
+    {
+        if (string.IsNullOrWhiteSpace(imageId) || !imagesById.TryGetValue(imageId, out var payload))
+            return;
+
+        EnsureImageModal();
+        if (!imageModalRoot || !imageModalImage)
+            return;
+
+        imageModalTitle.text = payload.FileName;
+        imageModalImage.sprite = payload.Sprite;
+        imageModalImage.preserveAspect = true;
+
+        float canvasW = 1120f;
+        float canvasH = 820f;
+        if (imageModalRoot.transform.parent is RectTransform canvasRt)
+        {
+            canvasW = Mathf.Max(480f, canvasRt.rect.width);
+            canvasH = Mathf.Max(360f, canvasRt.rect.height);
+        }
+
+        var rt = (RectTransform)imageModalImage.transform;
+        float maxW = Mathf.Min(1280f, canvasW - 80f);
+        float maxH = Mathf.Min(820f, canvasH - 132f);
+        float aspect = payload.Width / (float)Mathf.Max(1, payload.Height);
+        float w = maxW;
+        float h = w / Mathf.Max(0.01f, aspect);
+        if (h > maxH)
+        {
+            h = maxH;
+            w = h * aspect;
+        }
+        rt.sizeDelta = new Vector2(w, h);
+        if (imageModalPanelRect)
+            imageModalPanelRect.sizeDelta = new Vector2(
+                Mathf.Min(canvasW - 40f, Mathf.Max(520f, w + 36f)),
+                Mathf.Min(canvasH - 40f, h + 92f)
+            );
+        imageModalRoot.SetActive(true);
+    }
+
+    private void EnsureImageModal()
+    {
+        if (imageModalRoot)
+            return;
+
+        var canvas = rootCanvas ? rootCanvas : GetComponentInParent<Canvas>();
+        if (!canvas)
+            return;
+
+        imageModalRoot = new GameObject("Chat Image Modal", typeof(RectTransform));
+        imageModalRoot.transform.SetParent(canvas.transform, false);
+        var rootRt = (RectTransform)imageModalRoot.transform;
+        rootRt.anchorMin = Vector2.zero;
+        rootRt.anchorMax = Vector2.one;
+        rootRt.offsetMin = Vector2.zero;
+        rootRt.offsetMax = Vector2.zero;
+
+        var scrim = imageModalRoot.AddComponent<Image>();
+        scrim.color = new Color(0f, 0f, 0f, 0.72f);
+
+        var closeArea = imageModalRoot.AddComponent<Button>();
+        closeArea.targetGraphic = scrim;
+        closeArea.onClick.AddListener(() => imageModalRoot.SetActive(false));
+
+        var panel = new GameObject("Panel", typeof(RectTransform));
+        panel.transform.SetParent(imageModalRoot.transform, false);
+        var panelRt = (RectTransform)panel.transform;
+        imageModalPanelRect = panelRt;
+        panelRt.anchorMin = panelRt.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRt.pivot = new Vector2(0.5f, 0.5f);
+        panelRt.sizeDelta = new Vector2(1120f, 820f);
+
+        var panelImage = panel.AddComponent<Image>();
+        panelImage.color = new Color(0.05f, 0.06f, 0.07f, 0.96f);
+
+        var layout = panel.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(18, 18, 14, 18);
+        layout.spacing = 10f;
+        layout.childAlignment = TextAnchor.UpperCenter;
+        layout.childControlWidth = false;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = false;
+        layout.childForceExpandHeight = false;
+
+        var headerGo = new GameObject("Header", typeof(RectTransform));
+        headerGo.transform.SetParent(panel.transform, false);
+        var headerLayout = headerGo.AddComponent<LayoutElement>();
+        headerLayout.minWidth = 1084f;
+        headerLayout.preferredWidth = 1084f;
+        headerLayout.minHeight = 30f;
+        headerLayout.preferredHeight = 30f;
+
+        var header = headerGo.AddComponent<HorizontalLayoutGroup>();
+        header.childAlignment = TextAnchor.MiddleCenter;
+        header.childControlWidth = true;
+        header.childControlHeight = true;
+        header.childForceExpandWidth = true;
+        header.childForceExpandHeight = false;
+        header.spacing = 8f;
+
+        var titleGo = new GameObject("Title", typeof(RectTransform));
+        titleGo.transform.SetParent(headerGo.transform, false);
+        imageModalTitle = titleGo.AddComponent<TextMeshProUGUI>();
+        TmpCjkFontFallback.ApplyTo(imageModalTitle);
+        imageModalTitle.fontSize = 16f;
+        imageModalTitle.fontStyle = FontStyles.Bold;
+        imageModalTitle.color = Color.white;
+        imageModalTitle.alignment = TextAlignmentOptions.MidlineLeft;
+        imageModalTitle.textWrappingMode = TextWrappingModes.NoWrap;
+        imageModalTitle.overflowMode = TextOverflowModes.Ellipsis;
+        imageModalTitle.richText = false;
+        imageModalTitle.raycastTarget = false;
+        var titleLayout = titleGo.AddComponent<LayoutElement>();
+        titleLayout.flexibleWidth = 1f;
+        titleLayout.minWidth = 320f;
+        titleLayout.preferredWidth = 984f;
+        titleLayout.minHeight = 30f;
+        titleLayout.preferredHeight = 30f;
+
+        var closeButton = CreateButton(headerGo.transform, "Close", () => imageModalRoot.SetActive(false));
+        var closeLayout = closeButton.GetComponent<LayoutElement>();
+        closeLayout.minWidth = 72f;
+        closeLayout.preferredWidth = 72f;
+        closeLayout.minHeight = 30f;
+        closeLayout.preferredHeight = 30f;
+
+        var imageGo = new GameObject("Image", typeof(RectTransform));
+        imageGo.transform.SetParent(panel.transform, false);
+        imageModalImage = imageGo.AddComponent<Image>();
+        imageModalImage.color = Color.white;
+        imageModalImage.preserveAspect = true;
+
+        imageModalRoot.SetActive(false);
+    }
+
+    private static bool IsSupportedImagePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        string ext = System.IO.Path.GetExtension(path);
+        for (int i = 0; i < SupportedImageExtensions.Length; i++)
+        {
+            if (string.Equals(ext, SupportedImageExtensions[i], System.StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string SanitizeImageFileName(string fileName, string fallbackExtension = ".jpg")
+    {
+        fileName = string.IsNullOrWhiteSpace(fileName) ? null : System.IO.Path.GetFileName(fileName);
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = $"image{fallbackExtension}";
+
+        foreach (char ch in System.IO.Path.GetInvalidFileNameChars())
+            fileName = fileName.Replace(ch, '_');
+
+        if (string.IsNullOrWhiteSpace(System.IO.Path.GetExtension(fileName)))
+            fileName += fallbackExtension;
+
+        return fileName;
+    }
+
+    private static string ChangeImageExtension(string fileName, string extension)
+    {
+        fileName = string.IsNullOrWhiteSpace(fileName) ? "image" : System.IO.Path.GetFileName(fileName);
+        string name = System.IO.Path.GetFileNameWithoutExtension(fileName);
+        if (string.IsNullOrWhiteSpace(name))
+            name = "image";
+        return name + extension;
+    }
+
+    private static string GuessImageExtension(byte[] bytes)
+    {
+        if (bytes != null && bytes.Length >= 4)
+        {
+            if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+                return ".png";
+            if (bytes[0] == 0xFF && bytes[1] == 0xD8)
+                return ".jpg";
+        }
+
+        return ".jpg";
     }
 
     private static string ResolveDisplayName(ulong clientId, string requestedName)
@@ -2786,6 +3647,120 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         return CurrentTimestamp();
     }
 
+    private static IEnumerable<string> SplitMessageForTransport(string message)
+    {
+        if (string.IsNullOrEmpty(message))
+            yield break;
+
+        var sb = new System.Text.StringBuilder();
+        int byteCount = 0;
+        var elements = System.Globalization.StringInfo.GetTextElementEnumerator(message);
+        while (elements.MoveNext())
+        {
+            string element = elements.GetTextElement();
+            int elementBytes = System.Text.Encoding.UTF8.GetByteCount(element);
+            if (sb.Length > 0 && byteCount + elementBytes > MaxChatMessageChunkBytes)
+            {
+                yield return sb.ToString();
+                sb.Clear();
+                byteCount = 0;
+            }
+
+            sb.Append(element);
+            byteCount += elementBytes;
+        }
+
+        if (sb.Length > 0)
+            yield return sb.ToString();
+    }
+
+    private static string FormatMessageWithLinks(string message)
+    {
+        if (string.IsNullOrEmpty(message))
+            return string.Empty;
+
+        var matches = System.Text.RegularExpressions.Regex.Matches(
+            message,
+            @"(?i)(https?://[^\s<]+|www\.[^\s<]+)"
+        );
+        if (matches.Count == 0)
+            return QuizMultiplayerCoordinator.EscapeRichText(message);
+
+        var sb = new System.Text.StringBuilder(message.Length + matches.Count * 32);
+        int cursor = 0;
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            if (match.Index > cursor)
+                sb.Append(
+                    QuizMultiplayerCoordinator.EscapeRichText(
+                        message.Substring(cursor, match.Index - cursor)
+                    )
+                );
+
+            string rawMatch = match.Value;
+            string linkText = TrimTrailingUrlPunctuation(rawMatch, out string trailingText);
+            string url = NormalizeUrlForOpen(linkText);
+            if (string.IsNullOrEmpty(url))
+            {
+                sb.Append(QuizMultiplayerCoordinator.EscapeRichText(rawMatch));
+            }
+            else
+            {
+                sb.Append("<link=\"");
+                sb.Append(EscapeLinkId(url));
+                sb.Append("\"><u><color=#7DD3FC>");
+                sb.Append(QuizMultiplayerCoordinator.EscapeRichText(linkText));
+                sb.Append("</color></u></link>");
+                sb.Append(QuizMultiplayerCoordinator.EscapeRichText(trailingText));
+            }
+
+            cursor = match.Index + rawMatch.Length;
+        }
+
+        if (cursor < message.Length)
+            sb.Append(QuizMultiplayerCoordinator.EscapeRichText(message.Substring(cursor)));
+
+        return sb.ToString();
+    }
+
+    private static string TrimTrailingUrlPunctuation(string value, out string trailing)
+    {
+        int end = value.Length;
+        while (end > 0 && ".,;:!?)\"]}".IndexOf(value[end - 1]) >= 0)
+            end--;
+
+        trailing = end < value.Length ? value.Substring(end) : string.Empty;
+        return value.Substring(0, end);
+    }
+
+    private static string NormalizeUrlForOpen(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        value = value.Trim().Replace("\"", "%22").Replace("<", "%3C").Replace(">", "%3E");
+        if (value.StartsWith("www.", System.StringComparison.OrdinalIgnoreCase))
+            value = "https://" + value;
+
+        if (
+            System.Uri.TryCreate(value, System.UriKind.Absolute, out var uri)
+            && (
+                string.Equals(uri.Scheme, System.Uri.UriSchemeHttp, System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(uri.Scheme, System.Uri.UriSchemeHttps, System.StringComparison.OrdinalIgnoreCase)
+            )
+        )
+        {
+            return uri.AbsoluteUri;
+        }
+
+        return null;
+    }
+
+    private static string EscapeLinkId(string value)
+    {
+        return value?.Replace("\"", "%22").Replace("<", "%3C").Replace(">", "%3E") ?? string.Empty;
+    }
+
     private static string NormalizeMessage(string message)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -2797,9 +3772,6 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         bool lastWasSpace = false;
         foreach (char ch in message)
         {
-            if (char.IsControl(ch))
-                continue;
-
             if (char.IsWhiteSpace(ch))
             {
                 if (!lastWasSpace)
@@ -2807,6 +3779,9 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
                 lastWasSpace = true;
                 continue;
             }
+
+            if (char.IsControl(ch))
+                continue;
 
             sb.Append(ch);
             lastWasSpace = false;
@@ -2819,9 +3794,412 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     {
         int needed = 32;
         foreach (string value in values)
-            needed += 8 + System.Text.Encoding.UTF8.GetByteCount(value ?? string.Empty);
+            needed += FastBufferWriter.GetWriteSize(value ?? string.Empty);
 
         return Mathf.Max(MessageSize, needed);
+    }
+
+    private static int MaxAllowedImageChunks()
+    {
+        return Mathf.CeilToInt(MaxEncodedImageBytes / (float)MaxImageChunkBytes) + 1;
+    }
+
+    private readonly struct PreparedChatImage
+    {
+        public readonly string FileName;
+        public readonly int Width;
+        public readonly int Height;
+        public readonly byte[] Bytes;
+
+        public PreparedChatImage(string fileName, int width, int height, byte[] bytes)
+        {
+            FileName = fileName;
+            Width = Mathf.Max(1, width);
+            Height = Mathf.Max(1, height);
+            Bytes = bytes;
+        }
+    }
+
+    private sealed class PendingChatImage
+    {
+        public readonly ulong SenderClientId;
+        public readonly string SenderName;
+        public readonly string Timestamp;
+        public readonly string ImageId;
+        public readonly string FileName;
+        public readonly int Width;
+        public readonly int Height;
+        public readonly byte[][] Chunks;
+        public byte[] Bytes;
+
+        public bool IsComplete
+        {
+            get
+            {
+                for (int i = 0; i < Chunks.Length; i++)
+                    if (Chunks[i] == null || Chunks[i].Length == 0)
+                        return false;
+
+                return true;
+            }
+        }
+
+        public PendingChatImage(
+            ulong senderClientId,
+            string senderName,
+            string timestamp,
+            string imageId,
+            string fileName,
+            int width,
+            int height,
+            int totalChunks
+        )
+        {
+            SenderClientId = senderClientId;
+            SenderName = senderName;
+            Timestamp = timestamp;
+            ImageId = imageId;
+            FileName = fileName;
+            Width = Mathf.Max(1, width);
+            Height = Mathf.Max(1, height);
+            Chunks = new byte[Mathf.Max(1, totalChunks)][];
+        }
+    }
+
+    private sealed class ChatImagePayload
+    {
+        public readonly string ImageId;
+        public readonly string FileName;
+        public readonly int Width;
+        public readonly int Height;
+        public readonly Texture2D Texture;
+        public readonly Sprite Sprite;
+
+        public ChatImagePayload(
+            string imageId,
+            string fileName,
+            int width,
+            int height,
+            Texture2D texture,
+            Sprite sprite
+        )
+        {
+            ImageId = imageId;
+            FileName = fileName;
+            Width = Mathf.Max(1, width);
+            Height = Mathf.Max(1, height);
+            Texture = texture;
+            Sprite = sprite;
+        }
+
+        public void Destroy()
+        {
+            if (Sprite)
+                UnityEngine.Object.Destroy(Sprite);
+            if (Texture)
+                UnityEngine.Object.Destroy(Texture);
+        }
+    }
+}
+
+public sealed class ChatLineInteraction
+    : MonoBehaviour,
+        IPointerDownHandler,
+        IBeginDragHandler,
+        IDragHandler,
+        IPointerUpHandler,
+        IPointerClickHandler
+{
+    private static readonly Color SelectionColor = new(0.24f, 0.50f, 1f, 0.42f);
+    private static ChatLineInteraction activeSelection;
+
+    private readonly List<Image> selectionImages = new();
+    private TMP_Text label;
+    private string copyText;
+    private bool pointerDown;
+    private bool draggedSelection;
+    private int selectionAnchor = -1;
+    private int selectionFocus = -1;
+
+    public void Configure(TMP_Text lineLabel, string plainText)
+    {
+        label = lineLabel;
+        copyText = plainText ?? string.Empty;
+    }
+
+    private void Update()
+    {
+        if (activeSelection == this && HasSelection && WasCopyPressedThisFrame())
+            GUIUtility.systemCopyBuffer = GetSelectedText();
+    }
+
+    private void OnDestroy()
+    {
+        if (activeSelection == this)
+            activeSelection = null;
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        if (!label || eventData.button != PointerEventData.InputButton.Left)
+            return;
+
+        if (activeSelection && activeSelection != this)
+            activeSelection.ClearSelection();
+        activeSelection = this;
+
+        pointerDown = true;
+        draggedSelection = false;
+        selectionAnchor = CharacterIndexFromPointer(eventData);
+        selectionFocus = selectionAnchor;
+        ClearSelection();
+    }
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        UpdateDraggedSelection(eventData);
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        UpdateDraggedSelection(eventData);
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        if (!pointerDown || eventData.button != PointerEventData.InputButton.Left)
+            return;
+
+        if (draggedSelection)
+        {
+            UpdateDraggedSelection(eventData);
+            string selected = GetSelectedText();
+            if (!string.IsNullOrEmpty(selected))
+                GUIUtility.systemCopyBuffer = selected;
+        }
+
+        pointerDown = false;
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (!label)
+            return;
+        if (draggedSelection && HasSelection)
+            return;
+
+        label.ForceMeshUpdate();
+        int linkIndex = TMP_TextUtilities.FindIntersectingLink(
+            label,
+            eventData.position,
+            eventData.pressEventCamera
+        );
+
+        if (eventData.button == PointerEventData.InputButton.Left && linkIndex >= 0)
+        {
+            string url = label.textInfo.linkInfo[linkIndex].GetLinkID();
+            if (IsSafeWebUrl(url))
+                Application.OpenURL(url);
+            return;
+        }
+
+        GUIUtility.systemCopyBuffer = copyText;
+        SelectWholeLine();
+    }
+
+    private void UpdateDraggedSelection(PointerEventData eventData)
+    {
+        if (!pointerDown || !label)
+            return;
+
+        selectionFocus = CharacterIndexFromPointer(eventData);
+        draggedSelection = true;
+        RefreshSelection();
+    }
+
+    private int CharacterIndexFromPointer(PointerEventData eventData)
+    {
+        label.ForceMeshUpdate();
+        int count = label.textInfo.characterCount;
+        if (count <= 0)
+            return -1;
+
+        int index = TMP_TextUtilities.FindNearestCharacter(
+            label,
+            eventData.position,
+            eventData.pressEventCamera,
+            false
+        );
+        return Mathf.Clamp(index, 0, count - 1);
+    }
+
+    private bool HasSelection
+    {
+        get
+        {
+            GetSelectionRange(out int start, out int end);
+            return start >= 0 && end > start;
+        }
+    }
+
+    private void GetSelectionRange(out int start, out int end)
+    {
+        start = -1;
+        end = -1;
+        if (!label || selectionAnchor < 0 || selectionFocus < 0)
+            return;
+
+        int count = label.textInfo.characterCount;
+        if (count <= 0)
+            return;
+
+        start = Mathf.Clamp(Mathf.Min(selectionAnchor, selectionFocus), 0, count - 1);
+        end = Mathf.Clamp(Mathf.Max(selectionAnchor, selectionFocus) + 1, 0, count);
+    }
+
+    private void SelectWholeLine()
+    {
+        if (!label)
+            return;
+
+        label.ForceMeshUpdate();
+        int count = label.textInfo.characterCount;
+        if (count <= 0)
+            return;
+
+        if (activeSelection && activeSelection != this)
+            activeSelection.ClearSelection();
+        activeSelection = this;
+        selectionAnchor = 0;
+        selectionFocus = count - 1;
+        draggedSelection = false;
+        RefreshSelection();
+    }
+
+    private void RefreshSelection()
+    {
+        ClearSelection();
+        if (!label)
+            return;
+
+        label.ForceMeshUpdate();
+        GetSelectionRange(out int start, out int end);
+        if (start < 0 || end <= start)
+            return;
+
+        var textInfo = label.textInfo;
+        int runLine = -1;
+        float runMinX = 0f;
+        float runMaxX = 0f;
+        float runMinY = 0f;
+        float runMaxY = 0f;
+        bool hasRun = false;
+
+        for (int i = start; i < end && i < textInfo.characterCount; i++)
+        {
+            var ch = textInfo.characterInfo[i];
+            if (!ch.isVisible)
+                continue;
+
+            if (
+                !hasRun
+                || ch.lineNumber != runLine
+                || ch.bottomLeft.x > runMaxX + 4f
+            )
+            {
+                if (hasRun)
+                    AddSelectionRect(runMinX, runMaxX, runMinY, runMaxY);
+
+                runLine = ch.lineNumber;
+                runMinX = ch.bottomLeft.x;
+                runMaxX = ch.topRight.x;
+                runMinY = ch.descender;
+                runMaxY = ch.ascender;
+                hasRun = true;
+                continue;
+            }
+
+            runMaxX = Mathf.Max(runMaxX, ch.topRight.x);
+            runMinY = Mathf.Min(runMinY, ch.descender);
+            runMaxY = Mathf.Max(runMaxY, ch.ascender);
+        }
+
+        if (hasRun)
+            AddSelectionRect(runMinX, runMaxX, runMinY, runMaxY);
+    }
+
+    private void AddSelectionRect(float minX, float maxX, float minY, float maxY)
+    {
+        var go = new GameObject("Selection", typeof(RectTransform));
+        go.transform.SetParent(label.transform, false);
+
+        var image = go.AddComponent<Image>();
+        image.color = SelectionColor;
+        image.raycastTarget = false;
+
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.localPosition = new Vector3((minX + maxX) * 0.5f, (minY + maxY) * 0.5f, 0f);
+        rt.sizeDelta = new Vector2(Mathf.Max(2f, maxX - minX + 3f), Mathf.Max(8f, maxY - minY + 3f));
+        selectionImages.Add(image);
+    }
+
+    private string GetSelectedText()
+    {
+        if (!label)
+            return string.Empty;
+
+        label.ForceMeshUpdate();
+        GetSelectionRange(out int start, out int end);
+        if (start < 0 || end <= start)
+            return string.Empty;
+
+        var sb = new System.Text.StringBuilder(end - start);
+        var textInfo = label.textInfo;
+        for (int i = start; i < end && i < textInfo.characterCount; i++)
+        {
+            char ch = textInfo.characterInfo[i].character;
+            if (ch != '\0')
+                sb.Append(ch);
+        }
+
+        return sb.ToString();
+    }
+
+    private void ClearSelection()
+    {
+        for (int i = 0; i < selectionImages.Count; i++)
+        {
+            if (selectionImages[i])
+                Destroy(selectionImages[i].gameObject);
+        }
+        selectionImages.Clear();
+    }
+
+    private static bool WasCopyPressedThisFrame()
+    {
+#if ENABLE_INPUT_SYSTEM
+        var kb = Keyboard.current;
+        return kb != null
+            && kb.cKey.wasPressedThisFrame
+            && (kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed || kb.leftCommandKey.isPressed || kb.rightCommandKey.isPressed);
+#else
+        return UnityEngine.Input.GetKeyDown(KeyCode.C)
+            && (UnityEngine.Input.GetKey(KeyCode.LeftControl)
+                || UnityEngine.Input.GetKey(KeyCode.RightControl)
+                || UnityEngine.Input.GetKey(KeyCode.LeftCommand)
+                || UnityEngine.Input.GetKey(KeyCode.RightCommand));
+#endif
+    }
+
+    private static bool IsSafeWebUrl(string url)
+    {
+        return System.Uri.TryCreate(url, System.UriKind.Absolute, out var uri)
+            && (
+                string.Equals(uri.Scheme, System.Uri.UriSchemeHttp, System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(uri.Scheme, System.Uri.UriSchemeHttps, System.StringComparison.OrdinalIgnoreCase)
+            );
     }
 }
 
@@ -2917,6 +4295,409 @@ public sealed class ChatLinePreferredHeight : MonoBehaviour
         if (rt.parent is RectTransform layoutRoot)
             LayoutRebuilder.MarkLayoutForRebuild(layoutRoot);
     }
+}
+
+public static class ChatClipboardImageReader
+{
+    public static bool TryGetImageBytes(out byte[] bytes, out string sourceName)
+    {
+        bytes = null;
+        sourceName = null;
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        if (TryGetWindowsClipboardPng(out bytes))
+        {
+            sourceName = "clipboard.png";
+            return true;
+        }
+
+        if (TryGetWindowsClipboardDib(out bytes))
+        {
+            sourceName = "clipboard.png";
+            return true;
+        }
+
+        if (TryGetWindowsClipboardImageFile(out bytes, out sourceName))
+            return true;
+#endif
+
+        return false;
+    }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+    private const uint CfDib = 8;
+    private const uint CfHdrop = 15;
+    private static uint pngFormat;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool OpenClipboard(System.IntPtr hWndNewOwner);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool CloseClipboard();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsClipboardFormatAvailable(uint format);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern System.IntPtr GetClipboardData(uint uFormat);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern uint RegisterClipboardFormat(string lpszFormat);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern System.IntPtr GlobalLock(System.IntPtr hMem);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool GlobalUnlock(System.IntPtr hMem);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern System.UIntPtr GlobalSize(System.IntPtr hMem);
+
+    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern uint DragQueryFile(
+        System.IntPtr hDrop,
+        uint iFile,
+        System.Text.StringBuilder lpszFile,
+        uint cch
+    );
+
+    private static bool TryGetWindowsClipboardPng(out byte[] bytes)
+    {
+        bytes = null;
+        pngFormat = pngFormat != 0 ? pngFormat : RegisterClipboardFormat("PNG");
+        if (pngFormat == 0 || !IsClipboardFormatAvailable(pngFormat))
+            return false;
+
+        return TryReadClipboardHandleBytes(pngFormat, out bytes);
+    }
+
+    private static bool TryGetWindowsClipboardDib(out byte[] pngBytes)
+    {
+        pngBytes = null;
+        if (!IsClipboardFormatAvailable(CfDib))
+            return false;
+        if (!TryReadClipboardHandleBytes(CfDib, out var dibBytes))
+            return false;
+
+        return TryConvertDibToPng(dibBytes, out pngBytes);
+    }
+
+    private static bool TryGetWindowsClipboardImageFile(out byte[] bytes, out string sourceName)
+    {
+        bytes = null;
+        sourceName = null;
+        if (!IsClipboardFormatAvailable(CfHdrop))
+            return false;
+
+        if (!OpenClipboard(System.IntPtr.Zero))
+            return false;
+
+        try
+        {
+            var hDrop = GetClipboardData(CfHdrop);
+            if (hDrop == System.IntPtr.Zero)
+                return false;
+
+            uint count = DragQueryFile(hDrop, 0xFFFFFFFF, null, 0);
+            for (uint i = 0; i < count; i++)
+            {
+                uint length = DragQueryFile(hDrop, i, null, 0);
+                var sb = new System.Text.StringBuilder((int)length + 1);
+                DragQueryFile(hDrop, i, sb, length + 1);
+                string path = sb.ToString();
+                if (!IsImagePath(path) || !System.IO.File.Exists(path))
+                    continue;
+
+                bytes = System.IO.File.ReadAllBytes(path);
+                sourceName = System.IO.Path.GetFileName(path);
+                return true;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[Chat] Failed to read clipboard image file: {ex.Message}");
+        }
+        finally
+        {
+            CloseClipboard();
+        }
+
+        return false;
+    }
+
+    private static bool TryReadClipboardHandleBytes(uint format, out byte[] bytes)
+    {
+        bytes = null;
+        if (!OpenClipboard(System.IntPtr.Zero))
+            return false;
+
+        try
+        {
+            var handle = GetClipboardData(format);
+            if (handle == System.IntPtr.Zero)
+                return false;
+
+            var locked = GlobalLock(handle);
+            if (locked == System.IntPtr.Zero)
+                return false;
+
+            try
+            {
+                int size = checked((int)GlobalSize(handle).ToUInt64());
+                if (size <= 0)
+                    return false;
+
+                bytes = new byte[size];
+                System.Runtime.InteropServices.Marshal.Copy(locked, bytes, 0, size);
+                return true;
+            }
+            finally
+            {
+                GlobalUnlock(handle);
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[Chat] Failed to read clipboard image: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            CloseClipboard();
+        }
+    }
+
+    private static bool TryConvertDibToPng(byte[] dib, out byte[] pngBytes)
+    {
+        pngBytes = null;
+        if (dib == null || dib.Length < 40)
+            return false;
+
+        int headerSize = System.BitConverter.ToInt32(dib, 0);
+        int width = System.BitConverter.ToInt32(dib, 4);
+        int rawHeight = System.BitConverter.ToInt32(dib, 8);
+        short bitCount = System.BitConverter.ToInt16(dib, 14);
+        int compression = System.BitConverter.ToInt32(dib, 16);
+        int colorsUsed = headerSize >= 40 ? System.BitConverter.ToInt32(dib, 32) : 0;
+
+        if (headerSize <= 0 || width <= 0 || rawHeight == 0)
+            return false;
+        if (bitCount != 24 && bitCount != 32)
+            return false;
+        if (compression != 0 && compression != 3)
+            return false;
+
+        bool topDown = rawHeight < 0;
+        int height = Mathf.Abs(rawHeight);
+        int pixelOffset = headerSize;
+        if (compression == 3 && headerSize == 40)
+            pixelOffset += bitCount == 16 || bitCount == 32 ? 12 : 0;
+        if (bitCount <= 8)
+        {
+            int colors = colorsUsed > 0 ? colorsUsed : 1 << bitCount;
+            pixelOffset += colors * 4;
+        }
+
+        int rowStride = bitCount == 32
+            ? width * 4
+            : ((width * 3 + 3) / 4) * 4;
+        if (pixelOffset < 0 || pixelOffset + rowStride * height > dib.Length)
+            return false;
+
+        var pixels = new Color32[width * height];
+        for (int y = 0; y < height; y++)
+        {
+            int srcY = topDown ? height - 1 - y : y;
+            int row = pixelOffset + srcY * rowStride;
+            for (int x = 0; x < width; x++)
+            {
+                int src = row + x * (bitCount / 8);
+                byte b = dib[src];
+                byte g = dib[src + 1];
+                byte r = dib[src + 2];
+                byte a = bitCount == 32 ? dib[src + 3] : (byte)255;
+                if (a == 0)
+                    a = 255;
+                pixels[y * width + x] = new Color32(r, g, b, a);
+            }
+        }
+
+        var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        texture.SetPixels32(pixels);
+        texture.Apply();
+        pngBytes = texture.EncodeToPNG();
+        UnityEngine.Object.Destroy(texture);
+        return pngBytes != null && pngBytes.Length > 0;
+    }
+
+    private static bool IsImagePath(string path)
+    {
+        string ext = System.IO.Path.GetExtension(path);
+        return string.Equals(ext, ".png", System.StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ext, ".jpg", System.StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ext, ".jpeg", System.StringComparison.OrdinalIgnoreCase);
+    }
+#endif
+}
+
+public static class ChatWindowsDropBridge
+{
+    private static readonly Queue<string> droppedFiles = new();
+    private static bool initialized;
+
+    public static void Ensure()
+    {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        if (initialized)
+            return;
+
+        initialized = true;
+        WindowsDropTarget.Initialize();
+#endif
+    }
+
+    public static List<string> DrainDroppedFiles()
+    {
+        var files = new List<string>();
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        WindowsDropTarget.Drain(files);
+#endif
+        return files;
+    }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+    private static class WindowsDropTarget
+    {
+        private const int GwlpWndproc = -4;
+        private const uint WmDropfiles = 0x0233;
+        private static System.IntPtr hwnd;
+        private static System.IntPtr previousWndProc;
+        private static WndProcDelegate wndProcDelegate;
+
+        private delegate System.IntPtr WndProcDelegate(
+            System.IntPtr hWnd,
+            uint msg,
+            System.IntPtr wParam,
+            System.IntPtr lParam
+        );
+
+        [System.Runtime.InteropServices.DllImport("shell32.dll")]
+        private static extern void DragAcceptFiles(System.IntPtr hWnd, bool fAccept);
+
+        [System.Runtime.InteropServices.DllImport("shell32.dll")]
+        private static extern void DragFinish(System.IntPtr hDrop);
+
+        [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern uint DragQueryFile(
+            System.IntPtr hDrop,
+            uint iFile,
+            System.Text.StringBuilder lpszFile,
+            uint cch
+        );
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
+        private static extern System.IntPtr SetWindowLongPtr64(
+            System.IntPtr hWnd,
+            int nIndex,
+            System.IntPtr dwNewLong
+        );
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLong")]
+        private static extern System.IntPtr SetWindowLongPtr32(
+            System.IntPtr hWnd,
+            int nIndex,
+            System.IntPtr dwNewLong
+        );
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern System.IntPtr CallWindowProc(
+            System.IntPtr lpPrevWndFunc,
+            System.IntPtr hWnd,
+            uint msg,
+            System.IntPtr wParam,
+            System.IntPtr lParam
+        );
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern System.IntPtr GetActiveWindow();
+
+        public static void Initialize()
+        {
+            hwnd = GetMainWindowHandle();
+            if (hwnd == System.IntPtr.Zero)
+                return;
+
+            wndProcDelegate = WndProc;
+            var newWndProc = System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(
+                wndProcDelegate
+            );
+            previousWndProc = System.IntPtr.Size == 8
+                ? SetWindowLongPtr64(hwnd, GwlpWndproc, newWndProc)
+                : SetWindowLongPtr32(hwnd, GwlpWndproc, newWndProc);
+
+            DragAcceptFiles(hwnd, true);
+        }
+
+        public static void Drain(List<string> files)
+        {
+            lock (droppedFiles)
+            {
+                while (droppedFiles.Count > 0)
+                    files.Add(droppedFiles.Dequeue());
+            }
+        }
+
+        private static System.IntPtr WndProc(
+            System.IntPtr hWnd,
+            uint msg,
+            System.IntPtr wParam,
+            System.IntPtr lParam
+        )
+        {
+            if (msg == WmDropfiles)
+            {
+                try
+                {
+                    uint count = DragQueryFile(wParam, 0xFFFFFFFF, null, 0);
+                    lock (droppedFiles)
+                    {
+                        for (uint i = 0; i < count; i++)
+                        {
+                            uint length = DragQueryFile(wParam, i, null, 0);
+                            var sb = new System.Text.StringBuilder((int)length + 1);
+                            DragQueryFile(wParam, i, sb, length + 1);
+                            droppedFiles.Enqueue(sb.ToString());
+                        }
+                    }
+                }
+                finally
+                {
+                    DragFinish(wParam);
+                }
+
+                return System.IntPtr.Zero;
+            }
+
+            return previousWndProc != System.IntPtr.Zero
+                ? CallWindowProc(previousWndProc, hWnd, msg, wParam, lParam)
+                : System.IntPtr.Zero;
+        }
+
+        private static System.IntPtr GetMainWindowHandle()
+        {
+            try
+            {
+                using var process = System.Diagnostics.Process.GetCurrentProcess();
+                process.Refresh();
+                if (process.MainWindowHandle != System.IntPtr.Zero)
+                    return process.MainWindowHandle;
+            }
+            catch { }
+
+            return GetActiveWindow();
+        }
+    }
+#endif
 }
 
 public static class TmpCjkFontFallback

@@ -164,7 +164,7 @@ public static class QuizNetworkRuntime
             throw new InvalidOperationException("Could not start Netcode host.");
 
         QuizMultiplayerChatOverlay.Ensure();
-        StatusChanged?.Invoke("Co-op lobby | Players: 1");
+        StatusChanged?.Invoke("Players: 1");
 
         return JoinCode;
     }
@@ -1011,7 +1011,7 @@ public static class QuizNetworkRuntime
         if (IsMultiplayerServer && manager)
         {
             int players = manager.ConnectedClientsIds.Count;
-            return $"Co-op lobby | Players: {players}";
+            return $"Players: {players}";
         }
 
         return "Joined co-op. Waiting for host...";

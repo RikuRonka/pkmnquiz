@@ -2101,7 +2101,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 320349528}
   m_Direction: 2
   m_Value: 0
-  m_Size: 0.4
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -3928,7 +3928,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -0.00012207031}
+  m_AnchoredPosition: {x: 0, y: -0.0001449585}
   m_SizeDelta: {x: 0, y: 90}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!114 &543477989
@@ -4976,81 +4976,90 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PatchNotesView
   notesText: {fileID: 1239978752}
-  patchNotes: "1.2.3\n- Check updates now performs a manual update check and reports
+  patchNotes: "1.2.4\n- Fixed Gen 1 co-op session restore so guessed Pokemon now
+    reappear in the counter and grid after re-entering the quiz\n- Improved co-op
+    quiz layout by aligning the player panel and chat, removing duplicate lobby text,
+    and refining the background color slider\n- Added co-op chat image sharing from
+    clipboard paste and drag-and-drop, with clickable thumbnails and an in-game image
+    viewer \n- Improved co-op chat text with long paste support, selectable/copyable
+    messages, and clickable web links\n- Fixed chat image upload crashes by sending
+    image data in fragmented chunks, preserving normal-size images, and correcting
+    upside-down pasted screenshots\n- Fixed co-op disconnect/shutdown scoreboard
+    errors\n- Quiz titles now turn white when the background slider is set fully
+    black\n\n1.2.3\n- Check updates now performs a manual update check and reports
     when no update is available\n- Full Quiz now loads correctly again\n- Reset quiz
     progress now shows only quizzes with guessed Pokemon, lists guessed count and
     elapsed time, and supports resetting one quiz at a time with confirmation\n-
-    Singleplayer progress now starts saving only after at least one Pokemon has
-    been guessed\n- Improved background color slider placement in singleplayer
-    and co-op so it stays fixed while scrolling\n- Improved co-op chat placement
-    and removed the message character limit\n- Added app/taskbar notification and
-    sound when someone joins a co-op lobby\n- Cleaned up co-op lobby player colors
-    and UI overlap around patch notes/reset controls\n\n1.2.2\n- Singleplayer
-    quiz progress now saves to disk and is restored
-    after restarting the game, including guesses, timer, hints, shadows, and completed
-    quizzes\n- Added a main menu Reset quiz progress button with a typed reset confirmation\n-
-    Added P as a pause shortcut outside text fields\n- Fixed co-op quiz re-entry
-    sometimes syncing the timer but not guessed Pokemon\n- Fixed already-guessed
-    Mega Evolution entries not clearing the input or showing feedback\n- Improved
-    co-op join/start handling after Netcode shutdowns and replaced the misleading
-    missing Netcode setup message\n\n1.2.1\n- Co-op quiz progress is now remembered
-    per quiz when the host returns to the lobby, including guessed Pok\xE9mon, shadows,
-    revealed types, timers, scores, and multiple saved quizzes\n- Solo quiz progress
-    is now remembered per quiz until the game is restarted\n- Hosts can start co-op
-    quizzes alone, and players can join after the quiz has already started\n- Lobby
-    rows now show which quiz the host is in and refresh while the lobby browser is
-    open\n- Added per-player quiz background color slider with black, pink, and turquoise
-    support\n- Fixed the background color slider placement on gen, full, type, and
-    Mega Evolutions quizzes\n- Nicknames are now required before hosting or joining
-    co-op\n- Improved quiz join/leave notifications and return-to-quiz behavior\n-
-    The game now always starts on the main menu instead of sometimes opening Gen
-    1 directly\n\n1.2.0\n- Added player color selection in co-op lobbies and during
-    quizzes\n- Matched multiplayer names and result highlights to each player's chosen
-    color\n- Added a draggable and resizable quiz chat panel with reserved grid space
-    on the right\n- Added a return-to-quiz flow for clients and clearer notifications
-    when players leave\n- Improved quiz grid refreshes after rejoining and changing
-    column counts\n- Fixed section title spacing so titles stay stable when changing
-    cols\n\n1.1.9\n- Added open lobby matchmaking so players can join co-op without
-    manually sharing a code\n- Improved the co-op lobby UI with a larger panel, clearer
-    player counts, colored action buttons, and Join labels\n- Added host join notifications
-    with player nicknames and a pulsing prompt when a quiz can be chosen\n- Improved
-    multiplayer chat placement, expansion, pause behavior, and patch notes hiding\n-
-    Fixed host-only reset and give up actions, and kept co-op lobbies active when
-    returning to the main menu\n\n1.1.8\n- Chat for multiplayer\n\n1.1.7\n- Added
-    multiplayer\n\n1.1.6\r\n- Added separate quiz for Mega Evolutions\r\n- Removed
-    Mega evolutions from Kalos and Paldea\r\n- Added missing Mega Slowbro, Primal
-    Kyogre and Primal Groudon\n\n1.1.5\n- Added Hyperspace mega evolutions\n\n1.1.4\r\n-
-    Vanillish and Vanilluxe dex order corrected (again)\r\n- Fixed Cherrim and Leafeon
-    sprites\r\n- Pok\xE9mon Quiz-logo not visible in patch notes anymore\n\n1.1.3\n-
-    Different Pok\xE9mon music can now be selected from dropdown menu \n- Fixed more
-    sprites\n- Added Pok\xE9mon Quiz-logo\n\n1.1.2\n- Game now automatically pauses
-    when the window loses focus\n- Added \u201CLast guessed Pok\xE9mon\u201D display
-    to the UI\n- Fixed Vanillish / Vanilluxe ordering\n- Fixed remaining sprites
-    with incorrect transparency\n\n1.1.1\n- Improved Pok\xE9mon sprites by replacing
-    white backgrounds with transparency where needed\n- Typing \u201CUrsaluna\u201D
-    in the Full Quiz now also reveals Ursaluna (Blood Moon) from Paldea Expeditions\n-
-    Added a fullscreen toggle in the top-right corner\n- Fixed the ordering of Stunfisk
-    and Silicobra\n- Ctrl + Click now zooms a Pok\xE9mon card\n\n1.1.0\n- Added a
-    toggle for spelling help\r\n- Spelling help no longer suggests already guessed
-    Pok\xE9mon\r\n- Spelling help is cleared after a Pok\xE9mon is guessed\n- Spelling
-    help and \u201CAlways scroll to Pok\xE9mon\u201D settings now persist between
-    sessions\n- Added option to switch between windowed and fullscreen modes\r\n\n1.0.9\n-
-    Added spelling helper that suggests the closest Pok\xE9mon name when your input
-    contains typos\n\n1.0.8\n- Fixed broken or incorrect sprites for Iron Jugulis,
-    Galarian Weezing, and Comfey \n- Mega evolutions no longer require typing the
-    \u201Cmega\u201D prefix when guessing\n\n1.0.7\n- Fixed reveal system: Shadow
-    and type hints now appear in the correct visual/section order instead of skipping
-    generations or jumping to later categories. Mega Evolutions, Gigantamax, Hisui,
-    Paldea Expeditions, and Lumiose Megas are now properly included\n\n1.0.6\n- \u201CNext
-    shadow\u201D button now reveals the next Pok\xE9mon silhouette in Pok\xE9dex
-    order \n- Reduced empty space between the main title and the first generation
-    (Kanto)\n- Finished dialog now shows how many type hints and shadows were used\n-
-    Green / red result borders now work correctly again after using Give up\n- Reduced
-    Pok\xE9mon sprite resolution from 512\xD7512 to 128\xD7128, resulting in shorter
-    loading times and a significantly smaller game size\n\n1.0.5\n- Improved quiz
-    layout: all section titles are now left-aligned and automatically scale with
-    the grid size for better readability\n- Added Patch Notes History, accessible
-    from the main menu\n- Added Pok\xE9mon silhouette mode (\u201CShadows\u201D),
+    Singleplayer progress now starts saving only after at least one Pokemon has been
+    guessed\n- Improved background color slider placement in singleplayer and co-op
+    so it stays fixed while scrolling\n- Improved co-op chat placement and removed
+    the message character limit\n- Added app/taskbar notification and sound when
+    someone joins a co-op lobby\n- Cleaned up co-op lobby player colors and UI overlap
+    around patch notes/reset controls\n\n1.2.2\n- Singleplayer quiz progress now
+    saves to disk and is restored after restarting the game, including guesses, timer,
+    hints, shadows, and completed quizzes\n- Added a main menu Reset quiz progress
+    button with a typed reset confirmation\n- Added P as a pause shortcut outside
+    text fields\n- Fixed co-op quiz re-entry sometimes syncing the timer but not
+    guessed Pokemon\n- Fixed already-guessed Mega Evolution entries not clearing
+    the input or showing feedback\n- Improved co-op join/start handling after Netcode
+    shutdowns and replaced the misleading missing Netcode setup message\n\n1.2.1\n-
+    Co-op quiz progress is now remembered per quiz when the host returns to the lobby,
+    including guessed Pok\xE9mon, shadows, revealed types, timers, scores, and multiple
+    saved quizzes\n- Solo quiz progress is now remembered per quiz until the game
+    is restarted\n- Hosts can start co-op quizzes alone, and players can join after
+    the quiz has already started\n- Lobby rows now show which quiz the host is in
+    and refresh while the lobby browser is open\n- Added per-player quiz background
+    color slider with black, pink, and turquoise support\n- Fixed the background
+    color slider placement on gen, full, type, and Mega Evolutions quizzes\n- Nicknames
+    are now required before hosting or joining co-op\n- Improved quiz join/leave
+    notifications and return-to-quiz behavior\n- The game now always starts on the
+    main menu instead of sometimes opening Gen 1 directly\n\n1.2.0\n- Added player
+    color selection in co-op lobbies and during quizzes\n- Matched multiplayer names
+    and result highlights to each player's chosen color\n- Added a draggable and
+    resizable quiz chat panel with reserved grid space on the right\n- Added a return-to-quiz
+    flow for clients and clearer notifications when players leave\n- Improved quiz
+    grid refreshes after rejoining and changing column counts\n- Fixed section title
+    spacing so titles stay stable when changing cols\n\n1.1.9\n- Added open lobby
+    matchmaking so players can join co-op without manually sharing a code\n- Improved
+    the co-op lobby UI with a larger panel, clearer player counts, colored action
+    buttons, and Join labels\n- Added host join notifications with player nicknames
+    and a pulsing prompt when a quiz can be chosen\n- Improved multiplayer chat placement,
+    expansion, pause behavior, and patch notes hiding\n- Fixed host-only reset and
+    give up actions, and kept co-op lobbies active when returning to the main menu\n\n1.1.8\n-
+    Chat for multiplayer\n\n1.1.7\n- Added multiplayer\n\n1.1.6\r\n- Added separate
+    quiz for Mega Evolutions\r\n- Removed Mega evolutions from Kalos and Paldea\r\n-
+    Added missing Mega Slowbro, Primal Kyogre and Primal Groudon\n\n1.1.5\n- Added
+    Hyperspace mega evolutions\n\n1.1.4\r\n- Vanillish and Vanilluxe dex order corrected
+    (again)\r\n- Fixed Cherrim and Leafeon sprites\r\n- Pok\xE9mon Quiz-logo not
+    visible in patch notes anymore\n\n1.1.3\n- Different Pok\xE9mon music can now
+    be selected from dropdown menu \n- Fixed more sprites\n- Added Pok\xE9mon Quiz-logo\n\n1.1.2\n-
+    Game now automatically pauses when the window loses focus\n- Added \u201CLast
+    guessed Pok\xE9mon\u201D display to the UI\n- Fixed Vanillish / Vanilluxe ordering\n-
+    Fixed remaining sprites with incorrect transparency\n\n1.1.1\n- Improved Pok\xE9mon
+    sprites by replacing white backgrounds with transparency where needed\n- Typing
+    \u201CUrsaluna\u201D in the Full Quiz now also reveals Ursaluna (Blood Moon)
+    from Paldea Expeditions\n- Added a fullscreen toggle in the top-right corner\n-
+    Fixed the ordering of Stunfisk and Silicobra\n- Ctrl + Click now zooms a Pok\xE9mon
+    card\n\n1.1.0\n- Added a toggle for spelling help\r\n- Spelling help no longer
+    suggests already guessed Pok\xE9mon\r\n- Spelling help is cleared after a Pok\xE9mon
+    is guessed\n- Spelling help and \u201CAlways scroll to Pok\xE9mon\u201D settings
+    now persist between sessions\n- Added option to switch between windowed and fullscreen
+    modes\r\n\n1.0.9\n- Added spelling helper that suggests the closest Pok\xE9mon
+    name when your input contains typos\n\n1.0.8\n- Fixed broken or incorrect sprites
+    for Iron Jugulis, Galarian Weezing, and Comfey \n- Mega evolutions no longer
+    require typing the \u201Cmega\u201D prefix when guessing\n\n1.0.7\n- Fixed reveal
+    system: Shadow and type hints now appear in the correct visual/section order
+    instead of skipping generations or jumping to later categories. Mega Evolutions,
+    Gigantamax, Hisui, Paldea Expeditions, and Lumiose Megas are now properly included\n\n1.0.6\n-
+    \u201CNext shadow\u201D button now reveals the next Pok\xE9mon silhouette in
+    Pok\xE9dex order \n- Reduced empty space between the main title and the first
+    generation (Kanto)\n- Finished dialog now shows how many type hints and shadows
+    were used\n- Green / red result borders now work correctly again after using
+    Give up\n- Reduced Pok\xE9mon sprite resolution from 512\xD7512 to 128\xD7128,
+    resulting in shorter loading times and a significantly smaller game size\n\n1.0.5\n-
+    Improved quiz layout: all section titles are now left-aligned and automatically
+    scale with the grid size for better readability\n- Added Patch Notes History,
+    accessible from the main menu\n- Added Pok\xE9mon silhouette mode (\u201CShadows\u201D),
     allowing players to reveal shadow versions of all Pok\xE9mon\n\n1.0.4\n- Tooltip
     for patch notes no longer overflows the right side of the screen when the text
     is long.\n- No need to type \u201CAlolan\u201D, \u201CGalarian\u201D, or \u201CHisui\u201D

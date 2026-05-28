@@ -1,5 +1,5 @@
 {
-  "version": "1.2.3",
-  "notes": "- Check updates now performs a manual update check and reports when no update is available - Full Quiz now loads correctly again - Reset quiz progress now shows only quizzes with guessed Pokemon, lists guessed count and elapsed time, and supports resetting one quiz at a time with confirmation - Singleplayer progress now starts saving only after at least one Pokemon has been guessed - Improved background color slider placement in singleplayer and co-op so it stays fixed while scrolling - Improved co-op chat placement and removed the message character limit - Added app/taskbar notification and sound when someone joins a co-op lobby - Cleaned up co-op lobby player colors and UI overlap around patch notes/reset controls",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.3.zip"
+  "version": "1.2.4",
+  "notes": "- Fixed Gen 1 co-op session restore so guessed Pokemon now reappear in the counter and grid after re-entering the quiz - Improved co-op quiz layout by aligning the player panel and chat, removing duplicate lobby text, and refining the background color slider - Added co-op chat image sharing from clipboard paste and drag-and-drop, with clickable thumbnails and an in-game image viewer - Improved co-op chat text with long paste support, selectable/copyable messages, and clickable web links - Fixed chat image upload crashes by sending image data in fragmented chunks, preserving normal-size images, and correcting upside-down pasted screenshots - Fixed co-op disconnect/shutdown scoreboard errors - Quiz titles now turn white when the background slider is set fully black",
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.4.zip"
 }

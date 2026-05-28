@@ -995,7 +995,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
             int players = manager.ConnectedClientsIds.Count;
             MaybeShowHostJoinNotice(players);
             string nextStep = "Choose a quiz button.";
-            SetStatus($"Co-op lobby | Players: {players} | {nextStep}");
+            SetStatus($"Players: {players} | {nextStep}");
         }
         else if (joinedLobby && manager && manager.IsClient && !manager.IsServer)
         {

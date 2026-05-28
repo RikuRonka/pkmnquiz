@@ -70,6 +70,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     public float ElapsedSeconds => elapsed;
     public bool IsQuizRunning => running;
     public bool IsQuizFinished => IsComplete() || (finishedDialog && finishedDialog.IsShowing);
+    public bool IsReadyForSavedMultiplayerSessionRestore => cardById.Count > 0;
+    public bool HasPendingSavedMultiplayerSessionRestore =>
+        _pendingSavedMultiplayerSession != null;
 
     private float elapsed;
     private bool running;
@@ -141,8 +144,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private const int MultiplayerContentTopPadding = 32;
     private const float SingleplayerHeaderExtraHeight = 24f;
     private const float MultiplayerGridRightPaddingMin = 390f;
-    private const float BackgroundColorSliderWidth = 220f;
+    private const float BackgroundColorSliderWidth = 153f;
     private const float BackgroundColorSliderHeight = 20f;
+    private const float BackgroundColorSliderHandleSize = 14f;
+    private const float BackgroundColorSliderHandleShadowSize = 18f;
     private const float BackgroundColorSliderRightPadding = 12f;
     private const float BackgroundColorSliderTopPadding = 94f;
     private const float BackgroundColorSliderMultiplayerRightPadding = 24f;
@@ -189,6 +194,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private Image scrollBackgroundImage;
     private Texture2D backgroundColorGradientTexture;
     private Sprite backgroundColorGradientSprite;
+    private Texture2D backgroundColorHandleTexture;
+    private Sprite backgroundColorHandleSprite;
     private readonly List<SectionGroup> _sections = new();
     int _hintUsedCount;
     int _shadowUsedCount;
@@ -228,6 +235,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<string, int> lumioseByBaseName = new();
     private readonly Dictionary<string, int> hyperspaceByBaseName = new();
     private readonly HashSet<int> shadowed = new();
+    private SavedQuizSessionSnapshot _pendingSavedMultiplayerSession;
     private bool redirectingToMainMenu;
 
     [SerializeField]
@@ -239,6 +247,30 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private bool _testRunning;
     private bool _testCancel;
     private bool _localSessionDiscarded;
+
+    private sealed class SavedQuizSessionSnapshot
+    {
+        public readonly List<int> SolvedIds;
+        public readonly List<int> HintedIds;
+        public readonly List<int> ShadowedIds;
+        public readonly float Elapsed;
+        public readonly bool Running;
+
+        public SavedQuizSessionSnapshot(
+            IReadOnlyList<int> solvedIds,
+            IReadOnlyList<int> hintedIds,
+            IReadOnlyList<int> shadowedIds,
+            float elapsed,
+            bool running
+        )
+        {
+            SolvedIds = solvedIds != null ? new List<int>(solvedIds) : new List<int>();
+            HintedIds = hintedIds != null ? new List<int>(hintedIds) : new List<int>();
+            ShadowedIds = shadowedIds != null ? new List<int>(shadowedIds) : new List<int>();
+            Elapsed = Mathf.Max(0f, elapsed);
+            Running = running;
+        }
+    }
 
     [Header("Audio")]
     [SerializeField]
@@ -706,19 +738,40 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         var slideAreaRt = (RectTransform)slideAreaGo.transform;
         slideAreaRt.anchorMin = Vector2.zero;
         slideAreaRt.anchorMax = Vector2.one;
-        slideAreaRt.offsetMin = new Vector2(7f, 0f);
-        slideAreaRt.offsetMax = new Vector2(-7f, 0f);
+        float handleInset = BackgroundColorSliderHandleShadowSize * 0.5f;
+        slideAreaRt.offsetMin = new Vector2(handleInset, 0f);
+        slideAreaRt.offsetMax = new Vector2(-handleInset, 0f);
 
         var handleGo = new GameObject("Handle", typeof(RectTransform));
         handleGo.transform.SetParent(slideAreaGo.transform, false);
         var handleRt = (RectTransform)handleGo.transform;
-        handleRt.sizeDelta = new Vector2(14f, 24f);
+        handleRt.sizeDelta = new Vector2(
+            BackgroundColorSliderHandleShadowSize,
+            BackgroundColorSliderHandleShadowSize
+        );
 
-        var handleImage = handleGo.AddComponent<Image>();
+        var shadowImage = handleGo.AddComponent<Image>();
+        shadowImage.sprite = GetBackgroundColorHandleSprite();
+        shadowImage.type = Image.Type.Simple;
+        shadowImage.preserveAspect = true;
+        shadowImage.color = new Color(0f, 0f, 0f, 0.58f);
+
+        var handleFaceGo = new GameObject("Face", typeof(RectTransform));
+        handleFaceGo.transform.SetParent(handleGo.transform, false);
+        var handleFaceRt = (RectTransform)handleFaceGo.transform;
+        handleFaceRt.anchorMin = handleFaceRt.anchorMax = new Vector2(0.5f, 0.5f);
+        handleFaceRt.pivot = new Vector2(0.5f, 0.5f);
+        handleFaceRt.anchoredPosition = Vector2.zero;
+        handleFaceRt.sizeDelta = new Vector2(
+            BackgroundColorSliderHandleSize,
+            BackgroundColorSliderHandleSize
+        );
+
+        var handleImage = handleFaceGo.AddComponent<Image>();
+        handleImage.sprite = GetBackgroundColorHandleSprite();
+        handleImage.type = Image.Type.Simple;
+        handleImage.preserveAspect = true;
         handleImage.color = Color.white;
-        var handleOutline = handleGo.AddComponent<Outline>();
-        handleOutline.effectColor = new Color(0f, 0f, 0f, 0.65f);
-        handleOutline.effectDistance = new Vector2(1.5f, -1.5f);
 
         backgroundColorSlider = root.AddComponent<Slider>();
         backgroundColorSlider.minValue = 0f;
@@ -799,7 +852,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void ApplyLocalBackgroundColor(float value)
     {
+        value = Mathf.Clamp01(value);
         ApplyQuizBackgroundColor(BackgroundColorFromSliderValue(value));
+        ApplyQuizTitleColor(IsBlackBackgroundSliderValue(value));
     }
 
     private float CurrentLocalBackgroundHue()
@@ -839,6 +894,26 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         float hue = Mathf.InverseLerp(BackgroundColorRainbowStart, 1f, value);
         return Color.HSVToRGB(hue, 0.42f, 1f);
+    }
+
+    private static bool IsBlackBackgroundSliderValue(float value)
+    {
+        return Mathf.Clamp01(value) <= BackgroundColorBlackStop;
+    }
+
+    private bool ShouldUseLightQuizTitles()
+    {
+        return IsBlackBackgroundSliderValue(CurrentLocalBackgroundHue());
+    }
+
+    private void ApplyQuizTitleColor(bool useLightTitles)
+    {
+        Color titleColor = useLightTitles ? Color.white : Color.black;
+        foreach (var sec in _sections)
+        {
+            if (sec)
+                sec.SetTitleColor(titleColor);
+        }
     }
 
     private void ApplyQuizBackgroundColor(Color color)
@@ -944,15 +1019,58 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         return backgroundColorGradientSprite;
     }
 
+    private Sprite GetBackgroundColorHandleSprite()
+    {
+        if (backgroundColorHandleSprite)
+            return backgroundColorHandleSprite;
+
+        const int size = 32;
+        backgroundColorHandleTexture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave,
+        };
+
+        float center = (size - 1) * 0.5f;
+        float radius = center;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x - center;
+                float dy = y - center;
+                float alpha = Mathf.Clamp01(radius + 0.5f - Mathf.Sqrt(dx * dx + dy * dy));
+                backgroundColorHandleTexture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+            }
+        }
+
+        backgroundColorHandleTexture.Apply();
+        backgroundColorHandleSprite = Sprite.Create(
+            backgroundColorHandleTexture,
+            new Rect(0f, 0f, size, size),
+            new Vector2(0.5f, 0.5f),
+            100f
+        );
+        backgroundColorHandleSprite.hideFlags = HideFlags.HideAndDontSave;
+        return backgroundColorHandleSprite;
+    }
+
     private void DestroyBackgroundColorGradient()
     {
         if (backgroundColorGradientSprite)
             Destroy(backgroundColorGradientSprite);
         if (backgroundColorGradientTexture)
             Destroy(backgroundColorGradientTexture);
+        if (backgroundColorHandleSprite)
+            Destroy(backgroundColorHandleSprite);
+        if (backgroundColorHandleTexture)
+            Destroy(backgroundColorHandleTexture);
 
         backgroundColorGradientSprite = null;
         backgroundColorGradientTexture = null;
+        backgroundColorHandleSprite = null;
+        backgroundColorHandleTexture = null;
     }
 
     private bool IsDialogOpen()
@@ -2222,8 +2340,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             FinalizeSection(fullLumioseMegas);
             FinalizeSection(fullHyperspaceMegas);
             FinalizeSection(unknownSec);
+            ApplyQuizTitleColor(ShouldUseLightQuizTitles());
             RebuildHintShadowOrderFromSections();
             UpdateScore();
+            ApplyPendingSavedMultiplayerSessionRestore();
             return;
         }
 
@@ -2635,7 +2755,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             && paldeaExpeditions == null;
 
         main.SetHeaderGap(noSubSections);
+        ApplyQuizTitleColor(ShouldUseLightQuizTitles());
         QueueResetScrollToTop();
+        ApplyPendingSavedMultiplayerSessionRestore();
     }
 
     bool HasTypeFilter => !string.IsNullOrEmpty(selectedType);
@@ -3527,6 +3649,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private void ResetGame()
     {
+        _pendingSavedMultiplayerSession = null;
         OnQuizReset?.Invoke();
 
         if (pauseMenu && pauseMenu.IsShowing)
@@ -3649,6 +3772,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         var hintedSnapshot = hintedIds != null ? new List<int>(hintedIds) : new List<int>();
         var shadowedSnapshot = shadowedIds != null ? new List<int>(shadowedIds) : new List<int>();
 
+        _pendingSavedMultiplayerSession = null;
+
         if (_networkStateApplyRoutine != null)
             StopCoroutine(_networkStateApplyRoutine);
 
@@ -3673,15 +3798,41 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         bool savedRunning
     )
     {
-        var solvedSnapshot = solvedIds != null ? new List<int>(solvedIds) : new List<int>();
-        var hintedSnapshot = hintedIds != null ? new List<int>(hintedIds) : new List<int>();
-        var shadowedSnapshot = shadowedIds != null ? new List<int>(shadowedIds) : new List<int>();
+        var snapshot = new SavedQuizSessionSnapshot(
+            solvedIds,
+            hintedIds,
+            shadowedIds,
+            savedElapsed,
+            savedRunning
+        );
 
-        elapsed = Mathf.Max(0f, savedElapsed);
+        if (!IsReadyForSavedMultiplayerSessionRestore)
+        {
+            _pendingSavedMultiplayerSession = snapshot;
+            elapsed = snapshot.Elapsed;
+            SetTimerText();
+            running = snapshot.Running;
+            if (guessInput)
+                guessInput.interactable = running;
+            ApplyMultiplayerUiState();
+            return;
+        }
+
+        ApplySavedMultiplayerSession(snapshot);
+    }
+
+    private void ApplySavedMultiplayerSession(SavedQuizSessionSnapshot snapshot)
+    {
+        if (snapshot == null)
+            return;
+
+        _pendingSavedMultiplayerSession = null;
+
+        elapsed = snapshot.Elapsed;
         SetTimerText();
-        ApplyNetworkHintState(hintedSnapshot, shadowedSnapshot);
-        ApplyNetworkSolvedIds(solvedSnapshot, clearInput: false, playSound: false);
-        running = savedRunning && !IsComplete();
+        ApplyNetworkHintState(snapshot.HintedIds, snapshot.ShadowedIds);
+        ApplyNetworkSolvedIds(snapshot.SolvedIds, clearInput: false, playSound: false);
+        running = snapshot.Running && !IsComplete();
         if (!running && !IsComplete())
             running = true;
 
@@ -3694,6 +3845,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (running)
             RefocusGuess();
+    }
+
+    private void ApplyPendingSavedMultiplayerSessionRestore()
+    {
+        if (_pendingSavedMultiplayerSession == null || !IsReadyForSavedMultiplayerSessionRestore)
+            return;
+
+        ApplySavedMultiplayerSession(_pendingSavedMultiplayerSession);
     }
 
     private void SaveLocalQuizSession()
