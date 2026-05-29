@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -191,6 +192,41 @@ public class PokemonTooltip : MonoBehaviour
             descriptionText.alignment = TextAlignmentOptions.TopLeft;
             descriptionText.textWrappingMode = TextWrappingModes.Normal;
             descriptionText.text = FormatUpdateNotes(rawNotes);
+        }
+
+        float contentW = MeasureWideNotes(descriptionText);
+        float targetWidth = Mathf.Clamp(
+            contentW + contentPadding,
+            minWidth,
+            GetMaxScreenTooltipWidth()
+        );
+        ApplyWidth(targetWidth);
+    }
+
+    public void SetPlayerList(string title, IReadOnlyList<string> playerNames)
+    {
+        if (nameLabel)
+            nameLabel.text = title ?? "";
+
+        if (type1Image)
+        {
+            type1Image.enabled = false;
+            type1Image.sprite = null;
+        }
+        if (type2Image)
+        {
+            type2Image.enabled = false;
+            type2Image.sprite = null;
+        }
+
+        if (descriptionText)
+        {
+            descriptionText.gameObject.SetActive(true);
+            descriptionText.alignment = TextAlignmentOptions.TopLeft;
+            descriptionText.textWrappingMode = TextWrappingModes.Normal;
+            descriptionText.text = playerNames != null && playerNames.Count > 0
+                ? string.Join("\n", playerNames)
+                : "No players";
         }
 
         float contentW = MeasureWideNotes(descriptionText);

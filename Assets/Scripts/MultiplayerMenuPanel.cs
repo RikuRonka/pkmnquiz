@@ -31,11 +31,21 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     private static readonly Color LeaveButtonColor = new Color(0.72f, 0.13f, 0.17f, 1f);
     private static readonly Color LobbyEntryColor = new Color(0.16f, 0.35f, 0.70f, 0.95f);
     private static readonly Color JoinBadgeColor = new Color(0.07f, 0.56f, 0.35f, 1f);
+    private static readonly HashSet<string> MenuQuizButtonMethodNames = new(StringComparer.Ordinal)
+    {
+        "PlayFullQuiz",
+        "PlayGenQuiz",
+        "PlayTypeQuiz",
+        "PlayMegaEvolutionsQuiz",
+        "PlayGen",
+        "PlayType",
+    };
 
     private static bool overlayVisible = true;
 
     private TMP_InputField nicknameInput;
     private TMP_Text statusLabel;
+    private TMP_Text playersListLabel;
     private TMP_Text hostNoticeLabel;
     private Button hostButton;
     private Button refreshLobbiesButton;
@@ -51,6 +61,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     private TMP_Text lobbyListEmptyLabel;
     private CanvasGroup canvasGroup;
     private readonly List<GameObject> lobbyEntryObjects = new();
+    private readonly Dictionary<Button, bool> menuQuizButtonBaseInteractivity = new();
     private bool hostingLobby;
     private bool joinedLobby;
     private bool operationBusy;
@@ -164,6 +175,11 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         statusLabel.color = new Color(0.82f, 0.88f, 0.93f, 1f);
         statusLabel.textWrappingMode = TextWrappingModes.Normal;
         statusLabel.richText = true;
+        playersListLabel = CreateLabel(string.Empty, 12f, FontStyles.Normal, 0f);
+        playersListLabel.color = new Color(0.9f, 0.9f, 0.9f, 1f);
+        playersListLabel.textWrappingMode = TextWrappingModes.Normal;
+        playersListLabel.richText = true;
+        playersListLabel.text = string.Empty;
 
         hostNoticeLabel = CreateLabel("", 12f, FontStyles.Bold, 20f);
         hostNoticeLabel.color = new Color(1f, 0.92f, 0.08f, 1f);
@@ -853,6 +869,8 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
             nicknameInput.interactable = !operationBusy && !inLobby;
         ApplyColorPickerVisibility(inLobby);
         RefreshColorSwatches();
+        if (playersListLabel)
+            playersListLabel.gameObject.SetActive(inLobby);
         if (leaveButton)
         {
             bool canLeave =
@@ -870,6 +888,69 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         var size = rt.sizeDelta;
         size.y = canBrowse ? BrowserPanelHeight : CompactPanelHeight;
         rt.sizeDelta = size;
+
+        ApplyMenuQuizButtonInteractivity();
+    }
+
+    private void ApplyMenuQuizButtonInteractivity()
+    {
+        bool canChooseQuiz = !(joinedLobby || QuizNetworkRuntime.IsMultiplayerClientOnly);
+
+        foreach (
+            var button in FindObjectsByType<Button>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            )
+        )
+        {
+            if (IsMenuQuizButton(button))
+                ApplyMenuQuizButtonState(button, canChooseQuiz);
+        }
+
+        foreach (
+            var controller in FindObjectsByType<MainMenuController>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            )
+        )
+        {
+            if (controller && controller.fullQuizBtn)
+                ApplyMenuQuizButtonState(controller.fullQuizBtn, canChooseQuiz);
+        }
+    }
+
+    private void ApplyMenuQuizButtonState(Button button, bool canChooseQuiz)
+    {
+        if (!button)
+            return;
+
+        if (!menuQuizButtonBaseInteractivity.ContainsKey(button))
+            menuQuizButtonBaseInteractivity[button] = button.interactable;
+
+        button.interactable =
+            canChooseQuiz
+            && menuQuizButtonBaseInteractivity.TryGetValue(button, out bool baseInteractivity)
+            && baseInteractivity;
+    }
+
+    private static bool IsMenuQuizButton(Button button)
+    {
+        if (!button)
+            return false;
+
+        int listenerCount = button.onClick.GetPersistentEventCount();
+        for (int i = 0; i < listenerCount; i++)
+        {
+            string methodName = button.onClick.GetPersistentMethodName(i);
+            if (!MenuQuizButtonMethodNames.Contains(methodName))
+                continue;
+
+            var target = button.onClick.GetPersistentTarget(i);
+            if (target is MenuRouter || target is MainMenuController)
+                return true;
+        }
+
+        return false;
     }
 
     private void SetStatus(string message)
@@ -1083,6 +1164,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
                 var joinedNames = new List<string>();
                 var nonLocalNames = new List<string>();
                 var currentMembers = new Dictionary<string, string>();
+                var currentMemberColors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 var currentOccupiedColors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var member in members)
                 {
@@ -1090,10 +1172,11 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
                         continue;
 
                     currentMembers[member.Id] = member.Name;
+                    currentMemberColors[member.Id] = QuizNetworkRuntime.NormalizeColorHex(member.ColorHex);
                     if (!member.IsLocalPlayer)
                     {
                         nonLocalNames.Add(member.Name);
-                        currentOccupiedColors.Add(QuizNetworkRuntime.NormalizeColorHex(member.ColorHex));
+                        currentOccupiedColors.Add(currentMemberColors[member.Id]);
                     }
                     else
                     {
@@ -1111,8 +1194,38 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
                 }
 
                 observedLobbyMembers.Clear();
+
                 foreach (var member in currentMembers)
                     observedLobbyMembers[member.Key] = member.Value;
+
+                if (playersListLabel != null)
+                {
+                    if (observedLobbyMembers.Count == 0)
+                    {
+                        playersListLabel.text = string.Empty;
+                    }
+                    else
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        foreach (var m in members)
+                        {
+                            if (string.IsNullOrEmpty(m.Id))
+                                continue;
+                            if (!currentMembers.TryGetValue(m.Id, out var nm))
+                                nm = m.Name;
+                            var hex = currentMemberColors.TryGetValue(m.Id, out var ch) ? ch : "#6FEA72";
+                            sb.Append('<');
+                            sb.Append("color=");
+                            sb.Append(hex);
+                            sb.Append('>');
+                            sb.Append(EscapeRichText(QuizNetworkRuntime.NormalizeNickname(nm)));
+                            if (m.IsHost)
+                                sb.Append(" (Host)");
+                            sb.Append("</color>\n");
+                        }
+                        playersListLabel.text = sb.ToString().TrimEnd('\n');
+                    }
+                }
 
                 occupiedColorHexes.Clear();
                 foreach (var colorHex in currentOccupiedColors)

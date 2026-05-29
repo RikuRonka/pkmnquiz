@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -51,7 +52,26 @@ public class TooltipManager : MonoBehaviour
     )
     {
         _pinned = false;
-        _tip.SetContent(title, t1, t2);
+        if (!string.IsNullOrWhiteSpace(description))
+            _tip.SetNotes(title, description);
+        else
+            _tip.SetContent(title, t1, t2);
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_tipRT);
+
+        PositionFollow(screenPos);
+        _tip.SetVisible(true, fadeTime <= 0f, fadeTime);
+    }
+
+    public void ShowFollowPlayerList(
+        string title,
+        IReadOnlyList<string> playerNames,
+        Vector2 screenPos,
+        Camera eventCam
+    )
+    {
+        _pinned = false;
+        _tip.SetPlayerList(title, playerNames);
         LayoutRebuilder.ForceRebuildLayoutImmediate(_tipRT);
 
         PositionFollow(screenPos);

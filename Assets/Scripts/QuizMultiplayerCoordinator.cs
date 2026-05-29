@@ -118,9 +118,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         IReadOnlyList<PlayerScore> scoreboard = instance
             ? instance.BuildScoreboard()
             : latestScoreboard;
-        IReadOnlyDictionary<int, ulong> solvedOwners = instance
-            ? instance.solvedByClientId
-            : null;
+        IReadOnlyDictionary<int, ulong> solvedOwners = instance ? instance.solvedByClientId : null;
         var solvedIds = BuildSolvedIdsSnapshot(quizManager.SolvedIds, solvedOwners);
 
         var session = new SavedQuizSession(
@@ -711,7 +709,12 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         ulong guesserClientId
     )
     {
-        if (!feedback.HasValue || !manager || !manager.IsServer || manager.CustomMessagingManager == null)
+        if (
+            !feedback.HasValue
+            || !manager
+            || !manager.IsServer
+            || manager.CustomMessagingManager == null
+        )
             return;
 
         using var writer = new FastBufferWriter(MessageSize, Allocator.Temp);
@@ -916,7 +919,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
                 : DefaultPlayerName(clientId);
             if (clientId != manager.LocalClientId && IsQuizSceneActive())
             {
-                string message = $"{QuizNetworkRuntime.NormalizeNickname(playerName)} left the quiz.";
+                string message =
+                    $"{QuizNetworkRuntime.NormalizeNickname(playerName)} left the quiz.";
                 ShowLocalNotice(message, true);
                 BroadcastPlayerNotice(message, true);
             }
@@ -937,10 +941,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
     private static bool IsQuizSceneActive()
     {
-        return SceneManager.GetActiveScene().name.Equals(
-            "Quiz",
-            System.StringComparison.OrdinalIgnoreCase
-        );
+        return SceneManager
+            .GetActiveScene()
+            .name.Equals("Quiz", System.StringComparison.OrdinalIgnoreCase);
     }
 
     private void SendStateToClient(ulong clientId)
@@ -1114,7 +1117,12 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         var scoreboard = BuildScoreboard();
         ApplyScoreboard(scoreboard);
 
-        if (!manager || !manager.IsListening || !manager.IsServer || manager.CustomMessagingManager == null)
+        if (
+            !manager
+            || !manager.IsListening
+            || !manager.IsServer
+            || manager.CustomMessagingManager == null
+        )
             return;
 
         using var writer = new FastBufferWriter(MessageSize, Allocator.Temp);
@@ -1227,7 +1235,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             quiz = FindFirstObjectByType<QuizManager>();
 
         string destination = IsQuizSceneActive() ? "quiz" : "lobby";
-        string message = $"{QuizNetworkRuntime.NormalizeNickname(playerName)} joined the {destination}.";
+        string message =
+            $"{QuizNetworkRuntime.NormalizeNickname(playerName)} joined the {destination}.";
         WindowsAppNotifier.NotifyLobbyJoin();
 
         if (quiz && quiz.toast)
@@ -1254,7 +1263,14 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
                 ? color
                 : QuizNetworkRuntime.DefaultColorForClient(clientId);
             scores.Add(
-                new PlayerScore(clientId, playerNames[clientId], colorHex, score, typeHints, shadows)
+                new PlayerScore(
+                    clientId,
+                    playerNames[clientId],
+                    colorHex,
+                    score,
+                    typeHints,
+                    shadows
+                )
             );
         }
 
@@ -1263,9 +1279,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
     private static void ApplyScoreboard(List<PlayerScore> scoreboard)
     {
-        latestScoreboard = scoreboard == null
-            ? new List<PlayerScore>()
-            : new List<PlayerScore>(scoreboard);
+        latestScoreboard =
+            scoreboard == null ? new List<PlayerScore>() : new List<PlayerScore>(scoreboard);
 
         latestPlayerColors.Clear();
         foreach (var score in latestScoreboard)
@@ -1596,9 +1611,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             ShadowedIds = shadowedIds == null ? new List<int>() : new List<int>(shadowedIds);
             Elapsed = Mathf.Max(0f, elapsed);
             Running = running;
-            Scoreboard = scoreboard == null
-                ? new List<PlayerScore>()
-                : new List<PlayerScore>(scoreboard);
+            Scoreboard =
+                scoreboard == null ? new List<PlayerScore>() : new List<PlayerScore>(scoreboard);
             SolvedOwners = new Dictionary<int, ulong>();
             if (solvedOwners != null)
                 foreach (var kv in solvedOwners)
@@ -1861,7 +1875,10 @@ public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour, IPointerClickH
 
         var gridGo = new GameObject("Swatches", typeof(RectTransform));
         gridGo.transform.SetParent(colorPickerPanel.transform, false);
-        ((RectTransform)gridGo.transform).sizeDelta = new Vector2(ColorPanelWidth - 20f, 2f * ColorSwatchSize + 5f);
+        ((RectTransform)gridGo.transform).sizeDelta = new Vector2(
+            ColorPanelWidth - 20f,
+            2f * ColorSwatchSize + 5f
+        );
         var grid = gridGo.AddComponent<GridLayoutGroup>();
         grid.cellSize = new Vector2(ColorSwatchSize, ColorSwatchSize);
         grid.spacing = new Vector2(5f, 5f);
@@ -1921,9 +1938,10 @@ public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour, IPointerClickH
         string currentColor = QuizMultiplayerCoordinator.LocalPlayerColorHex;
         for (int i = 0; i < colorButtons.Count; i++)
         {
-            string colorHex = i < QuizNetworkRuntime.PlayerColorPalette.Length
-                ? QuizNetworkRuntime.NormalizeColorHex(QuizNetworkRuntime.PlayerColorPalette[i])
-                : string.Empty;
+            string colorHex =
+                i < QuizNetworkRuntime.PlayerColorPalette.Length
+                    ? QuizNetworkRuntime.NormalizeColorHex(QuizNetworkRuntime.PlayerColorPalette[i])
+                    : string.Empty;
             bool selected = string.Equals(
                 colorHex,
                 currentColor,
@@ -1960,7 +1978,9 @@ public sealed class QuizMultiplayerStatusOverlay : MonoBehaviour, IPointerClickH
     private void ApplyColorPickerVisibility()
     {
         if (colorPickerPanel)
-            colorPickerPanel.SetActive(colorPickerVisible && QuizNetworkRuntime.IsMultiplayerActive);
+            colorPickerPanel.SetActive(
+                colorPickerVisible && QuizNetworkRuntime.IsMultiplayerActive
+            );
     }
 
     private static string FormatPlayerCount(int players)
@@ -1988,6 +2008,8 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private const float MenuChatWidth = 360f;
     private const float MenuChatHeight = 236f;
     private const float MenuChatMessagesHeight = 166f;
+    private const float MenuChatPanelGap = 18f;
+    private const float MenuFallbackLobbyPanelHeight = 300f;
     private const float QuizChatWidth = 390f;
     private const float QuizChatHeight = 800f;
     private const float QuizChatMessagesHeight = 730f;
@@ -2001,12 +2023,8 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private const float PausedChatMessagesHeight = 70f;
     private const float PausedExpandedChatHeight = 330f;
     private const float PausedExpandedChatMessagesHeight = 260f;
-    private static readonly string[] SupportedImageExtensions =
-    {
-        ".png",
-        ".jpg",
-        ".jpeg",
-    };
+    private static readonly Vector2 MenuFallbackLobbyAnchor = new(0.108f, 0.73f);
+    private static readonly string[] SupportedImageExtensions = { ".png", ".jpg", ".jpeg" };
 
     private static QuizMultiplayerChatOverlay instance;
     private static bool overlayVisible = true;
@@ -2035,10 +2053,12 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private RectTransform imageModalPanelRect;
     private TMP_Text imageModalTitle;
     private Image imageModalImage;
+    private RectTransform mainMenuLobbyPanelRect;
     private bool expandedInQuiz;
     private bool fixedHeightDock;
     private float basePanelHeight = 124f;
     private float currentInputHeight = MinInputHeight;
+    private readonly Vector3[] mainMenuLobbyPanelCorners = new Vector3[4];
 
     public static void Ensure()
     {
@@ -2282,7 +2302,10 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         }
 
         string imageId = System.Guid.NewGuid().ToString("N");
-        int totalChunks = Mathf.Max(1, Mathf.CeilToInt(payload.Bytes.Length / (float)MaxImageChunkBytes));
+        int totalChunks = Mathf.Max(
+            1,
+            Mathf.CeilToInt(payload.Bytes.Length / (float)MaxImageChunkBytes)
+        );
         for (int i = 0; i < totalChunks; i++)
         {
             int start = i * MaxImageChunkBytes;
@@ -2351,13 +2374,20 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         var kb = Keyboard.current;
         return kb != null
             && kb.vKey.wasPressedThisFrame
-            && (kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed || kb.leftCommandKey.isPressed || kb.rightCommandKey.isPressed);
+            && (
+                kb.leftCtrlKey.isPressed
+                || kb.rightCtrlKey.isPressed
+                || kb.leftCommandKey.isPressed
+                || kb.rightCommandKey.isPressed
+            );
 #else
         return UnityEngine.Input.GetKeyDown(KeyCode.V)
-            && (UnityEngine.Input.GetKey(KeyCode.LeftControl)
+            && (
+                UnityEngine.Input.GetKey(KeyCode.LeftControl)
                 || UnityEngine.Input.GetKey(KeyCode.RightControl)
                 || UnityEngine.Input.GetKey(KeyCode.LeftCommand)
-                || UnityEngine.Input.GetKey(KeyCode.RightCommand));
+                || UnityEngine.Input.GetKey(KeyCode.RightCommand)
+            );
 #endif
     }
 
@@ -2425,20 +2455,22 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         byte[] chunk = new byte[chunkLength];
         reader.ReadBytesSafe(ref chunk, chunkLength);
 
-        if (!TryAcceptImageChunk(
-            $"request:{senderClientId}:{imageId}",
-            senderClientId,
-            requestedName,
-            null,
-            imageId,
-            fileName,
-            width,
-            height,
-            totalChunks,
-            chunkIndex,
-            chunk,
-            out var complete
-        ))
+        if (
+            !TryAcceptImageChunk(
+                $"request:{senderClientId}:{imageId}",
+                senderClientId,
+                requestedName,
+                null,
+                imageId,
+                fileName,
+                width,
+                height,
+                totalChunks,
+                chunkIndex,
+                chunk,
+                out var complete
+            )
+        )
         {
             return;
         }
@@ -2473,20 +2505,22 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         byte[] chunk = new byte[chunkLength];
         reader.ReadBytesSafe(ref chunk, chunkLength);
 
-        if (!TryAcceptImageChunk(
-            $"broadcast:{imageId}",
-            chatSenderClientId,
-            senderName,
-            timestamp,
-            imageId,
-            fileName,
-            width,
-            height,
-            totalChunks,
-            chunkIndex,
-            chunk,
-            out var complete
-        ))
+        if (
+            !TryAcceptImageChunk(
+                $"broadcast:{imageId}",
+                chatSenderClientId,
+                senderName,
+                timestamp,
+                imageId,
+                fileName,
+                width,
+                height,
+                totalChunks,
+                chunkIndex,
+                chunk,
+                out var complete
+            )
+        )
         {
             return;
         }
@@ -2521,8 +2555,26 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         string timestamp = CurrentTimestamp();
         string imageId = System.Guid.NewGuid().ToString("N");
 
-        AppendImageLine(timestamp, senderClientId, senderName, imageId, fileName, width, height, imageBytes);
-        BroadcastChatImage(senderClientId, timestamp, senderName, imageId, fileName, width, height, imageBytes);
+        AppendImageLine(
+            timestamp,
+            senderClientId,
+            senderName,
+            imageId,
+            fileName,
+            width,
+            height,
+            imageBytes
+        );
+        BroadcastChatImage(
+            senderClientId,
+            timestamp,
+            senderName,
+            imageId,
+            fileName,
+            width,
+            height,
+            imageBytes
+        );
     }
 
     private void BroadcastChatImage(
@@ -2536,7 +2588,10 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         byte[] imageBytes
     )
     {
-        int totalChunks = Mathf.Max(1, Mathf.CeilToInt(imageBytes.Length / (float)MaxImageChunkBytes));
+        int totalChunks = Mathf.Max(
+            1,
+            Mathf.CeilToInt(imageBytes.Length / (float)MaxImageChunkBytes)
+        );
         for (int i = 0; i < totalChunks; i++)
         {
             int start = i * MaxImageChunkBytes;
@@ -2597,9 +2652,13 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     {
         var rt = (RectTransform)transform;
         string sceneName = SceneManager.GetActiveScene().name;
-        bool mainMenu = string.Equals(sceneName, "MainMenu", System.StringComparison.OrdinalIgnoreCase);
+        bool mainMenu = string.Equals(
+            sceneName,
+            "MainMenu",
+            System.StringComparison.OrdinalIgnoreCase
+        );
         string layoutKey = mainMenu ? "main-menu" : "quiz-docked";
-        if (!force && appliedLayoutScene == layoutKey)
+        if (!mainMenu && !force && appliedLayoutScene == layoutKey)
             return;
 
         appliedLayoutScene = layoutKey;
@@ -2609,13 +2668,10 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         if (mainMenu)
         {
             fixedHeightDock = false;
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(252f, -782f);
             rt.sizeDelta = new Vector2(MenuChatWidth, MenuChatHeight);
             basePanelHeight = MenuChatHeight;
             SetMessageListHeight(MenuChatMessagesHeight);
+            ApplyMainMenuPlacement(rt);
             ApplyPanelHeight();
             RefreshInputHeight();
             return;
@@ -2633,6 +2689,59 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         SetDockedMessageListHeight();
         ApplyPanelHeight();
         RefreshInputHeight();
+    }
+
+    private void ApplyMainMenuPlacement(RectTransform rt)
+    {
+        rt.pivot = new Vector2(0f, 1f);
+
+        if (TryGetMainMenuLobbyPanel(out var panelRt) && rootCanvas)
+        {
+            var rootRt = rootCanvas.transform as RectTransform;
+            if (rootRt)
+            {
+                panelRt.GetWorldCorners(mainMenuLobbyPanelCorners);
+                Vector2 panelBottomLeft = rootRt.InverseTransformPoint(
+                    mainMenuLobbyPanelCorners[0]
+                );
+                Vector2 panelBottomRight = rootRt.InverseTransformPoint(
+                    mainMenuLobbyPanelCorners[3]
+                );
+                var rootRect = rootRt.rect;
+
+                rt.anchorMin = new Vector2(0f, 1f);
+                rt.anchorMax = new Vector2(0f, 1f);
+                rt.anchoredPosition = new Vector2(
+                    Mathf.Round(panelBottomLeft.x - rootRect.xMin),
+                    Mathf.Round(panelBottomLeft.y - rootRect.yMax - MenuChatPanelGap)
+                );
+
+                var size = rt.sizeDelta;
+                size.x = Mathf.Max(260f, panelBottomRight.x - panelBottomLeft.x);
+                rt.sizeDelta = size;
+                return;
+            }
+        }
+
+        rt.anchorMin = MenuFallbackLobbyAnchor;
+        rt.anchorMax = MenuFallbackLobbyAnchor;
+        rt.anchoredPosition = new Vector2(
+            0f,
+            -(MenuFallbackLobbyPanelHeight + MenuChatPanelGap)
+        );
+    }
+
+    private bool TryGetMainMenuLobbyPanel(out RectTransform panelRt)
+    {
+        if (!mainMenuLobbyPanelRect)
+        {
+            var panel = FindFirstObjectByType<MultiplayerMenuPanel>();
+            if (panel)
+                mainMenuLobbyPanelRect = panel.transform as RectTransform;
+        }
+
+        panelRt = mainMenuLobbyPanelRect;
+        return panelRt;
     }
 
     private static bool IsPauseMenuShowing()
@@ -2712,7 +2821,11 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 
     private void DragBy(Vector2 screenDelta)
     {
-        if (SceneManager.GetActiveScene().name.Equals("MainMenu", System.StringComparison.OrdinalIgnoreCase))
+        if (
+            SceneManager
+                .GetActiveScene()
+                .name.Equals("MainMenu", System.StringComparison.OrdinalIgnoreCase)
+        )
             return;
 
         var rt = (RectTransform)transform;
@@ -2722,7 +2835,11 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 
     private void ResizeBy(Vector2 screenDelta)
     {
-        if (SceneManager.GetActiveScene().name.Equals("MainMenu", System.StringComparison.OrdinalIgnoreCase))
+        if (
+            SceneManager
+                .GetActiveScene()
+                .name.Equals("MainMenu", System.StringComparison.OrdinalIgnoreCase)
+        )
             return;
 
         var rt = (RectTransform)transform;
@@ -2990,7 +3107,11 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         return input;
     }
 
-    private Button CreateButton(Transform parent, string labelText, UnityEngine.Events.UnityAction onClick)
+    private Button CreateButton(
+        Transform parent,
+        string labelText,
+        UnityEngine.Events.UnityAction onClick
+    )
     {
         var go = new GameObject(labelText, typeof(RectTransform));
         go.transform.SetParent(parent, false);
@@ -3037,10 +3158,17 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private void RefreshSendButton()
     {
         if (sendButton)
-            sendButton.interactable = !string.IsNullOrWhiteSpace(inputField ? inputField.text : null);
+            sendButton.interactable = !string.IsNullOrWhiteSpace(
+                inputField ? inputField.text : null
+            );
     }
 
-    private void AppendLine(string timestamp, ulong senderClientId, string senderName, string message)
+    private void AppendLine(
+        string timestamp,
+        ulong senderClientId,
+        string senderName,
+        string message
+    )
     {
         timestamp = NormalizeTimestamp(timestamp);
         senderName = NormalizeSenderName(senderName);
@@ -3068,7 +3196,8 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         layout.minHeight = 15f;
         layout.preferredHeight = 15f;
         lineGo.AddComponent<ChatLinePreferredHeight>().Configure(label, layout, 15f, 3f);
-        lineGo.AddComponent<ChatLineInteraction>()
+        lineGo
+            .AddComponent<ChatLineInteraction>()
             .Configure(label, $"{timestamp} {senderName}: {message}");
 
         lineObjects.Add(lineGo);
@@ -3096,7 +3225,9 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     {
         timestamp = NormalizeTimestamp(timestamp);
         senderName = NormalizeSenderName(senderName);
-        imageId = string.IsNullOrWhiteSpace(imageId) ? System.Guid.NewGuid().ToString("N") : imageId;
+        imageId = string.IsNullOrWhiteSpace(imageId)
+            ? System.Guid.NewGuid().ToString("N")
+            : imageId;
         fileName = SanitizeImageFileName(fileName);
         if (imageBytes == null || imageBytes.Length == 0 || !lineContainer)
             return;
@@ -3147,9 +3278,8 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         button.targetGraphic = preview;
         button.onClick.AddListener(() => ShowImageModal(payload.ImageId));
         float maxWidth = Mathf.Max(120f, ((RectTransform)transform).sizeDelta.x - 28f);
-        float aspect = payload.Width > 0 && payload.Height > 0
-            ? payload.Width / (float)payload.Height
-            : 1f;
+        float aspect =
+            payload.Width > 0 && payload.Height > 0 ? payload.Width / (float)payload.Height : 1f;
         float previewWidth = Mathf.Min(maxWidth, Mathf.Max(96f, payload.Width));
         float previewHeight = Mathf.Clamp(previewWidth / Mathf.Max(0.01f, aspect), 72f, 150f);
         if (previewHeight >= 150f)
@@ -3530,7 +3660,11 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         titleLayout.minHeight = 30f;
         titleLayout.preferredHeight = 30f;
 
-        var closeButton = CreateButton(headerGo.transform, "Close", () => imageModalRoot.SetActive(false));
+        var closeButton = CreateButton(
+            headerGo.transform,
+            "Close",
+            () => imageModalRoot.SetActive(false)
+        );
         var closeLayout = closeButton.GetComponent<LayoutElement>();
         closeLayout.minWidth = 72f;
         closeLayout.preferredWidth = 72f;
@@ -3554,7 +3688,13 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         string ext = System.IO.Path.GetExtension(path);
         for (int i = 0; i < SupportedImageExtensions.Length; i++)
         {
-            if (string.Equals(ext, SupportedImageExtensions[i], System.StringComparison.OrdinalIgnoreCase))
+            if (
+                string.Equals(
+                    ext,
+                    SupportedImageExtensions[i],
+                    System.StringComparison.OrdinalIgnoreCase
+                )
+            )
                 return true;
         }
 
@@ -3563,7 +3703,9 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 
     private static string SanitizeImageFileName(string fileName, string fallbackExtension = ".jpg")
     {
-        fileName = string.IsNullOrWhiteSpace(fileName) ? null : System.IO.Path.GetFileName(fileName);
+        fileName = string.IsNullOrWhiteSpace(fileName)
+            ? null
+            : System.IO.Path.GetFileName(fileName);
         if (string.IsNullOrWhiteSpace(fileName))
             fileName = $"image{fallbackExtension}";
 
@@ -3578,7 +3720,9 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 
     private static string ChangeImageExtension(string fileName, string extension)
     {
-        fileName = string.IsNullOrWhiteSpace(fileName) ? "image" : System.IO.Path.GetFileName(fileName);
+        fileName = string.IsNullOrWhiteSpace(fileName)
+            ? "image"
+            : System.IO.Path.GetFileName(fileName);
         string name = System.IO.Path.GetFileNameWithoutExtension(fileName);
         if (string.IsNullOrWhiteSpace(name))
             name = "image";
@@ -3745,8 +3889,16 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         if (
             System.Uri.TryCreate(value, System.UriKind.Absolute, out var uri)
             && (
-                string.Equals(uri.Scheme, System.Uri.UriSchemeHttp, System.StringComparison.OrdinalIgnoreCase)
-                || string.Equals(uri.Scheme, System.Uri.UriSchemeHttps, System.StringComparison.OrdinalIgnoreCase)
+                string.Equals(
+                    uri.Scheme,
+                    System.Uri.UriSchemeHttp,
+                    System.StringComparison.OrdinalIgnoreCase
+                )
+                || string.Equals(
+                    uri.Scheme,
+                    System.Uri.UriSchemeHttps,
+                    System.StringComparison.OrdinalIgnoreCase
+                )
             )
         )
         {
@@ -4101,11 +4253,7 @@ public sealed class ChatLineInteraction
             if (!ch.isVisible)
                 continue;
 
-            if (
-                !hasRun
-                || ch.lineNumber != runLine
-                || ch.bottomLeft.x > runMaxX + 4f
-            )
+            if (!hasRun || ch.lineNumber != runLine || ch.bottomLeft.x > runMaxX + 4f)
             {
                 if (hasRun)
                     AddSelectionRect(runMinX, runMaxX, runMinY, runMaxY);
@@ -4141,7 +4289,10 @@ public sealed class ChatLineInteraction
         rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
         rt.localPosition = new Vector3((minX + maxX) * 0.5f, (minY + maxY) * 0.5f, 0f);
-        rt.sizeDelta = new Vector2(Mathf.Max(2f, maxX - minX + 3f), Mathf.Max(8f, maxY - minY + 3f));
+        rt.sizeDelta = new Vector2(
+            Mathf.Max(2f, maxX - minX + 3f),
+            Mathf.Max(8f, maxY - minY + 3f)
+        );
         selectionImages.Add(image);
     }
 
@@ -4183,13 +4334,20 @@ public sealed class ChatLineInteraction
         var kb = Keyboard.current;
         return kb != null
             && kb.cKey.wasPressedThisFrame
-            && (kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed || kb.leftCommandKey.isPressed || kb.rightCommandKey.isPressed);
+            && (
+                kb.leftCtrlKey.isPressed
+                || kb.rightCtrlKey.isPressed
+                || kb.leftCommandKey.isPressed
+                || kb.rightCommandKey.isPressed
+            );
 #else
         return UnityEngine.Input.GetKeyDown(KeyCode.C)
-            && (UnityEngine.Input.GetKey(KeyCode.LeftControl)
+            && (
+                UnityEngine.Input.GetKey(KeyCode.LeftControl)
                 || UnityEngine.Input.GetKey(KeyCode.RightControl)
                 || UnityEngine.Input.GetKey(KeyCode.LeftCommand)
-                || UnityEngine.Input.GetKey(KeyCode.RightCommand));
+                || UnityEngine.Input.GetKey(KeyCode.RightCommand)
+            );
 #endif
     }
 
@@ -4197,8 +4355,16 @@ public sealed class ChatLineInteraction
     {
         return System.Uri.TryCreate(url, System.UriKind.Absolute, out var uri)
             && (
-                string.Equals(uri.Scheme, System.Uri.UriSchemeHttp, System.StringComparison.OrdinalIgnoreCase)
-                || string.Equals(uri.Scheme, System.Uri.UriSchemeHttps, System.StringComparison.OrdinalIgnoreCase)
+                string.Equals(
+                    uri.Scheme,
+                    System.Uri.UriSchemeHttp,
+                    System.StringComparison.OrdinalIgnoreCase
+                )
+                || string.Equals(
+                    uri.Scheme,
+                    System.Uri.UriSchemeHttps,
+                    System.StringComparison.OrdinalIgnoreCase
+                )
             );
     }
 }
@@ -4244,7 +4410,12 @@ public sealed class ChatLinePreferredHeight : MonoBehaviour
     private float lastWidth = -1f;
     private string lastText;
 
-    public void Configure(TMP_Text textLabel, LayoutElement layoutElement, float minimum, float extraPadding)
+    public void Configure(
+        TMP_Text textLabel,
+        LayoutElement layoutElement,
+        float minimum,
+        float extraPadding
+    )
     {
         label = textLabel;
         layout = layoutElement;
@@ -4341,7 +4512,10 @@ public static class ChatClipboardImageReader
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern System.IntPtr GetClipboardData(uint uFormat);
 
-    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    [System.Runtime.InteropServices.DllImport(
+        "user32.dll",
+        CharSet = System.Runtime.InteropServices.CharSet.Unicode
+    )]
     private static extern uint RegisterClipboardFormat(string lpszFormat);
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
@@ -4353,7 +4527,10 @@ public static class ChatClipboardImageReader
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern System.UIntPtr GlobalSize(System.IntPtr hMem);
 
-    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    [System.Runtime.InteropServices.DllImport(
+        "shell32.dll",
+        CharSet = System.Runtime.InteropServices.CharSet.Unicode
+    )]
     private static extern uint DragQueryFile(
         System.IntPtr hDrop,
         uint iFile,
@@ -4498,9 +4675,7 @@ public static class ChatClipboardImageReader
             pixelOffset += colors * 4;
         }
 
-        int rowStride = bitCount == 32
-            ? width * 4
-            : ((width * 3 + 3) / 4) * 4;
+        int rowStride = bitCount == 32 ? width * 4 : ((width * 3 + 3) / 4) * 4;
         if (pixelOffset < 0 || pixelOffset + rowStride * height > dib.Length)
             return false;
 
@@ -4551,8 +4726,17 @@ public static class ChatWindowsDropBridge
         if (initialized)
             return;
 
-        initialized = true;
-        WindowsDropTarget.Initialize();
+        initialized = WindowsDropTarget.Initialize();
+#endif
+    }
+
+    public static void Shutdown()
+    {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        WindowsDropTarget.Shutdown();
+        initialized = false;
+        lock (droppedFiles)
+            droppedFiles.Clear();
 #endif
     }
 
@@ -4587,7 +4771,10 @@ public static class ChatWindowsDropBridge
         [System.Runtime.InteropServices.DllImport("shell32.dll")]
         private static extern void DragFinish(System.IntPtr hDrop);
 
-        [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        [System.Runtime.InteropServices.DllImport(
+            "shell32.dll",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode
+        )]
         private static extern uint DragQueryFile(
             System.IntPtr hDrop,
             uint iFile,
@@ -4621,21 +4808,60 @@ public static class ChatWindowsDropBridge
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern System.IntPtr GetActiveWindow();
 
-        public static void Initialize()
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern System.IntPtr DefWindowProc(
+            System.IntPtr hWnd,
+            uint msg,
+            System.IntPtr wParam,
+            System.IntPtr lParam
+        );
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool IsWindow(System.IntPtr hWnd);
+
+        public static bool Initialize()
         {
             hwnd = GetMainWindowHandle();
             if (hwnd == System.IntPtr.Zero)
-                return;
+                return false;
 
             wndProcDelegate = WndProc;
             var newWndProc = System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(
                 wndProcDelegate
             );
-            previousWndProc = System.IntPtr.Size == 8
-                ? SetWindowLongPtr64(hwnd, GwlpWndproc, newWndProc)
-                : SetWindowLongPtr32(hwnd, GwlpWndproc, newWndProc);
+            previousWndProc =
+                System.IntPtr.Size == 8
+                    ? SetWindowLongPtr64(hwnd, GwlpWndproc, newWndProc)
+                    : SetWindowLongPtr32(hwnd, GwlpWndproc, newWndProc);
+
+            if (previousWndProc == System.IntPtr.Zero)
+            {
+                hwnd = System.IntPtr.Zero;
+                wndProcDelegate = null;
+                return false;
+            }
 
             DragAcceptFiles(hwnd, true);
+            return true;
+        }
+
+        public static void Shutdown()
+        {
+            if (hwnd != System.IntPtr.Zero && IsWindow(hwnd))
+            {
+                DragAcceptFiles(hwnd, false);
+                if (previousWndProc != System.IntPtr.Zero)
+                {
+                    if (System.IntPtr.Size == 8)
+                        SetWindowLongPtr64(hwnd, GwlpWndproc, previousWndProc);
+                    else
+                        SetWindowLongPtr32(hwnd, GwlpWndproc, previousWndProc);
+                }
+            }
+
+            hwnd = System.IntPtr.Zero;
+            previousWndProc = System.IntPtr.Zero;
+            wndProcDelegate = null;
         }
 
         public static void Drain(List<string> files)
@@ -4680,7 +4906,7 @@ public static class ChatWindowsDropBridge
 
             return previousWndProc != System.IntPtr.Zero
                 ? CallWindowProc(previousWndProc, hWnd, msg, wParam, lParam)
-                : System.IntPtr.Zero;
+                : DefWindowProc(hWnd, msg, wParam, lParam);
         }
 
         private static System.IntPtr GetMainWindowHandle()

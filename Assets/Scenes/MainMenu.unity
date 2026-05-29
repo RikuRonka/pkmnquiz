@@ -3928,7 +3928,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -0.0001449585}
+  m_AnchoredPosition: {x: 0, y: 0.000061035156}
   m_SizeDelta: {x: 0, y: 90}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!114 &543477989
@@ -4380,6 +4380,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 699753358}
+  - {fileID: 1845875352}
   m_Father: {fileID: 672506105}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
@@ -4976,12 +4977,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PatchNotesView
   notesText: {fileID: 1239978752}
-  patchNotes: "1.2.4\n- Fixed Gen 1 co-op session restore so guessed Pokemon now
-    reappear in the counter and grid after re-entering the quiz\n- Improved co-op
-    quiz layout by aligning the player panel and chat, removing duplicate lobby text,
-    and refining the background color slider\n- Added co-op chat image sharing from
-    clipboard paste and drag-and-drop, with clickable thumbnails and an in-game image
-    viewer \n- Improved co-op chat text with long paste support, selectable/copyable
+  patchNotes: "1.2.5\n- Added a color-coded co-op lobby player list with host labels
+    \n- Disabled main menu quiz selection while joined as a multiplayer client so
+    the lobby stays on the host's quiz \n- Improved lobby member refresh handling
+    so transient Unity Lobby errors keep showing the local player instead of leaving
+    the list empty\n - Moved the co-op menu chat overlay higher for a cleaner lobby
+    layout\n - Enabled vSync and capped the game to the monitor refresh rate to reduce
+    unnecessary GPU usage\n\n1.2.4\n- Fixed Gen 1 co-op session restore so guessed
+    Pokemon now reappear in the counter and grid after re-entering the quiz\n- Improved
+    co-op quiz layout by aligning the player panel and chat, removing duplicate lobby
+    text, and refining the background color slider\n- Added co-op chat image sharing
+    from clipboard paste and drag-and-drop, with clickable thumbnails and an in-game
+    image viewer \n- Improved co-op chat text with long paste support, selectable/copyable
     messages, and clickable web links\n- Fixed chat image upload crashes by sending
     image data in fragmented chunks, preserving normal-size images, and correcting
     upside-down pasted screenshots\n- Fixed co-op disconnect/shutdown scoreboard
@@ -5773,7 +5780,6 @@ RectTransform:
   - {fileID: 64693097}
   - {fileID: 308735327}
   - {fileID: 1900892193}
-  - {fileID: 1845875352}
   - {fileID: 552352876}
   - {fileID: 408610223}
   - {fileID: 2032678354}
@@ -13826,18 +13832,18 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1845875351}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.59502554, y: 0.59502554, z: 0.59502554}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1998583125}
-  m_Father: {fileID: 672506105}
+  m_Father: {fileID: 552352876}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 938.95605, y: 525}
-  m_SizeDelta: {x: 42.0878, y: 30}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1845875353
 MonoBehaviour:

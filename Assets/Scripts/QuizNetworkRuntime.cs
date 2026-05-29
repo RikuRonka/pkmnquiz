@@ -85,6 +85,24 @@ public static class QuizNetworkRuntime
         );
 
     public static event Action<string> StatusChanged;
+    public static bool IsApplicationQuitting => applicationQuitting;
+
+    private static bool applicationQuitting;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void RegisterApplicationQuitHandler()
+    {
+        applicationQuitting = false;
+        Application.quitting -= OnApplicationQuitting;
+        Application.quitting += OnApplicationQuitting;
+    }
+
+    private static void OnApplicationQuitting()
+    {
+        applicationQuitting = true;
+        ShutdownInternal(allowLobbyServiceCleanup: false);
+        ChatWindowsDropBridge.Shutdown();
+    }
 
     public readonly struct AvailableLobby
     {
@@ -124,13 +142,21 @@ public static class QuizNetworkRuntime
         public readonly string Name;
         public readonly string ColorHex;
         public readonly bool IsLocalPlayer;
+        public readonly bool IsHost;
 
-        public LobbyMemberInfo(string id, string name, string colorHex, bool isLocalPlayer)
+        public LobbyMemberInfo(
+            string id,
+            string name,
+            string colorHex,
+            bool isLocalPlayer,
+            bool isHost = false
+        )
         {
             Id = id ?? string.Empty;
             Name = NormalizeNickname(name);
             ColorHex = NormalizeColorHex(colorHex);
             IsLocalPlayer = isLocalPlayer;
+            IsHost = isHost;
         }
     }
 
@@ -378,30 +404,76 @@ public static class QuizNetworkRuntime
         if (string.IsNullOrEmpty(LobbyId))
             return members;
 
-        var lobby = await LobbyService.Instance.GetLobbyAsync(LobbyId);
+        Lobby lobby;
+        try
+        {
+            lobby = await LobbyService.Instance.GetLobbyAsync(LobbyId);
+        }
+        catch (LobbyServiceException)
+        {
+            return CreateLocalLobbyMemberFallback();
+        }
+        catch (NullReferenceException ex) when (IsLobbySdkWrappedNullReference(ex))
+        {
+            return CreateLocalLobbyMemberFallback();
+        }
+
         if (lobby?.Players == null)
             return members;
 
         string localPlayerId = GetSignedInPlayerId();
-        foreach (var player in lobby.Players)
+        for (int i = 0; i < lobby.Players.Count; i++)
         {
+            var player = lobby.Players[i];
             if (player == null)
                 continue;
 
-            string fallbackName =
-                player.Id == lobby.HostId ? GetLobbyData(lobby, LobbyHostNameKey) : "Player";
+            bool isHost = !string.IsNullOrEmpty(lobby.HostId)
+                ? string.Equals(player.Id, lobby.HostId, StringComparison.Ordinal)
+                : i == 0;
+            string fallbackName = isHost ? GetLobbyData(lobby, LobbyHostNameKey) : "Player";
             string name = GetPlayerName(player, fallbackName);
             string colorHex = GetPlayerColor(player, DefaultPlayerColor);
             bool isLocalPlayer =
                 !string.IsNullOrEmpty(localPlayerId)
                 && string.Equals(player.Id, localPlayerId, StringComparison.Ordinal);
-            members.Add(new LobbyMemberInfo(player.Id, name, colorHex, isLocalPlayer));
+            members.Add(new LobbyMemberInfo(player.Id, name, colorHex, isLocalPlayer, isHost));
         }
 
         return members;
     }
 
+    private static List<LobbyMemberInfo> CreateLocalLobbyMemberFallback()
+    {
+        var members = new List<LobbyMemberInfo>();
+        string localPlayerId = GetSignedInPlayerId();
+        bool isHost = NetworkManager.Singleton && NetworkManager.Singleton.IsServer;
+        members.Add(
+            new LobbyMemberInfo(
+                string.IsNullOrEmpty(localPlayerId) ? "local" : localPlayerId,
+                PlayerNickname,
+                PlayerColorHex,
+                isLocalPlayer: true,
+                isHost
+            )
+        );
+        return members;
+    }
+
+    private static bool IsLobbySdkWrappedNullReference(NullReferenceException ex)
+    {
+        return ex?.StackTrace?.IndexOf(
+            "Unity.Services.Lobbies.Internal.WrappedLobbyService",
+            StringComparison.Ordinal
+        ) >= 0;
+    }
+
     public static void Shutdown()
+    {
+        ShutdownInternal(allowLobbyServiceCleanup: !applicationQuitting);
+    }
+
+    private static void ShutdownInternal(bool allowLobbyServiceCleanup)
     {
         var manager = NetworkManager.Singleton;
         if (manager && manager.CustomMessagingManager != null)
@@ -409,20 +481,23 @@ public static class QuizNetworkRuntime
 
         QuizMultiplayerChatOverlay.ResetSession();
         QuizMultiplayerCoordinator.ClearSavedQuizSession();
+        QuizLobbyHeartbeat.Clear();
 
         bool wasHost = manager && manager.IsServer;
         string lobbyToDelete = LobbyId;
-        string playerId = GetSignedInPlayerId();
+        string playerId = allowLobbyServiceCleanup ? GetSignedInPlayerId() : null;
 
         if (manager && manager.IsListening)
             manager.Shutdown();
 
-        if (wasHost && !string.IsNullOrEmpty(lobbyToDelete))
-            _ = TryDeleteLobbyAsync(lobbyToDelete);
-        else if (!string.IsNullOrEmpty(lobbyToDelete) && !string.IsNullOrEmpty(playerId))
-            _ = TryRemovePlayerAsync(lobbyToDelete, playerId);
+        if (allowLobbyServiceCleanup)
+        {
+            if (wasHost && !string.IsNullOrEmpty(lobbyToDelete))
+                _ = TryDeleteLobbyAsync(lobbyToDelete);
+            else if (!string.IsNullOrEmpty(lobbyToDelete) && !string.IsNullOrEmpty(playerId))
+                _ = TryRemovePlayerAsync(lobbyToDelete, playerId);
+        }
 
-        QuizLobbyHeartbeat.Clear();
         JoinCode = null;
         RelayJoinCode = null;
         LobbyId = null;
@@ -432,7 +507,8 @@ public static class QuizNetworkRuntime
         ActiveQuizTypeFilter = null;
         HasActiveQuizSelection = false;
         GameSettings.ClearMultiplayer();
-        StatusChanged?.Invoke(null);
+        if (!applicationQuitting)
+            StatusChanged?.Invoke(null);
     }
 
     public static void ReturnToLobbyMenu(bool keepActiveQuizSelection = false)
@@ -1172,16 +1248,28 @@ public sealed class QuizLobbyHeartbeat : MonoBehaviour
             instance.lobbyId = null;
     }
 
+    private void OnDestroy()
+    {
+        lobbyId = null;
+        if (instance == this)
+            instance = null;
+    }
+
     private async void Update()
     {
-        if (string.IsNullOrEmpty(lobbyId) || Time.unscaledTime < nextHeartbeatTime)
+        if (
+            QuizNetworkRuntime.IsApplicationQuitting
+            || string.IsNullOrEmpty(lobbyId)
+            || Time.unscaledTime < nextHeartbeatTime
+        )
             return;
 
         nextHeartbeatTime = Time.unscaledTime + HeartbeatInterval;
+        string currentLobbyId = lobbyId;
 
         try
         {
-            await LobbyService.Instance.SendHeartbeatPingAsync(lobbyId);
+            await LobbyService.Instance.SendHeartbeatPingAsync(currentLobbyId);
         }
         catch
         {
