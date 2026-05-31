@@ -1638,6 +1638,15 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         if (QuizNetworkRuntime.IsMultiplayerClientOnly)
         {
+            DefocusUI();
+            bool requested = QuizMultiplayerCoordinator.RequestStateReload();
+            if (toast)
+            {
+                toast.Show(
+                    requested ? "Reloading quiz from host..." : "Could not request host sync.",
+                    requested ? 1.25f : 1.75f
+                );
+            }
             ApplyMultiplayerUiState();
             return;
         }
@@ -4080,6 +4089,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private void ApplyMultiplayerUiState()
     {
         bool multiplayerUi = QuizNetworkRuntime.IsMultiplayerActive || GameSettings.IsMultiplayer;
+        ApplyResetButtonMode(multiplayerUi);
         ApplyContentTopPadding(preserveScroll: true);
         ApplyMultiplayerRightDock(multiplayerUi, preserveScroll: true);
 
@@ -4099,7 +4109,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (shadowsBtn)
             shadowsBtn.interactable = canUseQuizActions;
         if (resetBtn)
-            resetBtn.interactable = canUseHostActions;
+            resetBtn.interactable = canUseHostActions || QuizNetworkRuntime.IsMultiplayerClientOnly;
         if (backToMenuBtn)
             backToMenuBtn.interactable = true;
         if (pauseBtn)
@@ -4116,10 +4126,29 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         RefreshButtonVisual(testBtn);
     }
 
+    private void ApplyResetButtonMode(bool multiplayerUi)
+    {
+        if (!resetBtn)
+            return;
+
+        bool clientResync = multiplayerUi && QuizNetworkRuntime.IsMultiplayerClientOnly;
+        SetButtonLabel(resetBtn, clientResync ? "Resync" : "Reset");
+    }
+
     private static void RefreshButtonVisual(Button button)
     {
         if (button && button.TryGetComponent<UiButtonHover>(out var hover))
             hover.RefreshDisabledVisual();
+    }
+
+    private static void SetButtonLabel(Button button, string text)
+    {
+        if (!button)
+            return;
+
+        var label = button.GetComponentInChildren<TMP_Text>(true);
+        if (label)
+            label.text = text;
     }
 
     public List<int> AcceptNetworkGuessOnServer(string currentText, bool suppressLocalInput)

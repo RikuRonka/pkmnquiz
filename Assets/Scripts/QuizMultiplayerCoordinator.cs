@@ -217,6 +217,28 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
     public static bool RequestReturnToMenu() => RequestAction(CoopAction.ReturnToMenu);
 
+    public static bool RequestStateReload()
+    {
+        if (!QuizNetworkRuntime.IsMultiplayerActive)
+            return false;
+
+        if (!instance)
+            Attach(FindFirstObjectByType<QuizManager>());
+
+        if (!instance)
+            return false;
+
+        try
+        {
+            return instance.RequestStateReloadInternal();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogException(ex);
+            return false;
+        }
+    }
+
     public static void NotifyLocalPlayerLeavingQuiz()
     {
         if (!QuizNetworkRuntime.IsMultiplayerClientOnly)
@@ -529,6 +551,37 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         using var writer = new FastBufferWriter(16, Allocator.Temp);
         writer.WriteValueSafe((int)action);
         manager.CustomMessagingManager.SendNamedMessage(ActionRequestMessage, 0UL, writer);
+    }
+
+    private bool RequestStateReloadInternal()
+    {
+        if (!manager)
+            manager = NetworkManager.Singleton;
+
+        if (!manager || !manager.IsListening || manager.CustomMessagingManager == null)
+            return false;
+
+        if (manager.IsServer)
+        {
+            if (!quiz)
+                quiz = FindFirstObjectByType<QuizManager>();
+            if (!quiz)
+                return false;
+
+            BroadcastScoreboard();
+            BroadcastStateToClients();
+            return true;
+        }
+
+        if (!manager.IsClient)
+            return false;
+
+        pendingState = null;
+        stateReceived = false;
+        SendNickname();
+        SendStateRequest();
+        nextStateRequest = Time.unscaledTime + 0.75f;
+        return true;
     }
 
     private void OnGuessMessage(ulong senderClientId, FastBufferReader reader)
@@ -1063,8 +1116,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             return;
         }
 
-        if (IsScoreboardAheadOfSolvedState(snapshot))
-            Debug.LogWarning("[Co-op] Applying quiz state even though scoreboard is ahead of solved IDs.");
+        bool scoreboardAhead = IsScoreboardAheadOfSolvedState(snapshot);
+        if (scoreboardAhead)
+            Debug.LogWarning("[Co-op] Applying incomplete quiz state; requesting another host sync.");
 
         pendingState = null;
         solvedByClientId.Clear();
@@ -1081,7 +1135,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             snapshot.Elapsed,
             snapshot.Running
         );
-        stateReceived = true;
+        stateReceived = !scoreboardAhead;
+        if (scoreboardAhead)
+            nextStateRequest = Time.unscaledTime + 0.75f;
     }
 
     private static bool SnapshotMatchesActiveQuiz(NetworkStateSnapshot snapshot)

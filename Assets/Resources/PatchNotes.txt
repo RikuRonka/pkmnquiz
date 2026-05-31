@@ -1,3 +1,7 @@
+1.2.8 - 31.5.2026
+- Added a co-op Resync backup action for joined players so they can force a fresh quiz state reload from the host
+- Improved co-op state sync retry handling when the player scores arrive but the guessed Pokemon grid is still incomplete
+
 1.2.7 - 31.5.2026
 - Fixed the lobby chat overlay showing on top of the patch notes panel
 - Fixed large score counters like 1210/1210 so they fit on screen
