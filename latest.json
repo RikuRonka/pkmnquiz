@@ -9,7 +9,8 @@
     "Fixed co-op lobbies staying open when the host closes the game with Alt+F4",
     "Fixed Full Quiz and type quiz tile sizing so hidden white squares stay visible",
     "Improved type quiz layouts with two columns and more stable column resizing",
-    "Reveal type and Reveal shadow now scroll to the revealed Pokémon"
+    "Reveal type and Reveal shadow now scroll to the revealed Pokémon",
+    "Shadow-revealed Pokémon can now be enlarged with the Ctrl preview"
   ],
   "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.7.zip"
 }

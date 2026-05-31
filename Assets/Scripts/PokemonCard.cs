@@ -52,6 +52,7 @@ public class PokemonCard : MonoBehaviour
     private Quaternion baseRotation;
     public Pokemon Bound;
     public bool IsRevealed { get; private set; }
+    public bool IsShadowed { get; private set; }
 
     [SerializeField]
     Image background;
@@ -159,6 +160,7 @@ public class PokemonCard : MonoBehaviour
     {
         Bound = p;
         IsRevealed = true;
+        IsShadowed = false;
 
         data = p;
         loadedSprite = SpriteLibrary.Instance.ByPokemon(p);
@@ -244,6 +246,7 @@ public class PokemonCard : MonoBehaviour
     {
         Bound = p;
         IsRevealed = false;
+        IsShadowed = false;
         spriteImage.sprite = null;
         data = p;
         revealed = false;
@@ -300,6 +303,8 @@ public class PokemonCard : MonoBehaviour
 
         if (enabled)
         {
+            IsShadowed = true;
+
             // overwrite any type hint
             HideTypeIcons();
 
@@ -314,6 +319,7 @@ public class PokemonCard : MonoBehaviour
         }
         else
         {
+            IsShadowed = false;
             spriteImage.color = _normalColor;
 
             if (spriteImage)
@@ -329,6 +335,7 @@ public class PokemonCard : MonoBehaviour
             return;
 
         IsRevealed = true;
+        IsShadowed = false;
         spriteImage.sprite = sprite;
         spriteImage.color = _normalColor;
 

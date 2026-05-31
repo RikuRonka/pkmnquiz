@@ -17,11 +17,13 @@ public class PokemonCardHover
 
     // Global pinned state (one modal for all cards)
     private static bool s_pinned;
+    private static int s_ctrlHandledFrame = -1;
 
     void Awake() => card = GetComponent<PokemonCard>();
 
     bool CanShowTooltip => card != null && card.IsRevealed && card.Pokemon != null;
-    bool CanShowModal => card != null && card.IsRevealed && card.Pokemon != null;
+    bool CanShowModal =>
+        card != null && (card.IsRevealed || card.IsShadowed) && card.Pokemon != null;
 
     public void OnPointerEnter(PointerEventData e)
     {
@@ -61,12 +63,26 @@ public class PokemonCardHover
 
     void Update()
     {
+        bool ctrlPressed = CtrlPressedThisFrame();
+        if (ctrlPressed && s_ctrlHandledFrame == Time.frameCount)
+            ctrlPressed = false;
+
+        if (ctrlPressed && s_pinned)
+        {
+            s_ctrlHandledFrame = Time.frameCount;
+            s_pinned = false;
+            PokemonPreviewModal.Instance?.Hide();
+            TooltipManager.Instance?.Hide();
+            return;
+        }
+
         // Only toggle when we're hovering a card (prevents Ctrl anywhere toggling randomly)
         if (!_hovering)
             return;
 
-        if (CtrlPressedThisFrame())
+        if (ctrlPressed)
         {
+            s_ctrlHandledFrame = Time.frameCount;
             // Toggle
             s_pinned = !s_pinned;
 

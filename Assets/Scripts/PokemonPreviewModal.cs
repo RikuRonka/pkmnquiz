@@ -23,6 +23,7 @@ public class PokemonPreviewModal : MonoBehaviour
 
     public bool IsVisible => _visible;
     private int _currentPokemonId = -1;
+    private bool _currentShadowPreview;
 
     public static PokemonPreviewModal Ensure(PokemonCard cardPrefab)
     {
@@ -97,11 +98,14 @@ public class PokemonPreviewModal : MonoBehaviour
         if (p == null)
             return;
 
+        bool showShadow = source.IsShadowed && !source.IsRevealed;
+
         // If already showing this exact pokemon, do nothing (prevents Bind/Reveal flicker).
-        if (_visible && _currentPokemonId == p.id)
+        if (_visible && _currentPokemonId == p.id && _currentShadowPreview == showShadow)
             return;
 
         _currentPokemonId = p.id;
+        _currentShadowPreview = showShadow;
 
         _sourceCard = source;
 
@@ -131,17 +135,24 @@ public class PokemonPreviewModal : MonoBehaviour
         // Bind same Pokémon and copy reveal state
         _cardInstance.Bind(p);
 
-        var spr = source.CurrentSprite;
-        if (spr != null)
+        if (showShadow)
         {
-            _cardInstance.Reveal(spr); // guarantees no placeholder
+            _cardInstance.SetShadowMode(true);
         }
         else
         {
-            // Fallback if for some reason source sprite is missing
-            _cardInstance.Reveal(); // uses loadedSprite if available
+            var spr = source.CurrentSprite;
+            if (spr != null)
+            {
+                _cardInstance.Reveal(spr); // guarantees no placeholder
+            }
+            else
+            {
+                // Fallback if for some reason source sprite is missing
+                _cardInstance.Reveal(); // uses loadedSprite if available
+            }
         }
-        if (source.HintVisible && p != null && p.types != null)
+        if (!showShadow && source.HintVisible && p != null && p.types != null)
             _cardInstance.ShowTypeHint(p.types);
 
         // Big scale
@@ -156,6 +167,7 @@ public class PokemonPreviewModal : MonoBehaviour
     {
         _visible = false;
         _sourceCard = null;
+        _currentShadowPreview = false;
         gameObject.SetActive(false);
     }
 
@@ -163,6 +175,7 @@ public class PokemonPreviewModal : MonoBehaviour
     {
         _visible = false;
         _sourceCard = null;
+        _currentShadowPreview = false;
         gameObject.SetActive(false);
     }
 }
