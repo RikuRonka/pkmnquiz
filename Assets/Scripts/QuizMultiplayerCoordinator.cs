@@ -364,6 +364,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
                 solvedByClientId.Clear();
             }
             BroadcastScoreboard();
+            BroadcastStateToClients();
         }
         else if (manager && manager.IsClient)
         {
@@ -895,6 +896,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
     private void OnStateRequestMessage(ulong senderClientId, FastBufferReader reader)
     {
+        TryRestoreSavedQuizSessionForCurrentQuiz();
         SendStateToClient(senderClientId);
     }
 
@@ -964,6 +966,20 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         manager.CustomMessagingManager.SendNamedMessage(StateMessage, clientId, writer);
     }
 
+    private void BroadcastStateToClients()
+    {
+        if (!manager || !manager.IsServer)
+            return;
+
+        foreach (var clientId in manager.ConnectedClientsIds)
+        {
+            if (clientId == manager.LocalClientId)
+                continue;
+
+            SendStateToClient(clientId);
+        }
+    }
+
     private void OnStateMessage(ulong senderClientId, FastBufferReader reader)
     {
         reader.ReadValueSafe(out int generation);
@@ -1015,6 +1031,23 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             return;
         }
 
+        if (!SnapshotMatchesActiveQuiz(snapshot))
+        {
+            pendingState = null;
+            stateReceived = false;
+            nextStateRequest = 0f;
+            return;
+        }
+
+        if (IsScoreboardAheadOfSolvedState(snapshot))
+        {
+            ApplyScoreboard(snapshot.Scoreboard);
+            pendingState = null;
+            stateReceived = false;
+            nextStateRequest = 0f;
+            return;
+        }
+
         pendingState = null;
         solvedByClientId.Clear();
         foreach (var kv in snapshot.SolvedOwners)
@@ -1031,6 +1064,39 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             snapshot.Running
         );
         stateReceived = true;
+    }
+
+    private static bool SnapshotMatchesActiveQuiz(NetworkStateSnapshot snapshot)
+    {
+        if (
+            !QuizNetworkRuntime.IsMultiplayerClientOnly
+            || !QuizNetworkRuntime.HasActiveQuizSelection
+        )
+            return true;
+
+        return snapshot.Generation == QuizNetworkRuntime.ActiveQuizGeneration
+            && string.Equals(
+                NormalizeSavedTypeFilter(snapshot.TypeFilter),
+                NormalizeSavedTypeFilter(QuizNetworkRuntime.ActiveQuizTypeFilter),
+                System.StringComparison.Ordinal
+            );
+    }
+
+    private static bool IsScoreboardAheadOfSolvedState(NetworkStateSnapshot snapshot)
+    {
+        int scoreTotal = ScoreboardSolvedTotal(snapshot.Scoreboard);
+        return scoreTotal > snapshot.SolvedIds.Count;
+    }
+
+    private static int ScoreboardSolvedTotal(IReadOnlyList<PlayerScore> scoreboard)
+    {
+        if (scoreboard == null)
+            return 0;
+
+        int total = 0;
+        for (int i = 0; i < scoreboard.Count; i++)
+            total += Mathf.Max(0, scoreboard[i].Count);
+        return total;
     }
 
     private void BroadcastTimer()
@@ -1995,6 +2061,8 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private const string ChatBroadcastMessage = "pkmnquiz_chat";
     private const string ChatImageRequestMessage = "pkmnquiz_chat_image_request";
     private const string ChatImageBroadcastMessage = "pkmnquiz_chat_image";
+    private const string ChatImageDeleteRequestMessage = "pkmnquiz_chat_image_delete_request";
+    private const string ChatImageDeleteBroadcastMessage = "pkmnquiz_chat_image_delete";
     private const int MessageSize = 32768;
     private const int MaxChatMessageChunkBytes = 24000;
     private const int MaxImageChunkBytes = 24000;
@@ -2032,6 +2100,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private readonly List<GameObject> lineObjects = new();
     private readonly Dictionary<string, PendingChatImage> pendingImages = new();
     private readonly Dictionary<string, ChatImagePayload> imagesById = new();
+    private readonly Dictionary<string, GameObject> imageLineById = new();
     private readonly Queue<string> imageIdOrder = new();
     private Canvas rootCanvas;
     private CanvasGroup canvasGroup;
@@ -2053,6 +2122,22 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private RectTransform imageModalPanelRect;
     private TMP_Text imageModalTitle;
     private Image imageModalImage;
+    private Button imageModalDeleteButton;
+    private LayoutElement imageModalHeaderLayout;
+    private LayoutElement imageModalTitleLayout;
+    private LayoutElement imageModalImageLayout;
+    private string imageModalCurrentImageId;
+    private GameObject imageSendPreviewRoot;
+    private RectTransform imageSendPreviewPanelRect;
+    private TMP_Text imageSendPreviewTitle;
+    private TMP_Text imageSendPreviewMeta;
+    private Image imageSendPreviewImage;
+    private LayoutElement imageSendPreviewTitleLayout;
+    private LayoutElement imageSendPreviewMetaLayout;
+    private LayoutElement imageSendPreviewButtonsLayout;
+    private PreparedChatImage pendingOutgoingImage;
+    private ChatImagePayload pendingOutgoingPreviewPayload;
+    private bool hasPendingOutgoingImage;
     private RectTransform mainMenuLobbyPanelRect;
     private bool expandedInQuiz;
     private bool fixedHeightDock;
@@ -2145,10 +2230,16 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         foreach (var payload in imagesById.Values)
             payload?.Destroy();
         imagesById.Clear();
+        imageLineById.Clear();
         imageIdOrder.Clear();
         pendingImages.Clear();
         if (imageModalRoot)
             Destroy(imageModalRoot);
+        ClearPendingOutgoingImage();
+        if (imageSendPreviewRoot)
+            Destroy(imageSendPreviewRoot);
+        if (instance == this)
+            ChatWindowsDropBridge.Shutdown();
 
         if (instance == this)
             instance = null;
@@ -2204,6 +2295,10 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
                 ChatImageRequestMessage,
                 OnChatImageRequestMessage
             );
+            manager.CustomMessagingManager.RegisterNamedMessageHandler(
+                ChatImageDeleteRequestMessage,
+                OnChatImageDeleteRequestMessage
+            );
         }
 
         manager.CustomMessagingManager.RegisterNamedMessageHandler(
@@ -2213,6 +2308,10 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         manager.CustomMessagingManager.RegisterNamedMessageHandler(
             ChatImageBroadcastMessage,
             OnChatImageBroadcastMessage
+        );
+        manager.CustomMessagingManager.RegisterNamedMessageHandler(
+            ChatImageDeleteBroadcastMessage,
+            OnChatImageDeleteBroadcastMessage
         );
         registered = true;
     }
@@ -2231,10 +2330,16 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         {
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(ChatRequestMessage);
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(ChatImageRequestMessage);
+            manager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                ChatImageDeleteRequestMessage
+            );
         }
 
         manager.CustomMessagingManager.UnregisterNamedMessageHandler(ChatBroadcastMessage);
         manager.CustomMessagingManager.UnregisterNamedMessageHandler(ChatImageBroadcastMessage);
+        manager.CustomMessagingManager.UnregisterNamedMessageHandler(
+            ChatImageDeleteBroadcastMessage
+        );
         registered = false;
         manager = null;
         registeredAsServer = false;
@@ -2278,7 +2383,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         }
     }
 
-    private void SendImageBytes(byte[] sourceBytes, string sourceName)
+    private void PreviewImageBeforeSend(byte[] sourceBytes, string sourceName)
     {
         if (!manager || !manager.IsListening)
             RegisterHandlers();
@@ -2286,6 +2391,16 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             return;
 
         if (!TryPrepareImagePayload(sourceBytes, sourceName, out var payload))
+            return;
+
+        ShowImageSendPreview(payload);
+    }
+
+    private void SendPreparedImagePayload(PreparedChatImage payload)
+    {
+        if (!manager || !manager.IsListening)
+            RegisterHandlers();
+        if (!manager || !manager.IsListening)
             return;
 
         if (manager.IsServer)
@@ -2342,7 +2457,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             return;
 
         if (ChatClipboardImageReader.TryGetImageBytes(out var imageBytes, out var sourceName))
-            SendImageBytes(imageBytes, sourceName);
+            PreviewImageBeforeSend(imageBytes, sourceName);
     }
 
     private void HandleDroppedImageFiles()
@@ -2360,7 +2475,10 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 
         try
         {
-            SendImageBytes(System.IO.File.ReadAllBytes(path), System.IO.Path.GetFileName(path));
+            PreviewImageBeforeSend(
+                System.IO.File.ReadAllBytes(path),
+                System.IO.Path.GetFileName(path)
+            );
         }
         catch (System.Exception ex)
         {
@@ -2725,10 +2843,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 
         rt.anchorMin = MenuFallbackLobbyAnchor;
         rt.anchorMax = MenuFallbackLobbyAnchor;
-        rt.anchoredPosition = new Vector2(
-            0f,
-            -(MenuFallbackLobbyPanelHeight + MenuChatPanelGap)
-        );
+        rt.anchoredPosition = new Vector2(0f, -(MenuFallbackLobbyPanelHeight + MenuChatPanelGap));
     }
 
     private bool TryGetMainMenuLobbyPanel(out RectTransform panelRt)
@@ -3122,6 +3237,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         var button = go.AddComponent<Button>();
         button.targetGraphic = image;
         button.onClick.AddListener(onClick);
+        button.GetComponent<RectTransform>().sizeDelta = new Vector2(56f, 8f);
 
         var layout = go.AddComponent<LayoutElement>();
         layout.minWidth = 56f;
@@ -3205,8 +3321,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         {
             var old = lineObjects[0];
             lineObjects.RemoveAt(0);
-            if (old)
-                Destroy(old);
+            DestroyChatLine(old);
         }
 
         StartCoroutine(CoScrollToBottom());
@@ -3235,10 +3350,12 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         if (!TryCreateImagePayload(imageId, fileName, width, height, imageBytes, out var payload))
             return;
 
+        payload.SenderClientId = senderClientId;
         StoreImagePayload(payload);
 
         var lineGo = new GameObject("Image Message", typeof(RectTransform));
         lineGo.transform.SetParent(lineContainer, false);
+        lineGo.AddComponent<ChatImageLineMarker>().ImageId = payload.ImageId;
 
         var lineImage = lineGo.AddComponent<Image>();
         lineImage.color = new Color(0f, 0f, 0f, 0.12f);
@@ -3291,20 +3408,171 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         previewLayout.minWidth = previewWidth;
         previewLayout.preferredWidth = previewWidth;
 
+        if (CanDeleteImage(senderClientId))
+            CreateImageDeleteButton(buttonGo.transform, payload.ImageId);
+
         var lineLayout = lineGo.AddComponent<LayoutElement>();
         lineLayout.minHeight = previewHeight + 24f;
         lineLayout.preferredHeight = previewHeight + 24f;
 
         lineObjects.Add(lineGo);
+        imageLineById[payload.ImageId] = lineGo;
         while (lineObjects.Count > MaxChatLines)
         {
             var old = lineObjects[0];
             lineObjects.RemoveAt(0);
-            if (old)
-                Destroy(old);
+            DestroyChatLine(old);
         }
 
         StartCoroutine(CoScrollToBottom());
+    }
+
+    private void DestroyChatLine(GameObject lineGo)
+    {
+        if (!lineGo)
+            return;
+
+        if (lineGo.TryGetComponent(out ChatImageLineMarker marker))
+        {
+            if (!string.IsNullOrWhiteSpace(marker.ImageId))
+                imageLineById.Remove(marker.ImageId);
+        }
+
+        Destroy(lineGo);
+    }
+
+    private bool CanDeleteImage(ulong senderClientId)
+    {
+        if (!manager || !manager.IsListening)
+            RegisterHandlers();
+
+        return manager && manager.IsListening && senderClientId == manager.LocalClientId;
+    }
+
+    private Button CreateImageDeleteButton(Transform parent, string imageId)
+    {
+        var go = new GameObject("Delete Image", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(1f, 1f);
+        rt.anchoredPosition = new Vector2(-4f, -4f);
+        rt.sizeDelta = new Vector2(24f, 24f);
+
+        var image = go.AddComponent<Image>();
+        image.color = new Color(0.82f, 0.06f, 0.08f, 0.96f);
+
+        var button = go.AddComponent<Button>();
+        button.targetGraphic = image;
+        button.onClick.AddListener(() =>
+        {
+            string targetImageId = string.IsNullOrWhiteSpace(imageId)
+                ? imageModalCurrentImageId
+                : imageId;
+            RequestDeleteImage(targetImageId);
+        });
+
+        var labelGo = new GameObject("Text", typeof(RectTransform));
+        labelGo.transform.SetParent(go.transform, false);
+        var labelRt = (RectTransform)labelGo.transform;
+        labelRt.anchorMin = Vector2.zero;
+        labelRt.anchorMax = Vector2.one;
+        labelRt.offsetMin = Vector2.zero;
+        labelRt.offsetMax = Vector2.zero;
+
+        var label = labelGo.AddComponent<TextMeshProUGUI>();
+        label.text = "X";
+        label.fontSize = 18f;
+        label.fontStyle = FontStyles.Bold;
+        label.color = Color.white;
+        label.alignment = TextAlignmentOptions.Center;
+        label.raycastTarget = false;
+
+        go.AddComponent<ChatHoverTooltip>().Configure("delete photo?");
+        return button;
+    }
+
+    private void RequestDeleteImage(string imageId)
+    {
+        if (string.IsNullOrWhiteSpace(imageId))
+            return;
+        if (!manager || !manager.IsListening)
+            RegisterHandlers();
+        if (!manager || !manager.IsListening || manager.CustomMessagingManager == null)
+            return;
+        if (!imagesById.TryGetValue(imageId, out var payload))
+            return;
+        if (!CanDeleteImage(payload.SenderClientId))
+            return;
+
+        if (manager.IsServer)
+        {
+            DeleteImageLocally(imageId);
+            BroadcastChatImageDelete(imageId);
+            return;
+        }
+
+        using var writer = new FastBufferWriter(ChatWriterCapacity(imageId), Allocator.Temp);
+        writer.WriteValueSafe(imageId);
+        manager.CustomMessagingManager.SendNamedMessage(ChatImageDeleteRequestMessage, 0UL, writer);
+    }
+
+    private void OnChatImageDeleteRequestMessage(ulong senderClientId, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out string imageId);
+        if (string.IsNullOrWhiteSpace(imageId))
+            return;
+        if (!imagesById.TryGetValue(imageId, out var payload))
+            return;
+        if (payload.SenderClientId != senderClientId)
+            return;
+
+        DeleteImageLocally(imageId);
+        BroadcastChatImageDelete(imageId);
+    }
+
+    private void BroadcastChatImageDelete(string imageId)
+    {
+        if (!manager || !manager.IsServer || manager.CustomMessagingManager == null)
+            return;
+
+        using var writer = new FastBufferWriter(ChatWriterCapacity(imageId), Allocator.Temp);
+        writer.WriteValueSafe(imageId);
+        manager.CustomMessagingManager.SendNamedMessageToAll(
+            ChatImageDeleteBroadcastMessage,
+            writer
+        );
+    }
+
+    private void OnChatImageDeleteBroadcastMessage(ulong senderClientId, FastBufferReader reader)
+    {
+        if (manager && manager.IsServer)
+            return;
+
+        reader.ReadValueSafe(out string imageId);
+        DeleteImageLocally(imageId);
+    }
+
+    private void DeleteImageLocally(string imageId)
+    {
+        if (string.IsNullOrWhiteSpace(imageId))
+            return;
+
+        if (imageLineById.Remove(imageId, out var lineGo) && lineGo)
+        {
+            lineObjects.Remove(lineGo);
+            Destroy(lineGo);
+        }
+
+        if (imagesById.Remove(imageId, out var payload))
+            payload.Destroy();
+
+        if (string.Equals(imageModalCurrentImageId, imageId, System.StringComparison.Ordinal))
+        {
+            imageModalCurrentImageId = null;
+            if (imageModalRoot)
+                imageModalRoot.SetActive(false);
+        }
     }
 
     private System.Collections.IEnumerator CoScrollToBottom()
@@ -3549,9 +3817,12 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         if (!imageModalRoot || !imageModalImage)
             return;
 
+        imageModalCurrentImageId = payload.ImageId;
         imageModalTitle.text = payload.FileName;
         imageModalImage.sprite = payload.Sprite;
         imageModalImage.preserveAspect = true;
+        if (imageModalDeleteButton)
+            imageModalDeleteButton.gameObject.SetActive(CanDeleteImage(payload.SenderClientId));
 
         float canvasW = 1120f;
         float canvasH = 820f;
@@ -3562,8 +3833,8 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         }
 
         var rt = (RectTransform)imageModalImage.transform;
-        float maxW = Mathf.Min(1280f, canvasW - 80f);
-        float maxH = Mathf.Min(820f, canvasH - 132f);
+        float maxW = Mathf.Min(1280f, canvasW - 128f);
+        float maxH = Mathf.Min(820f, canvasH - 196f);
         float aspect = payload.Width / (float)Mathf.Max(1, payload.Height);
         float w = maxW;
         float h = w / Mathf.Max(0.01f, aspect);
@@ -3573,11 +3844,17 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             w = h * aspect;
         }
         rt.sizeDelta = new Vector2(w, h);
+        SetLayoutSize(imageModalImageLayout, w, h);
+
+        float panelW = Mathf.Min(canvasW - 48f, Mathf.Max(560f, w + 72f));
+        float panelH = Mathf.Min(canvasH - 48f, h + 136f);
         if (imageModalPanelRect)
-            imageModalPanelRect.sizeDelta = new Vector2(
-                Mathf.Min(canvasW - 40f, Mathf.Max(520f, w + 36f)),
-                Mathf.Min(canvasH - 40f, h + 92f)
-            );
+            imageModalPanelRect.sizeDelta = new Vector2(panelW, panelH);
+        float headerW = Mathf.Max(360f, panelW - 36f);
+        SetLayoutWidth(imageModalHeaderLayout, headerW);
+        if (imageModalTitleLayout)
+            imageModalTitleLayout.preferredWidth = Mathf.Max(220f, headerW - 88f);
+
         imageModalRoot.SetActive(true);
     }
 
@@ -3627,11 +3904,11 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
 
         var headerGo = new GameObject("Header", typeof(RectTransform));
         headerGo.transform.SetParent(panel.transform, false);
-        var headerLayout = headerGo.AddComponent<LayoutElement>();
-        headerLayout.minWidth = 1084f;
-        headerLayout.preferredWidth = 1084f;
-        headerLayout.minHeight = 30f;
-        headerLayout.preferredHeight = 30f;
+        imageModalHeaderLayout = headerGo.AddComponent<LayoutElement>();
+        imageModalHeaderLayout.minWidth = 1084f;
+        imageModalHeaderLayout.preferredWidth = 1084f;
+        imageModalHeaderLayout.minHeight = 30f;
+        imageModalHeaderLayout.preferredHeight = 30f;
 
         var header = headerGo.AddComponent<HorizontalLayoutGroup>();
         header.childAlignment = TextAnchor.MiddleCenter;
@@ -3653,12 +3930,12 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         imageModalTitle.overflowMode = TextOverflowModes.Ellipsis;
         imageModalTitle.richText = false;
         imageModalTitle.raycastTarget = false;
-        var titleLayout = titleGo.AddComponent<LayoutElement>();
-        titleLayout.flexibleWidth = 1f;
-        titleLayout.minWidth = 320f;
-        titleLayout.preferredWidth = 984f;
-        titleLayout.minHeight = 30f;
-        titleLayout.preferredHeight = 30f;
+        imageModalTitleLayout = titleGo.AddComponent<LayoutElement>();
+        imageModalTitleLayout.flexibleWidth = 1f;
+        imageModalTitleLayout.minWidth = 220f;
+        imageModalTitleLayout.preferredWidth = 984f;
+        imageModalTitleLayout.minHeight = 30f;
+        imageModalTitleLayout.preferredHeight = 30f;
 
         var closeButton = CreateButton(
             headerGo.transform,
@@ -3676,8 +3953,295 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         imageModalImage = imageGo.AddComponent<Image>();
         imageModalImage.color = Color.white;
         imageModalImage.preserveAspect = true;
+        imageModalImageLayout = imageGo.AddComponent<LayoutElement>();
+        imageModalImageLayout.minWidth = 320f;
+        imageModalImageLayout.preferredWidth = 320f;
+        imageModalImageLayout.minHeight = 180f;
+        imageModalImageLayout.preferredHeight = 180f;
+        imageModalDeleteButton = CreateImageDeleteButton(imageGo.transform, null);
+        imageModalDeleteButton.gameObject.SetActive(false);
 
         imageModalRoot.SetActive(false);
+    }
+
+    private void ShowImageSendPreview(PreparedChatImage payload)
+    {
+        ClearPendingOutgoingImage();
+
+        string previewId = "pending-outgoing-" + System.Guid.NewGuid().ToString("N");
+        if (
+            !TryCreateImagePayload(
+                previewId,
+                payload.FileName,
+                payload.Width,
+                payload.Height,
+                payload.Bytes,
+                out pendingOutgoingPreviewPayload
+            )
+        )
+        {
+            return;
+        }
+
+        pendingOutgoingImage = payload;
+        hasPendingOutgoingImage = true;
+
+        EnsureImageSendPreviewModal();
+        if (!imageSendPreviewRoot || !imageSendPreviewImage)
+        {
+            ClearPendingOutgoingImage();
+            return;
+        }
+
+        imageSendPreviewTitle.text = $"Send {payload.FileName}?";
+        imageSendPreviewMeta.text =
+            $"{payload.Width} x {payload.Height} - {FormatImageByteCount(payload.Bytes?.Length ?? 0)}";
+        imageSendPreviewImage.sprite = pendingOutgoingPreviewPayload.Sprite;
+        imageSendPreviewImage.preserveAspect = true;
+
+        ResizeImageSendPreview(payload.Width, payload.Height);
+        imageSendPreviewRoot.SetActive(true);
+    }
+
+    private void ConfirmPendingImageSend()
+    {
+        if (!hasPendingOutgoingImage)
+            return;
+
+        var payload = pendingOutgoingImage;
+        ClearPendingOutgoingImage();
+        SendPreparedImagePayload(payload);
+    }
+
+    private void CancelPendingImageSend()
+    {
+        ClearPendingOutgoingImage();
+        if (inputField)
+        {
+            inputField.ActivateInputField();
+            inputField.Select();
+        }
+    }
+
+    private void ClearPendingOutgoingImage()
+    {
+        hasPendingOutgoingImage = false;
+        pendingOutgoingImage = default;
+
+        if (pendingOutgoingPreviewPayload != null)
+        {
+            pendingOutgoingPreviewPayload.Destroy();
+            pendingOutgoingPreviewPayload = null;
+        }
+
+        if (imageSendPreviewImage)
+            imageSendPreviewImage.sprite = null;
+        if (imageSendPreviewRoot)
+            imageSendPreviewRoot.SetActive(false);
+    }
+
+    private void ResizeImageSendPreview(int width, int height)
+    {
+        if (!imageSendPreviewRoot || !imageSendPreviewImage)
+            return;
+
+        float canvasW = 1120f;
+        float canvasH = 820f;
+        if (imageSendPreviewRoot.transform.parent is RectTransform canvasRt)
+        {
+            canvasW = Mathf.Max(480f, canvasRt.rect.width);
+            canvasH = Mathf.Max(360f, canvasRt.rect.height);
+        }
+
+        float maxW = Mathf.Min(820f, canvasW - 96f);
+        float maxH = Mathf.Min(560f, canvasH - 196f);
+        float aspect = width / (float)Mathf.Max(1, height);
+        float previewW = maxW;
+        float previewH = previewW / Mathf.Max(0.01f, aspect);
+        if (previewH > maxH)
+        {
+            previewH = maxH;
+            previewW = previewH * aspect;
+        }
+
+        previewW = Mathf.Max(280f, previewW);
+        previewH = Mathf.Max(160f, previewH);
+
+        var imageRt = (RectTransform)imageSendPreviewImage.transform;
+        imageRt.sizeDelta = new Vector2(previewW, previewH);
+        var imageLayout = imageSendPreviewImage.GetComponent<LayoutElement>();
+        if (imageLayout)
+        {
+            imageLayout.minWidth = previewW;
+            imageLayout.preferredWidth = previewW;
+            imageLayout.minHeight = previewH;
+            imageLayout.preferredHeight = previewH;
+        }
+
+        float panelW = Mathf.Min(canvasW - 48f, Mathf.Max(420f, previewW + 36f));
+        float panelH = Mathf.Min(canvasH - 48f, previewH + 156f);
+        float contentW = Mathf.Max(260f, panelW - 36f);
+        if (imageSendPreviewPanelRect)
+            imageSendPreviewPanelRect.sizeDelta = new Vector2(panelW, panelH);
+        SetLayoutWidth(imageSendPreviewTitleLayout, contentW);
+        SetLayoutWidth(imageSendPreviewMetaLayout, contentW);
+        SetLayoutWidth(imageSendPreviewButtonsLayout, contentW);
+    }
+
+    private void EnsureImageSendPreviewModal()
+    {
+        if (imageSendPreviewRoot)
+            return;
+
+        var canvas = rootCanvas ? rootCanvas : GetComponentInParent<Canvas>();
+        if (!canvas)
+            return;
+
+        imageSendPreviewRoot = new GameObject("Chat Image Send Preview", typeof(RectTransform));
+        imageSendPreviewRoot.transform.SetParent(canvas.transform, false);
+        var rootRt = (RectTransform)imageSendPreviewRoot.transform;
+        rootRt.anchorMin = Vector2.zero;
+        rootRt.anchorMax = Vector2.one;
+        rootRt.offsetMin = Vector2.zero;
+        rootRt.offsetMax = Vector2.zero;
+
+        var scrim = imageSendPreviewRoot.AddComponent<Image>();
+        scrim.color = new Color(0f, 0f, 0f, 0.68f);
+
+        var closeArea = imageSendPreviewRoot.AddComponent<Button>();
+        closeArea.targetGraphic = scrim;
+        closeArea.onClick.AddListener(CancelPendingImageSend);
+
+        var panel = new GameObject("Panel", typeof(RectTransform));
+        panel.transform.SetParent(imageSendPreviewRoot.transform, false);
+        imageSendPreviewPanelRect = (RectTransform)panel.transform;
+        imageSendPreviewPanelRect.anchorMin = imageSendPreviewPanelRect.anchorMax = new Vector2(
+            0.5f,
+            0.5f
+        );
+        imageSendPreviewPanelRect.pivot = new Vector2(0.5f, 0.5f);
+        imageSendPreviewPanelRect.sizeDelta = new Vector2(620f, 520f);
+
+        var panelImage = panel.AddComponent<Image>();
+        panelImage.color = new Color(0.05f, 0.06f, 0.07f, 0.97f);
+
+        var layout = panel.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(18, 18, 14, 16);
+        layout.spacing = 8f;
+        layout.childAlignment = TextAnchor.UpperCenter;
+        layout.childControlWidth = false;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = false;
+        layout.childForceExpandHeight = false;
+
+        var titleGo = new GameObject("Title", typeof(RectTransform));
+        titleGo.transform.SetParent(panel.transform, false);
+        imageSendPreviewTitle = titleGo.AddComponent<TextMeshProUGUI>();
+        TmpCjkFontFallback.ApplyTo(imageSendPreviewTitle);
+        imageSendPreviewTitle.fontSize = 18f;
+        imageSendPreviewTitle.fontStyle = FontStyles.Bold;
+        imageSendPreviewTitle.color = Color.white;
+        imageSendPreviewTitle.alignment = TextAlignmentOptions.Center;
+        imageSendPreviewTitle.textWrappingMode = TextWrappingModes.NoWrap;
+        imageSendPreviewTitle.overflowMode = TextOverflowModes.Ellipsis;
+        imageSendPreviewTitle.richText = false;
+        imageSendPreviewTitle.raycastTarget = false;
+        imageSendPreviewTitleLayout = titleGo.AddComponent<LayoutElement>();
+        imageSendPreviewTitleLayout.minWidth = 360f;
+        imageSendPreviewTitleLayout.preferredWidth = 560f;
+        imageSendPreviewTitleLayout.minHeight = 26f;
+        imageSendPreviewTitleLayout.preferredHeight = 26f;
+
+        var metaGo = new GameObject("Meta", typeof(RectTransform));
+        metaGo.transform.SetParent(panel.transform, false);
+        imageSendPreviewMeta = metaGo.AddComponent<TextMeshProUGUI>();
+        TmpCjkFontFallback.ApplyTo(imageSendPreviewMeta);
+        imageSendPreviewMeta.fontSize = 13f;
+        imageSendPreviewMeta.color = new Color(0.78f, 0.84f, 0.92f, 1f);
+        imageSendPreviewMeta.alignment = TextAlignmentOptions.Center;
+        imageSendPreviewMeta.textWrappingMode = TextWrappingModes.NoWrap;
+        imageSendPreviewMeta.overflowMode = TextOverflowModes.Ellipsis;
+        imageSendPreviewMeta.richText = false;
+        imageSendPreviewMeta.raycastTarget = false;
+        imageSendPreviewMetaLayout = metaGo.AddComponent<LayoutElement>();
+        imageSendPreviewMetaLayout.minWidth = 360f;
+        imageSendPreviewMetaLayout.preferredWidth = 560f;
+        imageSendPreviewMetaLayout.minHeight = 20f;
+        imageSendPreviewMetaLayout.preferredHeight = 20f;
+
+        var imageGo = new GameObject("Image", typeof(RectTransform));
+        imageGo.transform.SetParent(panel.transform, false);
+        imageSendPreviewImage = imageGo.AddComponent<Image>();
+        imageSendPreviewImage.color = Color.white;
+        imageSendPreviewImage.preserveAspect = true;
+        var imageLayout = imageGo.AddComponent<LayoutElement>();
+        imageLayout.minWidth = 560f;
+        imageLayout.preferredWidth = 560f;
+        imageLayout.minHeight = 340f;
+        imageLayout.preferredHeight = 340f;
+
+        var buttonsGo = new GameObject("Buttons", typeof(RectTransform));
+        buttonsGo.transform.SetParent(panel.transform, false);
+        var buttonsLayout = buttonsGo.AddComponent<HorizontalLayoutGroup>();
+        buttonsLayout.spacing = 10f;
+        buttonsLayout.childAlignment = TextAnchor.MiddleRight;
+        buttonsLayout.childControlWidth = false;
+        buttonsLayout.childControlHeight = true;
+        buttonsLayout.childForceExpandWidth = false;
+        buttonsLayout.childForceExpandHeight = false;
+        imageSendPreviewButtonsLayout = buttonsGo.AddComponent<LayoutElement>();
+        imageSendPreviewButtonsLayout.minWidth = 560f;
+        imageSendPreviewButtonsLayout.preferredWidth = 560f;
+        imageSendPreviewButtonsLayout.minHeight = 34f;
+        imageSendPreviewButtonsLayout.preferredHeight = 34f;
+
+        var cancelButton = CreateButton(buttonsGo.transform, "Cancel", CancelPendingImageSend);
+        var cancelLayout = cancelButton.GetComponent<LayoutElement>();
+        cancelLayout.minWidth = 86f;
+        cancelLayout.preferredWidth = 86f;
+        cancelLayout.minHeight = 32f;
+        cancelLayout.preferredHeight = 32f;
+        if (cancelButton.targetGraphic is Image cancelImage)
+            cancelImage.color = new Color(0.35f, 0.39f, 0.46f, 1f);
+
+        var sendButton = CreateButton(buttonsGo.transform, "Send", ConfirmPendingImageSend);
+        var sendLayout = sendButton.GetComponent<LayoutElement>();
+        sendLayout.minWidth = 86f;
+        sendLayout.preferredWidth = 86f;
+        sendLayout.minHeight = 32f;
+        sendLayout.preferredHeight = 32f;
+        if (sendButton.targetGraphic is Image sendImage)
+            sendImage.color = new Color(0.12f, 0.48f, 0.28f, 1f);
+
+        imageSendPreviewRoot.SetActive(false);
+    }
+
+    private static string FormatImageByteCount(int byteCount)
+    {
+        if (byteCount >= 1024 * 1024)
+            return $"{byteCount / (1024f * 1024f):0.0} MB";
+
+        return $"{Mathf.Max(1, Mathf.CeilToInt(byteCount / 1024f))} KB";
+    }
+
+    private static void SetLayoutWidth(LayoutElement layout, float width)
+    {
+        if (!layout)
+            return;
+
+        layout.minWidth = width;
+        layout.preferredWidth = width;
+    }
+
+    private static void SetLayoutSize(LayoutElement layout, float width, float height)
+    {
+        if (!layout)
+            return;
+
+        layout.minWidth = width;
+        layout.preferredWidth = width;
+        layout.minHeight = height;
+        layout.preferredHeight = height;
     }
 
     private static bool IsSupportedImagePath(string path)
@@ -4026,6 +4590,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         public readonly int Height;
         public readonly Texture2D Texture;
         public readonly Sprite Sprite;
+        public ulong SenderClientId { get; set; }
 
         public ChatImagePayload(
             string imageId,
@@ -4051,6 +4616,53 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             if (Texture)
                 UnityEngine.Object.Destroy(Texture);
         }
+    }
+}
+
+public sealed class ChatImageLineMarker : MonoBehaviour
+{
+    public string ImageId;
+}
+
+public sealed class ChatHoverTooltip
+    : MonoBehaviour,
+        IPointerEnterHandler,
+        IPointerMoveHandler,
+        IPointerExitHandler
+{
+    private string text;
+
+    public void Configure(string tooltipText)
+    {
+        text = tooltipText ?? string.Empty;
+    }
+
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (!string.IsNullOrWhiteSpace(text))
+            TooltipManager.Instance?.ShowFollow(
+                text,
+                null,
+                null,
+                null,
+                eventData.position,
+                eventData.pressEventCamera
+            );
+    }
+
+    public void OnPointerMove(PointerEventData eventData)
+    {
+        TooltipManager.Instance?.MoveFollow(eventData.position, eventData.pressEventCamera);
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        TooltipManager.Instance?.Hide();
+    }
+
+    private void OnDisable()
+    {
+        TooltipManager.Instance?.Hide();
     }
 }
 

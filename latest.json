@@ -1,5 +1,16 @@
 {
-  "version": "1.2.5",
-  "notes": "- Added a color-coded co-op lobby player list with host labels - Disabled main menu quiz selection while joined as a multiplayer client so the lobby stays on the host's quiz - Improved lobby member refresh handling so transient Unity Lobby errors keep showing the local player instead of leaving the list empty - Anchored the co-op menu chat below the lobby panel so it stays aligned across resolutions - Enabled vSync and capped the game to the monitor refresh rate to reduce unnecessary GPU usage",
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.5.zip"
+  "version": "1.2.6",
+  "notes": [
+    "Added singleplayer scoreboard history for every quiz, including type quizzes, with multiple entries per quiz",
+    "Added scoreboard sorting by date, completion time, type reveals, shadows used, and fill-quiz usage",
+    "Added scoreboard entry deletion with a confirmation dialog that also updates the saved scoreboard JSON",
+    "Added a scrollbar and smoother scrolling to the scoreboard panel",
+    "Fixed completed quizzes and Back to Menu so singleplayer quiz progress resets correctly after finishing",
+    "Fixed Reset so it clears the current quiz attempt without deleting saved quiz progress JSON",
+    "Fixed Fill quiz so Full Quiz fills every entry, and marked scoreboard entries that used the Fill quiz button",
+    "Made the Fill quiz button singleplayer-only and aligned the main menu autofill setting with the other checkboxes",
+    "Fixed menu utility buttons, patch notes overlay visibility, pause-on-focus-loss checkbox behavior, and pause-screen background slider visibility",
+    "Fixed the chat image delete tooltip showing duplicate text"
+  ],
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.6.zip"
 }

@@ -14,21 +14,29 @@ public class PatchNotesView : MonoBehaviour
     void Awake()
     {
         if (notesText != null)
-            notesText.text = patchNotes;
+        {
+            var asset = Resources.Load<TextAsset>("PatchNotes");
+            if (asset != null && !string.IsNullOrEmpty(asset.text))
+                notesText.text = asset.text;
+            else
+                notesText.text = patchNotes;
+        }
     }
 
     void OnEnable()
     {
-        transform.SetAsLastSibling();
         MultiplayerMenuPanel.SetOverlayVisible(false);
-        QuizMultiplayerChatOverlay.SetOverlayVisible(false);
+        SingleplayerScoreboardPanel.SetOverlayVisible(false);
         SingleplayerProgressResetPanel.SetOverlayVisible(false);
+        MainMenuController.SetMenuChromeVisible(false);
+        transform.SetAsLastSibling();
     }
 
     void OnDisable()
     {
         MultiplayerMenuPanel.SetOverlayVisible(true);
-        QuizMultiplayerChatOverlay.SetOverlayVisible(true);
+        SingleplayerScoreboardPanel.SetOverlayVisible(true);
         SingleplayerProgressResetPanel.SetOverlayVisible(true);
+        MainMenuController.SetMenuChromeVisible(true);
     }
 }

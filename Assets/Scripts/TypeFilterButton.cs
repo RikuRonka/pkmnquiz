@@ -23,6 +23,8 @@ public class TypeFilterButton : MonoBehaviour
     [SerializeField]
     Image icon2;
 
+    public string TypeName => typeName;
+
     void Awake()
     {
         Apply(typeName);

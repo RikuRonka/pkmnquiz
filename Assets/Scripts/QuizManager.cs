@@ -140,6 +140,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     const string KEY_PAUSE_ON_FOCUS_LOSS = "pause_on_focus_loss";
     const string KEY_BACKGROUND_COLOR_VALUE = "quiz_background_color_value";
+    public const string KEY_ENABLE_AUTOFILL_BUTTON = "enable_quiz_autofill_button";
     private const int BaseContentTopPadding = 32;
     private const int MultiplayerContentTopPadding = 32;
     private const float SingleplayerHeaderExtraHeight = 24f;
@@ -164,7 +165,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     [Header("Dev/Test")]
     public Button testBtn;
     public bool testIncludeAliases;
-    public float testDelay = 0.02f;
+    public float testDelay = 0.01f;
 
     [SerializeField]
     Toggle alwaysScrollToggle;
@@ -247,6 +248,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private bool _testRunning;
     private bool _testCancel;
     private bool _localSessionDiscarded;
+    private bool _localSessionSuppressSaving;
+    private bool _fillQuizUsed;
 
     private sealed class SavedQuizSessionSnapshot
     {
@@ -371,16 +374,20 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             giveUpBtn.onClick.RemoveAllListeners();
             giveUpBtn.onClick.AddListener(OnGiveUpClicked);
         }
+        ConfigureAutofillTestButton();
         if (testBtn)
         {
             testBtn.onClick.RemoveAllListeners();
-            testBtn.onClick.AddListener(() =>
+            if (testBtn.gameObject.activeSelf)
             {
-                if (!_testRunning)
-                    StartCoroutine(CoAutoTypeAll());
-                else
-                    _testCancel = true;
-            });
+                testBtn.onClick.AddListener(() =>
+                {
+                    if (!_testRunning)
+                        StartCoroutine(CoAutoTypeAll());
+                    else
+                        _testCancel = true;
+                });
+            }
         }
         if (pauseBtn)
         {
@@ -427,6 +434,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     void SetGridVisible(bool visible)
     {
+        SetBackgroundColorSliderVisible(visible);
+
         if (!gridGroup)
         {
             if (scrollRect)
@@ -436,6 +445,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         gridGroup.alpha = visible ? 1f : 0f;
         gridGroup.blocksRaycasts = visible;
         gridGroup.interactable = visible;
+    }
+
+    private void SetBackgroundColorSliderVisible(bool visible)
+    {
+        if (backgroundColorSlider && backgroundColorSlider.gameObject.activeSelf != visible)
+            backgroundColorSlider.gameObject.SetActive(visible);
     }
 
     void PauseGame()
@@ -523,6 +538,120 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             PauseGame();
     }
 
+    private void ConfigureAutofillTestButton()
+    {
+        if (!testBtn)
+            testBtn = CreateAutofillTestButton();
+
+        if (!testBtn)
+            return;
+
+        bool enabled = ShouldShowAutofillTestButton();
+        testBtn.gameObject.SetActive(enabled);
+        PositionAutofillTestButton();
+        if (testDelay > 0.02f)
+            testDelay = 0.01f;
+
+        if (enabled)
+            SetAutofillTestButtonLabel("Fill quiz");
+    }
+
+    private static bool ShouldShowAutofillTestButton()
+    {
+        return PlayerPrefs.GetInt(KEY_ENABLE_AUTOFILL_BUTTON, 0) == 1
+            && IsLocalQuizSessionAllowed();
+    }
+
+    private Button CreateAutofillTestButton()
+    {
+        var parent = resetBtn ? resetBtn.transform.parent as RectTransform : null;
+        if (!parent && guessInput)
+        {
+            var canvas = guessInput.GetComponentInParent<Canvas>();
+            parent = canvas ? canvas.transform as RectTransform : null;
+        }
+        if (!parent)
+            return null;
+
+        var go = new GameObject(
+            "Quiz Autofill Button",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image),
+            typeof(Button)
+        );
+        go.layer = parent.gameObject.layer;
+
+        var rt = go.GetComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = new Vector2(1f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(1f, 1f);
+        rt.anchoredPosition = new Vector2(-16f, -128f);
+        rt.sizeDelta = new Vector2(120f, 30f);
+
+        var image = go.GetComponent<Image>();
+        image.color = new Color(1f, 0.78f, 0.16f, 1f);
+
+        var textGo = new GameObject(
+            "Label",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(TextMeshProUGUI)
+        );
+        textGo.layer = go.layer;
+
+        var textRt = textGo.GetComponent<RectTransform>();
+        textRt.SetParent(rt, false);
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.offsetMin = Vector2.zero;
+        textRt.offsetMax = Vector2.zero;
+
+        var label = textGo.GetComponent<TextMeshProUGUI>();
+        label.alignment = TextAlignmentOptions.Center;
+        label.color = new Color(0.08f, 0.08f, 0.08f, 1f);
+        label.fontSize = 18f;
+        label.raycastTarget = false;
+
+        return go.GetComponent<Button>();
+    }
+
+    private void PositionAutofillTestButton()
+    {
+        if (!testBtn || !hintTypeBtn || hintTypeBtn.transform is not RectTransform hintRt)
+            return;
+
+        var fillRt = testBtn.transform as RectTransform;
+        var hintParent = hintRt.parent as RectTransform;
+        if (!fillRt || !hintParent)
+            return;
+
+        if (fillRt.parent != hintParent)
+            fillRt.SetParent(hintParent, false);
+
+        fillRt.anchorMin = hintRt.anchorMin;
+        fillRt.anchorMax = hintRt.anchorMax;
+        fillRt.pivot = hintRt.pivot;
+        fillRt.sizeDelta = hintRt.sizeDelta;
+        fillRt.localScale = Vector3.one;
+        float hintHeight = hintRt.rect.height > 0f ? hintRt.rect.height : Mathf.Abs(hintRt.sizeDelta.y);
+        if (hintHeight <= 0f)
+            hintHeight = 30f;
+        fillRt.anchoredPosition =
+            hintRt.anchoredPosition - new Vector2(0f, hintHeight + 8f);
+    }
+
+    private void SetAutofillTestButtonLabel(string text)
+    {
+        if (!testBtn)
+            return;
+
+        var label = testBtn.GetComponentInChildren<TMP_Text>(true);
+        if (label)
+            label.text = text;
+    }
+
     IEnumerator CoAutoTypeAll()
     {
         if (!guessInput)
@@ -537,55 +666,83 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         _testRunning = true;
         _testCancel = false;
+        _fillQuizUsed = true;
+        SetAutofillTestButtonLabel("Stop fill");
         running = true;
         if (giveUpBtn)
             giveUpBtn.interactable = true;
         guessInput.interactable = true;
 
-        RefocusGuess();
+        var fillIds = cardById
+            .Keys.Select(id => new
+            {
+                Id = id,
+                Pokemon = pokemonById.TryGetValue(id, out var p) ? p : null,
+            })
+            .OrderBy(x => x.Pokemon != null ? DexOrder.GetIndex(x.Pokemon) : int.MaxValue)
+            .ThenBy(x => x.Id)
+            .Select(x => x.Id)
+            .ToList();
 
-        var testList = pokemonById.Values.Distinct().OrderBy(p => DexOrder.GetIndex(p)).ToList();
+        bool anyNew = false;
+        Pokemon lastSolvedPokemon = null;
+        int filled = 0;
 
-        int typed = 0;
-
-        foreach (var p in testList)
+        foreach (int id in fillIds)
         {
             if (_testCancel)
                 break;
-            if (solved.Contains(p.id))
+            if (solved.Contains(id))
                 continue;
 
-            yield return StartCoroutine(TypeAndCommit(p.name));
-            typed++;
+            solved.Add(id);
 
-            if (p.baseId != 0 && p.baseId != p.id)
+            if (cardById.TryGetValue(id, out var card) && card)
+                card.Reveal();
+
+            if (pokemonById.TryGetValue(id, out var p) && p != null)
             {
-                var baseMon = PokemonDatabase.Instance.All().FirstOrDefault(x => x.id == p.baseId);
-                if (baseMon != null)
-                    yield return StartCoroutine(TypeAndCommit(baseMon.name));
+                lastSolvedPokemon = p;
+                OnPokemonSolved?.Invoke(p);
             }
 
-            if (testIncludeAliases && p.aliases != null)
-            {
-                foreach (var a in p.aliases)
-                {
-                    if (_testCancel)
-                        break;
-                    yield return StartCoroutine(TypeAndCommit(a));
-                    typed++;
-                }
-            }
+            anyNew = true;
+            filled++;
 
-            if (testDelay > 0f)
-                yield return new WaitForSecondsRealtime(testDelay);
-            if ((typed & 31) == 0)
+            if ((filled & 31) == 0)
+            {
+                UpdateScore();
+                SaveLocalQuizSession();
                 yield return null;
+
+                if (testDelay > 0f)
+                    yield return new WaitForSecondsRealtime(testDelay);
+            }
         }
 
-        guessInput.ActivateInputField();
-        guessInput.Select();
+        bool wasCanceled = _testCancel;
+
+        if (anyNew)
+        {
+            PlayCorrect();
+            UpdateScore();
+            SaveLocalQuizSession();
+        }
+
         _testRunning = false;
         _testCancel = false;
+        SetAutofillTestButtonLabel("Fill quiz");
+
+        if (!wasCanceled && lastSolvedPokemon != null && !IsComplete())
+            MaybeScrollTo(lastSolvedPokemon);
+
+        ShowFinishedIfComplete();
+
+        if (guessInput && !IsComplete())
+        {
+            guessInput.ActivateInputField();
+            guessInput.Select();
+        }
     }
 
     private void HandleKeyboardScroll()
@@ -783,6 +940,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         backgroundColorSlider.targetGraphic = handleImage;
         backgroundColorSlider.SetValueWithoutNotify(CurrentLocalBackgroundHue());
         backgroundColorSlider.onValueChanged.AddListener(OnBackgroundColorSliderChanged);
+        SetBackgroundColorSliderVisible(!(pauseMenu && pauseMenu.IsShowing));
     }
 
     private RectTransform GetBackgroundColorSliderParent(SectionGroup main)
@@ -909,9 +1067,19 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private void ApplyQuizTitleColor(bool useLightTitles)
     {
         Color titleColor = useLightTitles ? Color.white : Color.black;
+        var seen = new HashSet<SectionGroup>();
         foreach (var sec in _sections)
         {
-            if (sec)
+            if (sec && seen.Add(sec))
+                sec.SetTitleColor(titleColor);
+        }
+
+        if (!content)
+            return;
+
+        foreach (var sec in content.GetComponentsInChildren<SectionGroup>(true))
+        {
+            if (sec && seen.Add(sec))
                 sec.SetTitleColor(titleColor);
         }
     }
@@ -1456,7 +1624,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (QuizMultiplayerCoordinator.RequestReset())
                 return;
 
-            ClearLocalQuizSession();
+            ClearLocalQuizSession(removeSavedProgress: false, suppressFurtherSaves: false);
             ResetGame();
         }
 
@@ -1599,7 +1767,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 return;
             }
 
-            SaveLocalQuizSession();
+            if (!IsQuizFinished)
+                SaveLocalQuizSession();
             QuizNetworkRuntime.Shutdown();
             SceneManager.LoadScene("MainMenu");
         }
@@ -2352,39 +2521,47 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             megaKalosGen = Instantiate(sectionGroupPrefab, content);
             megaKalosGen.EnsureLayout();
             megaKalosGen.SetTitle("Mega Evolution - Kalos", false);
+            _sections.Add(megaKalosGen);
 
             megaHoennGen = Instantiate(sectionGroupPrefab, content);
             megaHoennGen.EnsureLayout();
             megaHoennGen.SetTitle("Mega Evolution - Hoenn", false);
+            _sections.Add(megaHoennGen);
 
             lumioseMegasSec = Instantiate(sectionGroupPrefab, content);
             lumioseMegasSec.EnsureLayout();
             lumioseMegasSec.SetTitle("Mega Evolution - Lumiose", false);
+            _sections.Add(lumioseMegasSec);
 
             hyperspaceMegasSec = Instantiate(sectionGroupPrefab, content);
             hyperspaceMegasSec.EnsureLayout();
             hyperspaceMegasSec.SetTitle("Mega Evolution - Hyperspace", false);
+            _sections.Add(hyperspaceMegasSec);
         }
         if (generation == 7)
         {
             alolaUnknown = Instantiate(sectionGroupPrefab, content);
             alolaUnknown.EnsureLayout();
             alolaUnknown.SetTitle("Unknown", false);
+            _sections.Add(alolaUnknown);
         }
         if (generation == 8)
         {
             gmaxSec = Instantiate(sectionGroupPrefab, content);
             gmaxSec.EnsureLayout();
             gmaxSec.SetTitle("Gigantamax (Gen 8)", false);
+            _sections.Add(gmaxSec);
             hisuiSec = Instantiate(sectionGroupPrefab, content);
             hisuiSec.EnsureLayout();
             hisuiSec.SetTitle("Hisui (Gen 8)", false);
+            _sections.Add(hisuiSec);
         }
         if (generation == 9)
         {
             paldeaExpeditions = Instantiate(sectionGroupPrefab, content);
             paldeaExpeditions.EnsureLayout();
             paldeaExpeditions.SetTitle("Paldea Expeditions", false);
+            _sections.Add(paldeaExpeditions);
         }
 
         var expeditionPool = new List<Pokemon>();
@@ -3650,6 +3827,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private void ResetGame()
     {
         _pendingSavedMultiplayerSession = null;
+        _localSessionSuppressSaving = false;
+        _fillQuizUsed = false;
         OnQuizReset?.Invoke();
 
         if (pauseMenu && pauseMenu.IsShowing)
@@ -3690,6 +3869,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         ApplyContentTopPadding(preserveScroll: true);
         ApplyMultiplayerRightDock(multiplayerUi, preserveScroll: true);
 
+        if (testBtn)
+            testBtn.gameObject.SetActive(ShouldShowAutofillTestButton());
+
         if (!multiplayerUi)
             return;
 
@@ -3708,7 +3890,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             backToMenuBtn.interactable = true;
         if (pauseBtn)
             pauseBtn.interactable = canUseQuizActions;
-        if (testBtn)
+        if (testBtn && testBtn.gameObject.activeSelf)
             testBtn.interactable = canUseQuizActions;
 
         RefreshButtonVisual(giveUpBtn);
@@ -3860,9 +4042,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!IsLocalQuizSessionAllowed())
             return;
 
+        if (_localSessionSuppressSaving)
+            return;
+
         if (_localSessionDiscarded)
         {
-            if (!running)
+            if (solved.Count == 0)
                 return;
 
             _localSessionDiscarded = false;
@@ -3882,7 +4067,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 hinted,
                 shadowed,
                 elapsed,
-                running
+                running,
+                _fillQuizUsed
             )
         );
     }
@@ -3899,6 +4085,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return false;
 
         _localSessionDiscarded = false;
+        _localSessionSuppressSaving = false;
+        _fillQuizUsed = session.usedFillQuiz;
         ApplySavedMultiplayerSession(
             session.solvedIds,
             session.hintedIds,
@@ -3909,18 +4097,40 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         return true;
     }
 
-    private void ClearLocalQuizSession()
+    private void ClearLocalQuizSession(
+        bool removeSavedProgress = true,
+        bool suppressFurtherSaves = true
+    )
     {
         if (!IsLocalQuizSessionAllowed())
             return;
 
         _localSessionDiscarded = true;
-        SingleplayerQuizProgressStore.Remove(generation, selectedType);
+        _localSessionSuppressSaving = suppressFurtherSaves;
+
+        if (removeSavedProgress)
+            SingleplayerQuizProgressStore.Remove(generation, selectedType);
     }
 
     private static bool IsLocalQuizSessionAllowed()
     {
         return !QuizNetworkRuntime.IsMultiplayerActive && !GameSettings.IsMultiplayer;
+    }
+
+    private void RecordSingleplayerScoreIfComplete()
+    {
+        if (!IsLocalQuizSessionAllowed() || !IsComplete())
+            return;
+
+        SingleplayerScoreboardStore.RecordCompletion(
+            generation,
+            selectedType,
+            cardById.Count,
+            elapsed,
+            _hintUsedCount,
+            _shadowUsedCount,
+            _fillQuizUsed
+        );
     }
 
     private IEnumerator CoApplyNetworkState(
@@ -4020,6 +4230,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
 
         bool anyNew = false;
+        Pokemon lastSolvedPokemon = null;
 
         foreach (var id in solvedIds)
         {
@@ -4033,7 +4244,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
             if (pokemonById.TryGetValue(id, out var p))
             {
-                MaybeScrollTo(p);
+                lastSolvedPokemon = p;
                 OnPokemonSolved?.Invoke(p);
             }
 
@@ -4046,6 +4257,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 PlayCorrect();
             UpdateScore();
         }
+
+        bool completed = IsComplete();
+        if (anyNew && playSound && !completed && lastSolvedPokemon != null)
+            MaybeScrollTo(lastSolvedPokemon);
 
         if (clearInput)
             RefocusGuess();
@@ -4182,8 +4397,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (guessInput)
             guessInput.interactable = false;
 
+        if (finishedDialog && finishedDialog.IsShowing)
+            return;
+
+        CancelActiveSmartScroll();
+        CancelPendingResetScrollToTop();
         ApplyEndStateCardBorders();
-        SaveLocalQuizSession();
+        RecordSingleplayerScoreIfComplete();
+        ClearLocalQuizSession(removeSavedProgress: true, suppressFurtherSaves: true);
 
         if (finishedDialog)
             finishedDialog.Show(

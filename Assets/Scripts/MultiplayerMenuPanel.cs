@@ -924,13 +924,18 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         if (!button)
             return;
 
-        if (!menuQuizButtonBaseInteractivity.ContainsKey(button))
+        if (!menuQuizButtonBaseInteractivity.ContainsKey(button) && button.interactable)
             menuQuizButtonBaseInteractivity[button] = button.interactable;
 
         button.interactable =
             canChooseQuiz
-            && menuQuizButtonBaseInteractivity.TryGetValue(button, out bool baseInteractivity)
-            && baseInteractivity;
+            && (
+                !menuQuizButtonBaseInteractivity.TryGetValue(button, out bool baseInteractivity)
+                || baseInteractivity
+            );
+
+        if (button.TryGetComponent<UiButtonHover>(out var hover))
+            hover.RefreshDisabledVisual();
     }
 
     private static bool IsMenuQuizButton(Button button)

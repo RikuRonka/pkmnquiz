@@ -140,7 +140,7 @@ public class UpdateButtonController
         TooltipManager.Instance?.ShowUpdateUnder(
             anchor,
             version: $"v{_pending.version}",
-            notes: _pending.notes,
+            notes: _pending.NotesText,
             gapY: 10f,
             centerToAnchor: false
         );

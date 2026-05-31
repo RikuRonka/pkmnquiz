@@ -1,17 +1,49 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.Networking;
 
 [Serializable]
 public class UpdateInfo
 {
-    public string version,
-        notes,
-        url,
-        sha256;
+    public string version, url, sha256;
+    public string[] notes;
+
+    public string NotesText
+    {
+        get
+        {
+            if (notes == null || notes.Length == 0)
+                return string.Empty;
+
+            var cleaned = new List<string>(notes.Length);
+            foreach (var note in notes)
+            {
+                if (!string.IsNullOrWhiteSpace(note))
+                    cleaned.Add(note.Trim());
+            }
+
+            return string.Join("\n", cleaned);
+        }
+    }
+
+    public void Normalize()
+    {
+        notes ??= Array.Empty<string>();
+    }
+}
+
+[Serializable]
+internal sealed class LegacyUpdateInfo
+{
+    public string version = string.Empty;
+    public string notes = string.Empty;
+    public string url = string.Empty;
+    public string sha256 = string.Empty;
 }
 
 public class UpdaterRunner : MonoBehaviour
@@ -48,7 +80,7 @@ public class UpdaterRunner : MonoBehaviour
         if (File.Exists(local))
         {
             string json = File.ReadAllText(local);
-            var info = JsonUtility.FromJson<UpdateInfo>(json);
+            var info = ParseUpdateInfo(json);
             if (info != null && !string.IsNullOrEmpty(info.version))
             {
                 FinishUpdateCheck(info);
@@ -73,7 +105,7 @@ public class UpdaterRunner : MonoBehaviour
             yield break;
         }
 
-        var remoteInfo = JsonUtility.FromJson<UpdateInfo>(req.downloadHandler.text);
+        var remoteInfo = ParseUpdateInfo(req.downloadHandler.text);
         if (remoteInfo == null || string.IsNullOrEmpty(remoteInfo.version))
         {
             OnCheckFailed?.Invoke("Invalid update info");
@@ -81,6 +113,52 @@ public class UpdaterRunner : MonoBehaviour
         }
 
         FinishUpdateCheck(remoteInfo);
+    }
+
+    static UpdateInfo ParseUpdateInfo(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+
+        try
+        {
+            var info = JsonUtility.FromJson<UpdateInfo>(json);
+            if (info == null)
+                return null;
+
+            if (info.notes == null || info.notes.Length == 0)
+            {
+                var legacy = JsonUtility.FromJson<LegacyUpdateInfo>(json);
+                if (legacy != null && !string.IsNullOrWhiteSpace(legacy.notes))
+                    info.notes = SplitLegacyNotes(legacy.notes);
+            }
+
+            info.Normalize();
+            return info;
+        }
+        catch (Exception ex)
+        {
+            UnityEngine.Debug.LogWarning($"Update info parse failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    static string[] SplitLegacyNotes(string notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes))
+            return Array.Empty<string>();
+
+        notes = notes.Replace("\r", "").Trim();
+        var parts = Regex.Split(notes, @"(?m)^\s*[-\u2022]\s+|\s+-\s+|\n+");
+        var cleaned = new List<string>();
+        foreach (var part in parts)
+        {
+            var item = Regex.Replace(part.Trim(), @"\s+", " ");
+            if (!string.IsNullOrWhiteSpace(item))
+                cleaned.Add(item);
+        }
+
+        return cleaned.ToArray();
     }
 
     void FinishUpdateCheck(UpdateInfo info)

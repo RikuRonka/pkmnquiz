@@ -313,7 +313,10 @@ public class PokemonTooltip : MonoBehaviour
             System.Text.RegularExpressions.RegexOptions.IgnoreCase
         );
 
-        var parts = System.Text.RegularExpressions.Regex.Split(s, @"(?m)^\s*-\s+|\s+-\s+");
+        var parts = System.Text.RegularExpressions.Regex.Split(
+            s,
+            @"(?m)^\s*[-\u2022]\s+|\s+-\s+|\n+"
+        );
         var cleaned = new System.Collections.Generic.List<string>();
         foreach (var part in parts)
         {

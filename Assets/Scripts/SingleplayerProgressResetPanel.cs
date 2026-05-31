@@ -105,7 +105,7 @@ public sealed class SingleplayerProgressResetPanel : MonoBehaviour
         rt.anchorMax = new Vector2(0f, 0f);
         rt.pivot = new Vector2(0f, 0f);
         rt.anchoredPosition = new Vector2(24f, BottomMargin);
-        rt.sizeDelta = new Vector2(ButtonWidth, ButtonHeight + 20f);
+        rt.sizeDelta = new Vector2(ButtonWidth, ButtonHeight + 18f);
 
         resetButton = CreateButton(transform, "Reset quiz progress", ShowDialog);
         var buttonRt = (RectTransform)resetButton.transform;
@@ -558,7 +558,7 @@ public sealed class SingleplayerProgressResetPanel : MonoBehaviour
         go.transform.SetParent(parent, false);
 
         var image = go.AddComponent<Image>();
-        image.color = new Color(0.62f, 0.16f, 0.18f, 0.95f);
+        image.color = new Color(0.68f, 0.12f, 0.16f, 0.96f);
 
         var button = go.AddComponent<Button>();
         button.targetGraphic = image;

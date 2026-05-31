@@ -92,7 +92,8 @@ public static class SingleplayerQuizProgressStore
                     session.hintedIds,
                     session.shadowedIds,
                     session.elapsed,
-                    session.running
+                    session.running,
+                    session.usedFillQuiz
                 )
             );
         }
@@ -192,6 +193,7 @@ public static class SingleplayerQuizProgressStore
         public List<int> shadowedIds = new();
         public float elapsed;
         public bool running;
+        public bool usedFillQuiz;
 
         public string Key => KeyFor(generation, typeFilter);
         public bool IsValid => generation >= 0;
@@ -206,7 +208,8 @@ public static class SingleplayerQuizProgressStore
             IReadOnlyCollection<int> hintedIds,
             IReadOnlyCollection<int> shadowedIds,
             float elapsed,
-            bool running
+            bool running,
+            bool usedFillQuiz = false
         )
         {
             this.generation = generation;
@@ -216,6 +219,7 @@ public static class SingleplayerQuizProgressStore
             this.shadowedIds = shadowedIds == null ? new List<int>() : new List<int>(shadowedIds);
             this.elapsed = Mathf.Max(0f, elapsed);
             this.running = running;
+            this.usedFillQuiz = usedFillQuiz;
         }
 
         public bool Matches(int generation, string typeFilter)

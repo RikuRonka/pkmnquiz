@@ -53,6 +53,15 @@ public class SectionGroup : MonoBehaviour
     {
         if (titleText)
             titleText.color = color;
+
+        if (!headerRect)
+            return;
+
+        foreach (var text in headerRect.GetComponentsInChildren<TMP_Text>(true))
+        {
+            if (text)
+                text.color = color;
+        }
     }
 
     public void UpdateHeaderForCols(int cols, int minCols, int maxCols)

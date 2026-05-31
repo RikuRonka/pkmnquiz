@@ -1,0 +1,165 @@
+1.2.6 - 31.5.2026
+- Added singleplayer scoreboard history for every quiz, including type quizzes, with multiple entries per quiz
+- Added scoreboard sorting by date, completion time, type reveals, shadows used, and fill-quiz usage
+- Added scoreboard entry deletion with a confirmation dialog that also updates the saved scoreboard JSON
+- Added a scrollbar and smoother scrolling to the scoreboard panel
+- Fixed completed quizzes and Back to Menu so singleplayer quiz progress resets correctly after finishing
+- Fixed Reset so it clears the current quiz attempt without deleting saved quiz progress JSON
+- Fixed Fill quiz so Full Quiz fills every entry, and marked scoreboard entries that used the Fill quiz button
+- Made the Fill quiz button singleplayer-only and aligned the main menu autofill setting with the other checkboxes
+- Fixed menu utility buttons, patch notes overlay visibility, pause-on-focus-loss checkbox behavior, and pause-screen background slider visibility
+- Added the chat image deletion (only for user that uploaded it)
+- There is now confirmation dialog before sending screenshot
+
+1.2.5 - 29.5.2026
+- Added a color-coded co-op lobby player list with host labels
+- Disabled main menu quiz selection while joined as a multiplayer client so the lobby stays on the host's quiz
+- Improved lobby member refresh handling so transient Unity Lobby errors keep showing the local player instead of leaving the list empty
+- Moved the co-op menu chat overlay higher for a cleaner lobby layout
+- Enabled vSync and capped the game to the monitor refresh rate to reduce unnecessary GPU usage
+
+1.2.4 - 28.5.2026
+- Fixed Gen 1 co-op session restore so guessed Pokémon now reappear in the counter and grid after re-entering the quiz
+- Improved co-op quiz layout by aligning the player panel and chat, removing duplicate lobby text, and refining the background color slider
+- Added co-op chat image sharing from clipboard paste and drag-and-drop, with clickable thumbnails and an in-game image viewer
+- Improved co-op chat text with long paste support, selectable/copyable messages, and clickable web links
+- Fixed chat image upload crashes by sending image data in fragmented chunks, preserving normal-size images, and correcting upside-down pasted screenshots
+- Fixed co-op disconnect/shutdown scoreboard errors
+- Quiz titles now turn white when the background slider is set fully black
+
+1.2.3 - 26.5.2026
+- Check updates now performs a manual update check and reports when no update is available
+- Full Quiz now loads correctly again
+- Reset quiz progress now shows only quizzes with guessed Pokémon, lists guessed count and elapsed time, and supports resetting one quiz at a time with confirmation
+- Singleplayer progress now starts saving only after at least one Pokémon has been guessed
+- Improved background color slider placement in singleplayer and co-op so it stays fixed while scrolling
+- Improved co-op chat placement and removed the message character limit
+- Added app/taskbar notification and sound when someone joins a co-op lobby
+- Cleaned up co-op lobby player colors and UI overlap around patch notes/reset controls
+
+1.2.2 - 26.5.2026
+- Singleplayer quiz progress now saves to disk and is restored after restarting the game, including guesses, timer, hints, shadows, and completed quizzes
+- Added a main menu Reset quiz progress button with a typed reset confirmation
+- Added P as a pause shortcut outside text fields
+- Fixed co-op quiz re-entry sometimes syncing the timer but not guessed Pokémon
+- Fixed already-guessed Mega Evolution entries not clearing the input or showing feedback
+- Improved co-op join/start handling after Netcode shutdowns and replaced the misleading missing Netcode setup message
+
+1.2.1 - 25.5.2026
+- Co-op quiz progress is now remembered per quiz when the host returns to the lobby, including guessed Pokémon, shadows, revealed types, timers, scores, and multiple saved quizzes
+- Solo quiz progress is now remembered per quiz until the game is restarted
+- Hosts can start co-op quizzes alone, and players can join after the quiz has already started
+- Lobby rows now show which quiz the host is in and refresh while the lobby browser is open
+- Added per-player quiz background color slider with black, pink, and turquoise support
+- Fixed the background color slider placement on gen, full, type, and Mega Evolutions quizzes
+- Nicknames are now required before hosting or joining co-op
+- Improved quiz join/leave notifications and return-to-quiz behavior
+- The game now always starts on the main menu instead of sometimes opening Gen 1 directly
+
+1.2.0 - 24.5.2026
+- Added player color selection in co-op lobbies and during quizzes
+- Matched multiplayer names and result highlights to each player's chosen color
+- Added a draggable and resizable quiz chat panel with reserved grid space on the right
+- Added a return-to-quiz flow for clients and clearer notifications when players leave
+- Improved quiz grid refreshes after rejoining and changing column counts
+- Fixed section title spacing so titles stay stable when changing cols
+
+1.1.9 - 24.5.2026
+- Added open lobby matchmaking so players can join co-op without manually sharing a code
+- Improved the co-op lobby UI with a larger panel, clearer player counts, colored action buttons, and Join labels
+- Added host join notifications with player nicknames and a pulsing prompt when a quiz can be chosen
+- Improved multiplayer chat placement, expansion, pause behavior, and patch notes hiding
+- Fixed host-only reset and give up actions, and kept co-op lobbies active when returning to the main menu
+
+1.1.8 - 23.5.2026
+- Chat for multiplayer
+
+1.1.7 - 22.5.2026
+- Added multiplayer
+
+1.1.6 - 10.5.2026
+- Added separate quiz for Mega Evolutions
+- Removed Mega evolutions from Kalos and Paldea
+- Added missing Mega Slowbro, Primal Kyogre and Primal Groudon
+
+1.1.5 - 4.4.2026
+- Added Hyperspace mega evolutions
+
+1.1.4 - 2.1.2026
+- Vanillish and Vanilluxe dex order corrected (again)
+- Fixed Cherrim and Leafeon sprites
+- Pokémon Quiz-logo not visible in patch notes anymore
+
+1.1.3 - 1.1.2026
+- Different Pokémon music can now be selected from dropdown menu
+- Fixed more sprites
+- Added Pokémon Quiz-logo
+
+1.1.2 - 31.12.2025
+- Game now automatically pauses when the window loses focus
+- Added “Last guessed Pokémon” display to the UI
+- Fixed Vanillish / Vanilluxe ordering
+- Fixed remaining sprites with incorrect transparency
+
+1.1.1 - 30.12.2025
+- Improved Pokémon sprites by replacing white backgrounds with transparency where needed
+- Typing “Ursaluna” in the Full Quiz now also reveals Ursaluna (Blood Moon) from Paldea Expeditions
+- Added a fullscreen toggle in the top-right corner
+- Fixed the ordering of Stunfisk and Silicobra
+- Ctrl + Click now zooms a Pokémon card
+
+1.1.0 - 15.12.2025
+- Added a toggle for spelling help
+- Spelling help no longer suggests already guessed Pokémon
+- Spelling help is cleared after a Pokémon is guessed
+- Spelling help and “Always scroll to Pokémon” settings now persist between sessions
+- Added option to switch between windowed and fullscreen modes
+
+1.0.9 - 23.11.2025
+- Added spelling helper that suggests the closest Pokémon name when your input contains typos
+
+1.0.8 - 21.11.2025
+- Fixed broken or incorrect sprites for Iron Jugulis, Galarian Weezing, and Comfey
+- Mega evolutions no longer require typing the “mega” prefix when guessing
+
+1.0.7 - 21.11.2025
+- Fixed reveal system: Shadow and type hints now appear in the correct visual/section order instead of skipping generations or jumping to later categories. Mega Evolutions, Gigantamax, Hisui, Paldea Expeditions, and Lumiose Megas are now properly included
+
+1.0.6 - 20.11.2025
+- “Next shadow” button now reveals the next Pokémon silhouette in Pokédex order
+- Reduced empty space between the main title and the first generation (Kanto)
+- Finished dialog now shows how many type hints and shadows were used
+- Green / red result borders now work correctly again after using Give Up
+- Reduced Pokémon sprite resolution from 512×512 to 128×128, resulting in shorter loading times and a significantly smaller game size
+
+1.0.5 - 17.11.2025
+- Improved quiz layout: all section titles are now left-aligned and automatically scale with the grid size for better readability
+- Added Patch Notes History, accessible from the main menu
+- Added Pokémon silhouette mode (“Shadows”), allowing players to reveal shadow versions of all Pokémon
+
+1.0.4 - 14.11.2025
+- Tooltip for patch notes no longer overflows the right side of the screen when the text is long.
+- No need to type “Alolan”, “Galarian”, or “Hisui” in Gen 7/8 quizzes if the base form exists in earlier generations.
+- All Pokémon should now appear in the correct order in every quiz.
+- Type quizzes now use the same background color as their corresponding type buttons.
+- Added Lumiose Mega Evolutions.
+- Meltan and Melmetal appear in the Unknown section under Alola, matching the original quiz.
+- Mega Evolutions are now split into “Mega Evolution – Kalos” and “Mega Evolution – Hoenn”.
+
+1.0.3 - 11.11.2025
+- Re-typing a Pokémon name now clears the input field and plays the duplicate-guess sound.
+- Added a Pause Menu: pressing Esc (or the Pause button) pauses the quiz, hides the grid, and shows total elapsed time with a Resume button.
+- Fixed an issue where correct/incorrect outline colors after Give Up did not scale properly with different grid sizes.
+
+1.0.2 - 6.11.2025
+- Added a Card Size slider allowing you to adjust Pokémon tile size (zoom in/out).
+
+1.0.1 - 6.11.2025
+- The game can now automatically check for and download updates.
+- Added a toggle to always scroll to the entered Pokémon, even if it was already guessed.
+- After pressing Give Up, guessed Pokémon display a green outline and missed ones show a red circle.
+- The final results dialog now has a Close (×) button and stays open until manually dismissed.
+- Added a toggle + slider for background music, with volume preserved between scenes.
+- Added distinct sound effects for correct guesses and duplicate guesses.
+- Buttons now have mouse hover animations.
+- The PC executable now uses a Poké Ball icon.
