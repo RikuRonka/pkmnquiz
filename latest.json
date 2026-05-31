@@ -1,8 +1,7 @@
 {
-  "version": "1.2.8",
+  "version": "1.2.9",
   "notes": [
-    "Added a co-op Resync backup action for joined players so they can force a fresh quiz state reload from the host",
-    "Improved co-op state sync retry handling when the player scores arrive but the guessed Pokemon grid is still incomplete"
+    "- Fixed restarted co-op clients rejoining an active Gen quiz as Full Quiz instead of the host's selected quiz"
   ],
-  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.8.zip"
+  "url": "https://github.com/RikuRonka/pkmnquiz/releases/download/latest/pkmnquiz_build1.2.9.zip"
 }

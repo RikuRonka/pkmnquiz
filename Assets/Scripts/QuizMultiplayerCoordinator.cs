@@ -974,12 +974,14 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     private void OnStateRequestMessage(ulong senderClientId, FastBufferReader reader)
     {
         TryRestoreSavedQuizSessionForCurrentQuiz();
+        QuizNetworkRuntime.SendActiveQuizSelectionToClient(senderClientId);
         SendStateToClient(senderClientId);
     }
 
     private void OnClientConnected(ulong clientId)
     {
         EnsurePlayer(clientId, null);
+        QuizNetworkRuntime.SendActiveQuizSelectionToClient(clientId);
         BroadcastScoreboard();
 
         if (clientId != manager.LocalClientId)
@@ -1107,6 +1109,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             nextStateRequest = 0f;
             return;
         }
+
+        QuizNetworkRuntime.ApplyAuthoritativeQuizSelection(snapshot.Generation, snapshot.TypeFilter);
 
         if (!SnapshotMatchesActiveQuiz(snapshot))
         {

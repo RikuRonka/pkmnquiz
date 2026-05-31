@@ -24,6 +24,8 @@ public static class QuizNetworkRuntime
     private const string LobbyAppValue = "pkmnquiz";
     private const string LobbyHostNameKey = "host";
     private const string LobbyActiveQuizKey = "quiz";
+    private const string LobbyActiveQuizGenerationKey = "quiz_gen";
+    private const string LobbyActiveQuizTypeKey = "quiz_type";
     private const string PlayerNameKey = "name";
     private const string PlayerColorKey = "color";
     private const string QuizSelectionMessage = "pkmnquiz_quiz_selection";
@@ -282,7 +284,7 @@ public static class QuizNetworkRuntime
         }
 
         ApplyQuizSettings(generation, typeFilter);
-        _ = UpdateLobbyActiveQuizAsync(DescribeQuiz(generation, typeFilter));
+        _ = UpdateLobbyActiveQuizAsync(DescribeQuiz(generation, typeFilter), generation, typeFilter);
         BroadcastQuizSelection(manager, generation, typeFilter);
         StatusChanged?.Invoke($"Starting {DescribeQuiz(generation, typeFilter)} co-op...");
 
@@ -326,9 +328,16 @@ public static class QuizNetworkRuntime
         GameSettings.MultiplayerMode = QuizMultiplayerMode.Client;
         GameSettings.MultiplayerJoinCode = JoinCode;
         GameSettings.MultiplayerNickname = PlayerNickname;
-        GameSettings.Generation = 0;
-        GameSettings.TypeFilter = null;
-        GameSettings.TypeBgColor = null;
+        if (HasActiveQuizSelection)
+        {
+            ApplyQuizSettings(ActiveQuizGeneration, ActiveQuizTypeFilter);
+        }
+        else
+        {
+            GameSettings.Generation = 0;
+            GameSettings.TypeFilter = null;
+            GameSettings.TypeBgColor = null;
+        }
 
         if (!manager.StartClient())
             throw new InvalidOperationException("Could not start Netcode client.");
@@ -644,9 +653,21 @@ public static class QuizNetworkRuntime
 
     private static async Task UpdateLobbyActiveQuizAsync(string activeQuizLabel)
     {
+        await UpdateLobbyActiveQuizAsync(activeQuizLabel, null, null);
+    }
+
+    private static async Task UpdateLobbyActiveQuizAsync(
+        string activeQuizLabel,
+        int? generation,
+        string typeFilter
+    )
+    {
         if (string.IsNullOrEmpty(LobbyId) || !IsMultiplayerServer)
             return;
 
+        string normalizedType = string.IsNullOrWhiteSpace(typeFilter)
+            ? string.Empty
+            : typeFilter.Trim().ToLowerInvariant();
         try
         {
             await LobbyService.Instance.UpdateLobbyAsync(
@@ -661,6 +682,17 @@ public static class QuizNetworkRuntime
                                 DataObject.VisibilityOptions.Public,
                                 activeQuizLabel ?? string.Empty
                             )
+                        },
+                        {
+                            LobbyActiveQuizGenerationKey,
+                            new DataObject(
+                                DataObject.VisibilityOptions.Public,
+                                generation.HasValue ? generation.Value.ToString() : string.Empty
+                            )
+                        },
+                        {
+                            LobbyActiveQuizTypeKey,
+                            new DataObject(DataObject.VisibilityOptions.Public, normalizedType)
                         },
                     },
                 }
@@ -731,6 +763,14 @@ public static class QuizNetworkRuntime
                         new DataObject(DataObject.VisibilityOptions.Public, string.Empty)
                     },
                     {
+                        LobbyActiveQuizGenerationKey,
+                        new DataObject(DataObject.VisibilityOptions.Public, string.Empty)
+                    },
+                    {
+                        LobbyActiveQuizTypeKey,
+                        new DataObject(DataObject.VisibilityOptions.Public, string.Empty)
+                    },
+                    {
                         LobbyRelayKey,
                         new DataObject(DataObject.VisibilityOptions.Member, relayJoinCode)
                     },
@@ -783,6 +823,7 @@ public static class QuizNetworkRuntime
         }
 
         LobbyId = lobby.Id;
+        TryApplyLobbyQuizSettings(lobby);
 
         if (
             lobby.Data == null
@@ -1084,12 +1125,34 @@ public static class QuizNetworkRuntime
         manager.CustomMessagingManager.SendNamedMessageToAll(QuizSelectionMessage, writer);
     }
 
+    public static void SendActiveQuizSelectionToClient(ulong clientId)
+    {
+        var manager = NetworkManager.Singleton;
+        if (
+            !manager
+            || !manager.IsServer
+            || manager.CustomMessagingManager == null
+            || !HasActiveQuizSelection
+        )
+            return;
+
+        using var writer = new FastBufferWriter(QuizSelectionMessageSize, Allocator.Temp);
+        writer.WriteValueSafe(ActiveQuizGeneration);
+        writer.WriteValueSafe(ActiveQuizTypeFilter ?? string.Empty);
+        manager.CustomMessagingManager.SendNamedMessage(QuizSelectionMessage, clientId, writer);
+    }
+
     private static void OnQuizSelectionMessage(ulong senderClientId, FastBufferReader reader)
     {
         reader.ReadValueSafe(out int generation);
         reader.ReadValueSafe(out string typeFilter);
         ApplyQuizSettings(generation, typeFilter);
         StatusChanged?.Invoke($"Host selected {DescribeQuiz(generation, typeFilter)}.");
+    }
+
+    public static void ApplyAuthoritativeQuizSelection(int generation, string typeFilter)
+    {
+        ApplyQuizSettings(generation, typeFilter);
     }
 
     private static void ApplyQuizSettings(int generation, string typeFilter)
@@ -1130,6 +1193,77 @@ public static class QuizNetworkRuntime
     {
         value = string.IsNullOrWhiteSpace(value) ? "Type" : value.Trim().ToLowerInvariant();
         return char.ToUpperInvariant(value[0]) + value.Substring(1);
+    }
+
+    private static bool TryApplyLobbyQuizSettings(Lobby lobby)
+    {
+        if (lobby == null)
+            return false;
+
+        string typeFilter = GetLobbyData(lobby, LobbyActiveQuizTypeKey);
+        string generationValue = GetLobbyData(lobby, LobbyActiveQuizGenerationKey);
+        if (int.TryParse(generationValue, out int generation))
+        {
+            ApplyQuizSettings(generation, typeFilter);
+            return true;
+        }
+
+        string activeQuizLabel = GetLobbyData(lobby, LobbyActiveQuizKey);
+        if (TryParseActiveQuizLabel(activeQuizLabel, out generation, out typeFilter))
+        {
+            ApplyQuizSettings(generation, typeFilter);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseActiveQuizLabel(
+        string activeQuizLabel,
+        out int generation,
+        out string typeFilter
+    )
+    {
+        generation = 0;
+        typeFilter = null;
+        if (string.IsNullOrWhiteSpace(activeQuizLabel))
+            return false;
+
+        string label = activeQuizLabel.Trim();
+        if (label.Equals("full quiz", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (label.Equals("Mega Evolutions quiz", StringComparison.OrdinalIgnoreCase))
+        {
+            generation = 10;
+            return true;
+        }
+
+        const string genPrefix = "Gen ";
+        const string genSuffix = " quiz";
+        if (
+            label.StartsWith(genPrefix, StringComparison.OrdinalIgnoreCase)
+            && label.EndsWith(genSuffix, StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            string genText = label.Substring(
+                genPrefix.Length,
+                label.Length - genPrefix.Length - genSuffix.Length
+            );
+            return int.TryParse(genText, out generation);
+        }
+
+        const string typeSuffix = " type quiz";
+        if (label.EndsWith(typeSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            typeFilter = label.Substring(0, label.Length - typeSuffix.Length)
+                .Trim()
+                .ToLowerInvariant();
+            generation = 0;
+            return !string.IsNullOrEmpty(typeFilter);
+        }
+
+        return false;
     }
 
     private static string ReadableError(Exception ex)

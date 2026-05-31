@@ -1,3 +1,6 @@
+1.2.9 - 31.5.2026
+- Fixed restarted co-op clients rejoining an active Gen quiz as Full Quiz instead of the host's selected quiz
+
 1.2.8 - 31.5.2026
 - Added a co-op Resync backup action for joined players so they can force a fresh quiz state reload from the host
 - Improved co-op state sync retry handling when the player scores arrive but the guessed Pokemon grid is still incomplete
