@@ -88,19 +88,43 @@ public static class QuizNetworkRuntime
     public static bool IsApplicationQuitting => applicationQuitting;
 
     private static bool applicationQuitting;
+    private static bool quitCleanupStarted;
+    private static bool quitCleanupComplete;
+    private const int QuitCleanupTimeoutMs = 1800;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void RegisterApplicationQuitHandler()
     {
         applicationQuitting = false;
+        quitCleanupStarted = false;
+        quitCleanupComplete = false;
+        Application.wantsToQuit -= OnApplicationWantsToQuit;
+        Application.wantsToQuit += OnApplicationWantsToQuit;
         Application.quitting -= OnApplicationQuitting;
         Application.quitting += OnApplicationQuitting;
+    }
+
+    private static bool OnApplicationWantsToQuit()
+    {
+        if (quitCleanupComplete)
+            return true;
+
+        if (!HasLobbyCleanupWork())
+            return true;
+
+        if (!quitCleanupStarted)
+        {
+            quitCleanupStarted = true;
+            _ = CleanupLobbyThenQuitAsync();
+        }
+
+        return false;
     }
 
     private static void OnApplicationQuitting()
     {
         applicationQuitting = true;
-        ShutdownInternal(allowLobbyServiceCleanup: false);
+        ShutdownInternal(allowLobbyServiceCleanup: !quitCleanupStarted);
         ChatWindowsDropBridge.Shutdown();
     }
 
@@ -509,6 +533,42 @@ public static class QuizNetworkRuntime
         GameSettings.ClearMultiplayer();
         if (!applicationQuitting)
             StatusChanged?.Invoke(null);
+    }
+
+    private static bool HasLobbyCleanupWork()
+    {
+        return !string.IsNullOrEmpty(LobbyId)
+            && NetworkManager.Singleton
+            && NetworkManager.Singleton.IsListening;
+    }
+
+    private static async Task CleanupLobbyThenQuitAsync()
+    {
+        applicationQuitting = true;
+
+        var manager = NetworkManager.Singleton;
+        bool wasHost = manager && manager.IsServer;
+        string lobbyToClean = LobbyId;
+        string playerId = GetSignedInPlayerId();
+
+        ShutdownInternal(allowLobbyServiceCleanup: false);
+
+        if (!string.IsNullOrEmpty(lobbyToClean))
+        {
+            Task cleanupTask = wasHost
+                ? TryDeleteLobbyAsync(lobbyToClean)
+                : (
+                    !string.IsNullOrEmpty(playerId)
+                        ? TryRemovePlayerAsync(lobbyToClean, playerId)
+                        : Task.CompletedTask
+                );
+
+            await Task.WhenAny(cleanupTask, Task.Delay(QuitCleanupTimeoutMs));
+        }
+
+        ChatWindowsDropBridge.Shutdown();
+        quitCleanupComplete = true;
+        Application.Quit();
     }
 
     public static void ReturnToLobbyMenu(bool keepActiveQuizSelection = false)

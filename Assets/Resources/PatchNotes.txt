@@ -1,3 +1,14 @@
+1.2.7 - 31.5.2026
+- Fixed the lobby chat overlay showing on top of the patch notes panel
+- Fixed large score counters like 1210/1210 so they fit on screen
+- Fixed multi-word Pokémon guesses such as Iron Bundle, including space-less input like ironbundle
+- Fixed co-op quiz state restoration after leaving a quiz, playing another quiz, and returning
+- Fixed large co-op quiz loading and state sync issues that could leave clients missing guesses or the finished panel
+- Fixed co-op lobbies staying open when the host closes the game with Alt+F4
+- Fixed Full Quiz and type quiz tile sizing so hidden white squares stay visible
+- Improved type quiz layouts with two columns and more stable column resizing
+- Reveal type and Reveal shadow now scroll to the revealed Pokémon
+
 1.2.6 - 31.5.2026
 - Added singleplayer scoreboard history for every quiz, including type quizzes, with multiple entries per quiz
 - Added scoreboard sorting by date, completion time, type reveals, shadows used, and fill-quiz usage

@@ -26,6 +26,7 @@ public class PatchNotesView : MonoBehaviour
     void OnEnable()
     {
         MultiplayerMenuPanel.SetOverlayVisible(false);
+        QuizMultiplayerChatOverlay.SetOverlayVisible(false);
         SingleplayerScoreboardPanel.SetOverlayVisible(false);
         SingleplayerProgressResetPanel.SetOverlayVisible(false);
         MainMenuController.SetMenuChromeVisible(false);
@@ -35,6 +36,7 @@ public class PatchNotesView : MonoBehaviour
     void OnDisable()
     {
         MultiplayerMenuPanel.SetOverlayVisible(true);
+        QuizMultiplayerChatOverlay.SetOverlayVisible(true);
         SingleplayerScoreboardPanel.SetOverlayVisible(true);
         SingleplayerProgressResetPanel.SetOverlayVisible(true);
         MainMenuController.SetMenuChromeVisible(true);

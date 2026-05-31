@@ -185,6 +185,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private RectTransform _backgroundImageRt;
     private Vector2 _originalBackgroundImageOffsetMin;
     private Vector2 _originalBackgroundImageOffsetMax;
+    private RectTransform _typeColumnsRoot;
+    private RectTransform _typeLeftColumn;
+    private RectTransform _typeRightColumn;
     private bool _viewportOffsetsCaptured;
     private bool _scrollRectOffsetsCaptured;
     private bool _backgroundImageOffsetsCaptured;
@@ -198,6 +201,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private Texture2D backgroundColorHandleTexture;
     private Sprite backgroundColorHandleSprite;
     private readonly List<SectionGroup> _sections = new();
+    private int _typeSectionColumnCursor;
     int _hintUsedCount;
     int _shadowUsedCount;
 
@@ -351,6 +355,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 OnGuessChanged(txt + " ");
             });
         }
+        ConfigureScoreText();
 
         if (backToMenuBtn)
         {
@@ -400,6 +405,18 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             pauseMenu.OnResume = OnPauseMenuResume;
         }
         EnsureUIContracts();
+    }
+
+    private void ConfigureScoreText()
+    {
+        if (!scoreText)
+            return;
+
+        scoreText.enableAutoSizing = true;
+        scoreText.fontSizeMin = 16f;
+        scoreText.fontSizeMax = scoreText.fontSize > 0f ? scoreText.fontSize : 30f;
+        scoreText.textWrappingMode = TextWrappingModes.NoWrap;
+        scoreText.overflowMode = TextOverflowModes.Overflow;
     }
 
     int TotalGoal()
@@ -1251,6 +1268,16 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private static int BaseIdOf(Pokemon p) => p.baseId != 0 ? p.baseId : p.id;
 
+    private static Pokemon PickMegaFormForSlot(int baseId, IReadOnlyList<Pokemon> forms)
+    {
+        if (forms == null || forms.Count == 0)
+            return null;
+
+        var ordered = forms.OrderBy(p => p.id).ToList();
+        int index = Mathf.Abs(baseId) % ordered.Count;
+        return ordered[index];
+    }
+
     void EnsureLoader()
     {
         if (_loader && _loader.gameObject.scene.IsValid())
@@ -1587,7 +1614,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             LastNetworkGuessFeedback = feedback;
     }
 
-    void MaybeScrollTo(Pokemon p, float duration = 0.25f)
+    void MaybeScrollTo(Pokemon p, float duration = 0.25f, bool force = false)
     {
         if (!scrollRect || !scrollRect.content || !scrollRect.viewport)
             return;
@@ -1596,7 +1623,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!cardById.TryGetValue(p.id, out var card) || !card)
             return;
 
-        if (!_alwaysScrollEnabled)
+        if (!force && !_alwaysScrollEnabled)
             return;
 
         if (_scrollRoutine != null)
@@ -1981,6 +2008,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         foreach (Transform c in content)
             Destroy(c.gameObject);
         DestroyBackgroundColorSlider();
+        _typeColumnsRoot = null;
+        _typeLeftColumn = null;
+        _typeRightColumn = null;
+        _typeSectionColumnCursor = 0;
         cardById.Clear();
         pokemonById.Clear();
         solved.Clear();
@@ -2194,13 +2225,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             }
             if ((megaKalos != null || megaHoenn != null) && megaFormsByBase.Count > 0)
             {
-                var rng = new System.Random();
-
                 foreach (var kv in megaFormsByBase)
                 {
                     int baseId = kv.Key;
                     var forms = kv.Value;
-                    var pick = forms[rng.Next(forms.Count)];
+                    var pick = PickMegaFormForSlot(baseId, forms);
+                    if (pick == null)
+                        continue;
 
                     var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
                     int baseGen = baseMon?.generation ?? pick.generation;
@@ -2454,6 +2485,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 unknownSec.SetCardCount(unknownSec.gridRoot.childCount);
                 FitSection(unknownSec);
             }
+
+            ArrangeTypeQuizSectionsIntoColumns(main);
+
             foreach (var sec in mainByGen.Values)
             {
                 sec.SetCardCount(sec.gridRoot.childCount);
@@ -2496,8 +2530,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 FitSection(fullHyperspaceMegas);
             }
 
-            unknownSec.SetCardCount(unknownSec.gridRoot.childCount);
-            FitSection(unknownSec);
+            if (unknownSec != null)
+            {
+                unknownSec.SetCardCount(unknownSec.gridRoot.childCount);
+                FitSection(unknownSec);
+            }
             foreach (var sec in mainByGen.Values)
                 FinalizeSection(sec);
 
@@ -2509,6 +2546,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             FinalizeSection(fullLumioseMegas);
             FinalizeSection(fullHyperspaceMegas);
             FinalizeSection(unknownSec);
+            RefreshTypeColumnsPreferredHeight();
             ApplyQuizTitleColor(ShouldUseLightQuizTitles());
             RebuildHintShadowOrderFromSections();
             UpdateScore();
@@ -2627,13 +2665,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (generation == 10 && (megaKalosGen != null || megaHoennGen != null))
         {
-            var rng = new System.Random();
-
             foreach (var kv in megaFormsByBase)
             {
                 int baseId = kv.Key;
                 var forms = kv.Value;
-                var pick = forms[rng.Next(forms.Count)];
+                var pick = PickMegaFormForSlot(baseId, forms);
+                if (pick == null)
+                    continue;
 
                 var baseMon = allDb.FirstOrDefault(x => x.id == baseId);
                 int baseGen = baseMon?.generation ?? pick.generation;
@@ -2938,6 +2976,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     }
 
     bool HasTypeFilter => !string.IsNullOrEmpty(selectedType);
+    bool UseTypeQuizColumns => generation == 0 && HasTypeFilter;
 
     bool MatchesType(Pokemon p)
     {
@@ -2966,6 +3005,123 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         StopAllCoroutines();
     }
 
+    private void ArrangeTypeQuizSectionsIntoColumns(SectionGroup main)
+    {
+        if (!UseTypeQuizColumns || !content || !main)
+            return;
+
+        _typeColumnsRoot = CreateTypeColumnRoot();
+        _typeLeftColumn = CreateTypeColumn("Left Column", _typeColumnsRoot);
+        _typeRightColumn = CreateTypeColumn("Right Column", _typeColumnsRoot);
+        _typeSectionColumnCursor = 0;
+
+        _typeColumnsRoot.SetSiblingIndex(main.transform.GetSiblingIndex() + 1);
+
+        foreach (var sec in _sections)
+        {
+            if (!sec || sec == main)
+                continue;
+
+            var targetColumn =
+                (_typeSectionColumnCursor++ & 1) == 0 ? _typeLeftColumn : _typeRightColumn;
+            sec.transform.SetParent(targetColumn, false);
+        }
+
+        RefreshTypeColumnsPreferredHeight();
+    }
+
+    private RectTransform CreateTypeColumnRoot()
+    {
+        var rootGo = new GameObject(
+            "Type Quiz Columns",
+            typeof(RectTransform),
+            typeof(HorizontalLayoutGroup),
+            typeof(ContentSizeFitter),
+            typeof(LayoutElement)
+        );
+        rootGo.transform.SetParent(content, false);
+
+        var rt = (RectTransform)rootGo.transform;
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+        rt.sizeDelta = new Vector2(0f, 0f);
+
+        var layout = rootGo.GetComponent<HorizontalLayoutGroup>();
+        layout.spacing = 20f;
+        layout.padding = new RectOffset(0, 0, 0, 0);
+        layout.childAlignment = TextAnchor.UpperLeft;
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+
+        var fitter = rootGo.GetComponent<ContentSizeFitter>();
+        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        var element = rootGo.GetComponent<LayoutElement>();
+        element.flexibleWidth = 1f;
+        element.flexibleHeight = 0f;
+
+        return rt;
+    }
+
+    private static RectTransform CreateTypeColumn(string name, RectTransform parent)
+    {
+        var columnGo = new GameObject(
+            name,
+            typeof(RectTransform),
+            typeof(VerticalLayoutGroup),
+            typeof(ContentSizeFitter),
+            typeof(LayoutElement)
+        );
+        columnGo.transform.SetParent(parent, false);
+
+        var rt = (RectTransform)columnGo.transform;
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+
+        var layout = columnGo.GetComponent<VerticalLayoutGroup>();
+        layout.spacing = 10f;
+        layout.padding = new RectOffset(0, 0, 0, 0);
+        layout.childAlignment = TextAnchor.UpperLeft;
+        layout.childControlWidth = true;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+
+        var fitter = columnGo.GetComponent<ContentSizeFitter>();
+        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        var element = columnGo.GetComponent<LayoutElement>();
+        element.flexibleWidth = 1f;
+        element.flexibleHeight = 0f;
+
+        return rt;
+    }
+
+    private void RefreshTypeColumnsPreferredHeight()
+    {
+        if (!_typeColumnsRoot)
+            return;
+
+        Canvas.ForceUpdateCanvases();
+
+        float leftHeight = _typeLeftColumn ? LayoutUtility.GetPreferredHeight(_typeLeftColumn) : 0f;
+        float rightHeight = _typeRightColumn ? LayoutUtility.GetPreferredHeight(_typeRightColumn) : 0f;
+        float height = Mathf.Max(leftHeight, rightHeight);
+
+        var element =
+            _typeColumnsRoot.GetComponent<LayoutElement>()
+            ?? _typeColumnsRoot.gameObject.AddComponent<LayoutElement>();
+        element.minHeight = height;
+        element.preferredHeight = height;
+        element.flexibleHeight = 0f;
+    }
+
     static void AddKey(Dictionary<string, int> map, string s, int baseId)
     {
         var k = GuessNormalizer.Key(s);
@@ -2984,12 +3140,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         _hintShadowOrder.Clear();
         var seen = new HashSet<int>();
 
-        if (!content)
-            return;
-
-        foreach (Transform secTr in content)
+        foreach (var sec in _sections)
         {
-            var sec = secTr.GetComponent<SectionGroup>();
             if (!sec || !sec.gridRoot)
                 continue;
 
@@ -3004,6 +3156,26 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 {
                     _hintShadowOrder.Add(id);
                 }
+            }
+        }
+
+        if (_hintShadowOrder.Count > 0 || !content)
+            return;
+
+        foreach (var sec in content.GetComponentsInChildren<SectionGroup>(true))
+        {
+            if (!sec || !sec.gridRoot)
+                continue;
+
+            foreach (Transform cardTr in sec.gridRoot)
+            {
+                var card = cardTr.GetComponent<PokemonCard>();
+                if (!card)
+                    continue;
+
+                int id = card.PokemonId;
+                if (id != 0 && seen.Add(id))
+                    _hintShadowOrder.Add(id);
             }
         }
     }
@@ -3458,6 +3630,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             targetCard.SetShadowMode(true);
             _shadowUsedCount++;
             SaveLocalQuizSession();
+            MaybeScrollTo(pick, force: true);
             return pickId;
         }
 
@@ -3477,6 +3650,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             ?? grp.gridRoot.gameObject.AddComponent<GridAutoFit>();
 
         fit.Viewport = scrollRect ? scrollRect.viewport : null;
+        fit.WidthSource = GetSectionGridWidthSource(grp);
         fit.Header = grp.headerRect;
         fit.ItemCount = grp.CardCount;
         fit.OuterMarginX = 16;
@@ -3487,10 +3661,37 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         fit.MaxCols = currentCols;
 
         _fits.Add(fit);
+        if (fit.WidthSource)
+            ForceTypeColumnsLayoutImmediate();
         fit.Recalculate();
         grp.RefreshPreferredHeight();
 
         StartCoroutine(CoRecalcSafe(fit, _buildToken));
+    }
+
+    private RectTransform GetSectionGridWidthSource(SectionGroup grp)
+    {
+        if (!UseTypeQuizColumns || !grp)
+            return null;
+
+        var parent = grp.transform.parent as RectTransform;
+        if (parent && (parent == _typeLeftColumn || parent == _typeRightColumn))
+            return parent;
+
+        return null;
+    }
+
+    private void ForceTypeColumnsLayoutImmediate()
+    {
+        if (!_typeColumnsRoot)
+            return;
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_typeColumnsRoot);
+        if (_typeLeftColumn)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_typeLeftColumn);
+        if (_typeRightColumn)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_typeRightColumn);
     }
 
     private void OnCardSizeSliderChanged(float t)
@@ -3543,6 +3744,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 continue;
             fit.MinCols = currentCols;
             fit.MaxCols = currentCols;
+        }
+
+        ForceTypeColumnsLayoutImmediate();
+
+        foreach (var fit in _fits)
+        {
+            if (!fit)
+                continue;
             fit.Recalculate();
         }
 
@@ -3582,6 +3791,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (!fit.gameObject.activeInHierarchy)
             yield break;
 
+        if (fit.WidthSource)
+            ForceTypeColumnsLayoutImmediate();
         fit.Recalculate();
         RebuildSectionContentLayoutImmediate();
     }
@@ -3599,6 +3810,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (sec.transform is RectTransform secRt)
                 LayoutRebuilder.ForceRebuildLayoutImmediate(secRt);
         }
+
+        RefreshTypeColumnsPreferredHeight();
 
         if (content is RectTransform contentRt)
             LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
@@ -3654,6 +3867,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         card.ShowTypeHint(p.types);
         _hintUsedCount++;
         SaveLocalQuizSession();
+        MaybeScrollTo(p, force: true);
         return true;
     }
 
@@ -3860,7 +4074,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         int total = cardById.Count;
         if (scoreText)
-            scoreText.text = $"{solved.Count} / {total}";
+            scoreText.text = $"{solved.Count}/{total}";
     }
 
     private void ApplyMultiplayerUiState()
@@ -4622,8 +4836,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (string.IsNullOrWhiteSpace(currentText))
             return;
 
-        bool commit = char.IsWhiteSpace(currentText[^1]);
-        string raw = commit ? currentText.TrimEnd() : currentText;
+        bool commit = ShouldCommitGuessInput(currentText, out string raw);
 
         if (_spellingHelpEnabled)
             UpdateSpellingHelp(raw, commit);
@@ -4643,40 +4856,39 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (string.IsNullOrWhiteSpace(currentText))
             return;
 
-        bool commit = char.IsWhiteSpace(currentText[^1]);
-        string raw = commit ? currentText.TrimEnd() : currentText;
+        bool commit = ShouldCommitGuessInput(currentText, out string raw);
         if (_spellingHelpEnabled)
             UpdateSpellingHelp(raw, commit);
         else
             SetSpellingHelp(null);
-        if (generation == 8 || generation == 0 && commit)
+        if ((generation == 8 || generation == 0) && commit)
         {
-            if (TryAcceptGmaxByBaseName(currentText.Trim(), commit: true))
+            if (TryAcceptGmaxByBaseName(raw, commit: true))
                 return;
-            if (TryAcceptHisuiByBaseName(currentText.Trim(), commit: true))
+            if (TryAcceptHisuiByBaseName(raw, commit: true))
                 return;
         }
 
-        if (generation == 10 && TryAcceptAnyMegaByBaseName(currentText.Trim(), commit: true))
+        if (generation == 10 && commit && TryAcceptAnyMegaByBaseName(raw, commit: true))
             return;
 
         if (
             generation == 9
             && commit
-            && TryAcceptExpeditionByBaseName(currentText.Trim(), commit: true)
+            && TryAcceptExpeditionByBaseName(raw, commit: true)
         )
             return;
 
         if (
             (generation == 9 || generation == 0)
             && commit
-            && TryAcceptHyperspaceByBaseName(currentText.Trim(), commit: true)
+            && TryAcceptHyperspaceByBaseName(raw, commit: true)
         )
             return;
 
         if (generation == 6)
         {
-            var k = GuessNormalizer.Key(currentText.Trim());
+            var k = GuessNormalizer.Key(raw);
             if (
                 !string.IsNullOrEmpty(k)
                 && megaByBaseName.TryGetValue(k, out var ids)
@@ -4716,14 +4928,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                     var pick = PokemonDatabase.Instance.All().FirstOrDefault(p => p.id == pickId);
                     if (pick != null)
                     {
-                        HandleCandidate(pick, currentText, commit: true);
+                        HandleCandidate(pick, raw, commit: true);
                         return;
                     }
                 }
             }
         }
 
-        var keyOnly = GuessNormalizer.Key(currentText.Trim());
+        var keyOnly = GuessNormalizer.Key(raw);
         if (keyOnly == "nidoran")
         {
             RevealByBaseIds(29, 32);
@@ -4740,6 +4952,30 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             }
         }
         TryAcceptWithDisambiguation(raw, commit);
+    }
+
+    private bool ShouldCommitGuessInput(string currentText, out string raw)
+    {
+        raw = currentText?.TrimEnd() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(currentText))
+            return false;
+
+        bool trailingWhitespace = char.IsWhiteSpace(currentText[^1]);
+        if (!trailingWhitespace)
+        {
+            raw = currentText;
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        var exact = FindByExactPreserveDigits(raw);
+        bool exactInQuiz = exact != null && MapToTargetSpecies(exact) != null;
+        if (!exactInQuiz && HasInQuizContinuation(raw))
+            return false;
+
+        return true;
     }
 
     private static string KeyKeepDigits(string s)
@@ -5270,7 +5506,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         UpdateScore();
         ApplyMultiplayerUiState();
-        QuizMultiplayerCoordinator.Attach(this);
+        try
+        {
+            QuizMultiplayerCoordinator.Attach(this);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+        }
         Step(1.00f);
         yield return null;
     }

@@ -21,7 +21,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     private const string StateMessage = "pkmnquiz_state";
     private const string TimerMessage = "pkmnquiz_timer";
     private const string PlayerNoticeMessage = "pkmnquiz_player_notice";
-    private const int MessageSize = 32768;
+    private const int MessageSize = 131072;
     private const float TimerSyncInterval = 0.25f;
     private static readonly Color MissedEndStateColor = new(1f, 0f, 0f, 1f);
     private static readonly Color LeaveNoticeBackground = new(0.72f, 0.08f, 0.10f, 0.95f);
@@ -363,18 +363,41 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
                 ResetScores();
                 solvedByClientId.Clear();
             }
-            BroadcastScoreboard();
-            BroadcastStateToClients();
+            try
+            {
+                BroadcastScoreboard();
+                BroadcastStateToClients();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogException(ex);
+            }
         }
         else if (manager && manager.IsClient)
         {
             stateReceived = false;
             nextStateRequest = 0f;
-            SendNickname();
+            try
+            {
+                SendNickname();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogException(ex);
+            }
             if (pendingState != null)
                 ApplyNetworkStateSnapshot(pendingState);
             else
-                SendStateRequest();
+            {
+                try
+                {
+                    SendStateRequest();
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogException(ex);
+                }
+            }
         }
     }
 
@@ -796,6 +819,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
                 connectedClientIds.Add(clientId);
         }
 
+        ResetScores();
         RestoreSavedScoreboard(session.Scoreboard, connectedClientIds);
 
         solvedByClientId.Clear();
@@ -1040,13 +1064,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         }
 
         if (IsScoreboardAheadOfSolvedState(snapshot))
-        {
-            ApplyScoreboard(snapshot.Scoreboard);
-            pendingState = null;
-            stateReceived = false;
-            nextStateRequest = 0f;
-            return;
-        }
+            Debug.LogWarning("[Co-op] Applying quiz state even though scoreboard is ahead of solved IDs.");
 
         pendingState = null;
         solvedByClientId.Clear();

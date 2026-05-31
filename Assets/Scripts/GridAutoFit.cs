@@ -7,6 +7,7 @@ public class GridAutoFit : MonoBehaviour
 {
     [Header("Wiring")]
     public RectTransform Viewport;
+    public RectTransform WidthSource;
     public RectTransform Header;
 
     [Header("Layout")]
@@ -47,7 +48,11 @@ public class GridAutoFit : MonoBehaviour
         var vp = Viewport.rect;
         var pad = grid.padding;
 
-        float availW = Mathf.Max(1f, vp.width - 2f * OuterMarginX - (pad.left + pad.right));
+        float sourceWidth = vp.width;
+        if (WidthSource && WidthSource.rect.width > 1f)
+            sourceWidth = WidthSource.rect.width;
+
+        float availW = Mathf.Max(1f, sourceWidth - 2f * OuterMarginX - (pad.left + pad.right));
 
         int colsByMaxCell = Mathf.FloorToInt(availW / MaxCell);
         int bestCols = Mathf.Clamp(colsByMaxCell, MinCols, MaxCols);
