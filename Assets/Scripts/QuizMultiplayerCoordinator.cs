@@ -1042,7 +1042,12 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         WriteIds(writer, quiz.ShadowedIds);
         WriteScoreboard(writer, BuildScoreboard());
         WriteSolvedOwners(writer);
-        manager.CustomMessagingManager.SendNamedMessage(StateMessage, clientId, writer);
+        manager.CustomMessagingManager.SendNamedMessage(
+            StateMessage,
+            clientId,
+            writer,
+            NetworkDelivery.ReliableFragmentedSequenced
+        );
     }
 
     private void BroadcastStateToClients()
