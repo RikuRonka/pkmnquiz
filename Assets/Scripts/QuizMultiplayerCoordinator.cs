@@ -2174,6 +2174,8 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private const float PausedChatMessagesHeight = 70f;
     private const float PausedExpandedChatHeight = 330f;
     private const float PausedExpandedChatMessagesHeight = 260f;
+    private const float ImageSendPreviewFooterHeight = 72f;
+    private const float ImageSendPreviewPanelChromeHeight = 212f;
     private static readonly Vector2 MenuFallbackLobbyAnchor = new(0.108f, 0.73f);
     private static readonly string[] SupportedImageExtensions = { ".png", ".jpg", ".jpeg" };
 
@@ -2212,6 +2214,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
     private string imageModalCurrentImageId;
     private GameObject imageSendPreviewRoot;
     private RectTransform imageSendPreviewPanelRect;
+    private RectTransform imageSendPreviewFooterRect;
     private TMP_Text imageSendPreviewTitle;
     private TMP_Text imageSendPreviewMeta;
     private Image imageSendPreviewImage;
@@ -4136,8 +4139,11 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             canvasH = Mathf.Max(360f, canvasRt.rect.height);
         }
 
-        float maxW = Mathf.Min(820f, canvasW - 96f);
-        float maxH = Mathf.Min(560f, canvasH - 196f);
+        float maxW = Mathf.Max(240f, Mathf.Min(820f, canvasW - 96f));
+        float maxH = Mathf.Max(
+            120f,
+            Mathf.Min(560f, canvasH - 48f - ImageSendPreviewPanelChromeHeight)
+        );
         float aspect = width / (float)Mathf.Max(1, height);
         float previewW = maxW;
         float previewH = previewW / Mathf.Max(0.01f, aspect);
@@ -4147,8 +4153,8 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
             previewW = previewH * aspect;
         }
 
-        previewW = Mathf.Max(280f, previewW);
-        previewH = Mathf.Max(160f, previewH);
+        previewW = Mathf.Clamp(previewW, Mathf.Min(280f, maxW), maxW);
+        previewH = Mathf.Clamp(previewH, Mathf.Min(140f, maxH), maxH);
 
         var imageRt = (RectTransform)imageSendPreviewImage.transform;
         imageRt.sizeDelta = new Vector2(previewW, previewH);
@@ -4162,10 +4168,12 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         }
 
         float panelW = Mathf.Min(canvasW - 48f, Mathf.Max(420f, previewW + 36f));
-        float panelH = Mathf.Min(canvasH - 48f, previewH + 156f);
+        float panelH = Mathf.Min(canvasH - 48f, previewH + ImageSendPreviewPanelChromeHeight);
         float contentW = Mathf.Max(260f, panelW - 36f);
         if (imageSendPreviewPanelRect)
             imageSendPreviewPanelRect.sizeDelta = new Vector2(panelW, panelH);
+        if (imageSendPreviewFooterRect)
+            imageSendPreviewFooterRect.sizeDelta = new Vector2(0f, ImageSendPreviewFooterHeight);
         SetLayoutWidth(imageSendPreviewTitleLayout, contentW);
         SetLayoutWidth(imageSendPreviewMetaLayout, contentW);
         SetLayoutWidth(imageSendPreviewButtonsLayout, contentW);
@@ -4209,8 +4217,13 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         panelImage.color = new Color(0.05f, 0.06f, 0.07f, 0.97f);
 
         var layout = panel.AddComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(18, 18, 14, 16);
-        layout.spacing = 8f;
+        layout.padding = new RectOffset(
+            18,
+            18,
+            16,
+            Mathf.RoundToInt(ImageSendPreviewFooterHeight + 20f)
+        );
+        layout.spacing = 10f;
         layout.childAlignment = TextAnchor.UpperCenter;
         layout.childControlWidth = false;
         layout.childControlHeight = false;
@@ -4263,22 +4276,35 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         imageLayout.minHeight = 340f;
         imageLayout.preferredHeight = 340f;
 
-        var buttonsGo = new GameObject("Buttons", typeof(RectTransform));
-        buttonsGo.transform.SetParent(panel.transform, false);
-        var buttonsLayout = buttonsGo.AddComponent<HorizontalLayoutGroup>();
+        var footerGo = new GameObject("Footer", typeof(RectTransform));
+        footerGo.transform.SetParent(panel.transform, false);
+        imageSendPreviewFooterRect = (RectTransform)footerGo.transform;
+        imageSendPreviewFooterRect.anchorMin = new Vector2(0f, 0f);
+        imageSendPreviewFooterRect.anchorMax = new Vector2(1f, 0f);
+        imageSendPreviewFooterRect.pivot = new Vector2(0.5f, 0f);
+        imageSendPreviewFooterRect.anchoredPosition = Vector2.zero;
+        imageSendPreviewFooterRect.sizeDelta = new Vector2(0f, ImageSendPreviewFooterHeight);
+
+        var footerImage = footerGo.AddComponent<Image>();
+        footerImage.color = panelImage.color;
+
+        imageSendPreviewButtonsLayout = footerGo.AddComponent<LayoutElement>();
+        imageSendPreviewButtonsLayout.ignoreLayout = true;
+        imageSendPreviewButtonsLayout.minWidth = 560f;
+        imageSendPreviewButtonsLayout.preferredWidth = 560f;
+        imageSendPreviewButtonsLayout.minHeight = ImageSendPreviewFooterHeight;
+        imageSendPreviewButtonsLayout.preferredHeight = ImageSendPreviewFooterHeight;
+
+        var buttonsLayout = footerGo.AddComponent<HorizontalLayoutGroup>();
+        buttonsLayout.padding = new RectOffset(18, 18, 12, 16);
         buttonsLayout.spacing = 10f;
         buttonsLayout.childAlignment = TextAnchor.MiddleRight;
         buttonsLayout.childControlWidth = false;
         buttonsLayout.childControlHeight = true;
         buttonsLayout.childForceExpandWidth = false;
         buttonsLayout.childForceExpandHeight = false;
-        imageSendPreviewButtonsLayout = buttonsGo.AddComponent<LayoutElement>();
-        imageSendPreviewButtonsLayout.minWidth = 560f;
-        imageSendPreviewButtonsLayout.preferredWidth = 560f;
-        imageSendPreviewButtonsLayout.minHeight = 34f;
-        imageSendPreviewButtonsLayout.preferredHeight = 34f;
 
-        var cancelButton = CreateButton(buttonsGo.transform, "Cancel", CancelPendingImageSend);
+        var cancelButton = CreateButton(footerGo.transform, "Cancel", CancelPendingImageSend);
         var cancelLayout = cancelButton.GetComponent<LayoutElement>();
         cancelLayout.minWidth = 86f;
         cancelLayout.preferredWidth = 86f;
@@ -4287,7 +4313,7 @@ public sealed class QuizMultiplayerChatOverlay : MonoBehaviour
         if (cancelButton.targetGraphic is Image cancelImage)
             cancelImage.color = new Color(0.35f, 0.39f, 0.46f, 1f);
 
-        var sendButton = CreateButton(buttonsGo.transform, "Send", ConfirmPendingImageSend);
+        var sendButton = CreateButton(footerGo.transform, "Send", ConfirmPendingImageSend);
         var sendLayout = sendButton.GetComponent<LayoutElement>();
         sendLayout.minWidth = 86f;
         sendLayout.preferredWidth = 86f;
@@ -4723,19 +4749,24 @@ public sealed class ChatHoverTooltip
     public void OnPointerEnter(PointerEventData eventData)
     {
         if (!string.IsNullOrWhiteSpace(text))
+        {
+            var cam =
+                eventData.pressEventCamera ?? eventData.enterEventCamera ?? Camera.main;
             TooltipManager.Instance?.ShowFollow(
                 text,
                 null,
                 null,
                 null,
                 eventData.position,
-                eventData.pressEventCamera
+                cam
             );
+        }
     }
 
     public void OnPointerMove(PointerEventData eventData)
     {
-        TooltipManager.Instance?.MoveFollow(eventData.position, eventData.pressEventCamera);
+        var cam = eventData.pressEventCamera ?? eventData.enterEventCamera ?? Camera.main;
+        TooltipManager.Instance?.MoveFollow(eventData.position, cam);
     }
 
     public void OnPointerExit(PointerEventData eventData)
