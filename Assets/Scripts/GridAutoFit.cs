@@ -48,9 +48,7 @@ public class GridAutoFit : MonoBehaviour
         var vp = Viewport.rect;
         var pad = grid.padding;
 
-        float sourceWidth = vp.width;
-        if (WidthSource && WidthSource.rect.width > 1f)
-            sourceWidth = WidthSource.rect.width;
+        float sourceWidth = ResolveSourceWidth(vp.width);
 
         float availW = Mathf.Max(1f, sourceWidth - 2f * OuterMarginX - (pad.left + pad.right));
 
@@ -85,5 +83,67 @@ public class GridAutoFit : MonoBehaviour
         layoutElem.preferredHeight = gridHeight;
 
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
+    }
+
+    private float ResolveSourceWidth(float fallbackWidth)
+    {
+        if (!WidthSource)
+            return fallbackWidth;
+
+        if (WidthSource.rect.width > 1f)
+            return WidthSource.rect.width;
+
+        if (WidthSource.parent is RectTransform parent)
+        {
+            float estimated = EstimateLayoutChildWidth(parent);
+            if (estimated > 1f)
+                return estimated;
+        }
+
+        return fallbackWidth;
+    }
+
+    private static float EstimateLayoutChildWidth(RectTransform parent)
+    {
+        if (!parent)
+            return 0f;
+
+        float parentWidth = ResolveReadyWidth(parent);
+        if (parentWidth <= 1f)
+            return 0f;
+
+        var layout = parent.GetComponent<HorizontalOrVerticalLayoutGroup>();
+        if (!layout)
+            return parentWidth;
+
+        float available = parentWidth - layout.padding.left - layout.padding.right;
+        if (layout is HorizontalLayoutGroup)
+        {
+            int activeChildren = 0;
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                if (parent.GetChild(i).gameObject.activeSelf)
+                    activeChildren++;
+            }
+
+            activeChildren = Mathf.Max(1, activeChildren);
+            available -= layout.spacing * Mathf.Max(0, activeChildren - 1);
+            available /= activeChildren;
+        }
+
+        return Mathf.Max(0f, available);
+    }
+
+    private static float ResolveReadyWidth(RectTransform rt)
+    {
+        while (rt)
+        {
+            if (rt.rect.width > 1f)
+                return rt.rect.width;
+
+            rt = rt.parent as RectTransform;
+        }
+
+        return 0f;
     }
 }

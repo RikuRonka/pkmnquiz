@@ -30,6 +30,8 @@ public static class QuizNetworkRuntime
     private const string PlayerColorKey = "color";
     private const string QuizSelectionMessage = "pkmnquiz_quiz_selection";
     private const int QuizSelectionMessageSize = 256;
+    private const int LobbyQueryMaxAttempts = 2;
+    private const int LobbyQueryRetryDelayMs = 250;
     private const string HostProfilePrefix = "pkmn_host";
     private const string ClientProfilePrefix = "pkmn_join";
     private const string DefaultPlayerColor = "#6FEA72";
@@ -55,6 +57,7 @@ public static class QuizNetworkRuntime
     public static int ActiveQuizGeneration { get; private set; }
     public static string ActiveQuizTypeFilter { get; private set; }
     public static bool HasActiveQuizSelection { get; private set; }
+    public static bool LastLobbySearchHadTransientFailure { get; private set; }
     public static int MaxPlayerCount => MaxRemotePlayers + 1;
     public static int RequiredPlayerCount => MinimumPlayersToStart;
 
@@ -355,8 +358,23 @@ public static class QuizNetworkRuntime
         PlayerNickname = NormalizeNickname(nickname);
         await EnsureServicesReadyAsync(BuildAuthProfile(ClientProfilePrefix, PlayerNickname));
 
-        var response = await QueryOpenPkmnquizLobbiesAsync(Mathf.Clamp(maxResults, 1, 25));
         var results = new List<AvailableLobby>();
+        LastLobbySearchHadTransientFailure = false;
+
+        QueryResponse response;
+        try
+        {
+            response = await QueryOpenPkmnquizLobbiesAsync(Mathf.Clamp(maxResults, 1, 25));
+        }
+        catch (NullReferenceException ex) when (IsLobbySdkWrappedNullReference(ex))
+        {
+            LastLobbySearchHadTransientFailure = true;
+            Debug.LogWarning(
+                "[Co-op] Lobby browser query hit a Unity Lobby SDK null response. The browser will retry automatically."
+            );
+            return results;
+        }
+
         if (response?.Results == null)
             return results;
 
@@ -493,12 +511,13 @@ public static class QuizNetworkRuntime
         return members;
     }
 
-    private static bool IsLobbySdkWrappedNullReference(NullReferenceException ex)
+    public static bool IsLobbySdkWrappedNullReference(Exception ex)
     {
-        return ex?.StackTrace?.IndexOf(
-            "Unity.Services.Lobbies.Internal.WrappedLobbyService",
-            StringComparison.Ordinal
-        ) >= 0;
+        return ex is NullReferenceException
+            && ex.StackTrace?.IndexOf(
+                "Unity.Services.Lobbies.Internal.WrappedLobbyService",
+                StringComparison.Ordinal
+            ) >= 0;
     }
 
     public static void Shutdown()
@@ -852,7 +871,7 @@ public static class QuizNetworkRuntime
         return response.Results[0];
     }
 
-    private static Task<QueryResponse> QueryOpenPkmnquizLobbiesAsync(
+    private static async Task<QueryResponse> QueryOpenPkmnquizLobbiesAsync(
         int count,
         string visibleCode = null
     )
@@ -872,9 +891,23 @@ public static class QuizNetworkRuntime
                 )
             );
 
-        return LobbyService.Instance.QueryLobbiesAsync(
-            new QueryLobbiesOptions { Count = count, Filters = filters }
-        );
+        var options = new QueryLobbiesOptions { Count = count, Filters = filters };
+
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await LobbyService.Instance.QueryLobbiesAsync(options);
+            }
+            catch (NullReferenceException ex)
+                when (IsLobbySdkWrappedNullReference(ex) && attempt < LobbyQueryMaxAttempts)
+            {
+                Debug.LogWarning(
+                    $"[Co-op] Unity Lobby query failed internally; retrying ({attempt}/{LobbyQueryMaxAttempts})."
+                );
+                await Task.Delay(LobbyQueryRetryDelayMs);
+            }
+        }
     }
 
     private static string GetLobbyData(Lobby lobby, string key)

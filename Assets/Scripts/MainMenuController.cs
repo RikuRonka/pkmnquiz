@@ -23,6 +23,7 @@ public class MainMenuController : MonoBehaviour
         SingleplayerScoreboardPanel.EnsureInScene();
         SingleplayerProgressResetPanel.EnsureInScene();
         ConfigureSettingsControls();
+        AlignStandaloneQuizButtons();
 
         bool fullscreen = PlayerPrefs.GetInt("fullscreen", 1) == 1;
         Screen.fullScreen = fullscreen;
@@ -41,6 +42,7 @@ public class MainMenuController : MonoBehaviour
 
     void Start()
     {
+        AlignStandaloneQuizButtons();
         RestoreMainMenuButtonInteractivity();
     }
 
@@ -52,7 +54,74 @@ public class MainMenuController : MonoBehaviour
             return;
 
         nextQuizButtonRestoreTime = Time.unscaledTime + QuizButtonRestoreInterval;
+        AlignStandaloneQuizButtons();
         RestoreQuizButtonInteractivity();
+    }
+
+    private static void AlignStandaloneQuizButtons()
+    {
+        var gens = GameObject.Find("gens")?.transform as RectTransform;
+        if (!gens || gens.parent is not RectTransform parent)
+            return;
+
+        var referenceScale = FindReferenceQuizButtonScale(gens);
+        foreach (
+            var button in FindObjectsByType<Button>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            )
+        )
+        {
+            if (!button || button.transform.IsChildOf(gens))
+                continue;
+            if (
+                !HasPersistentMethod(button, "PlayFullQuiz")
+                && !HasPersistentMethod(button, "PlayMegaEvolutionsQuiz")
+            )
+                continue;
+
+            AlignStandaloneQuizButton(button, gens, parent, referenceScale);
+        }
+    }
+
+    private static Vector3 FindReferenceQuizButtonScale(RectTransform gens)
+    {
+        for (int i = 0; i < gens.childCount; i++)
+        {
+            if (gens.GetChild(i) is RectTransform child && child.GetComponent<Button>())
+                return child.localScale;
+        }
+
+        return Vector3.one;
+    }
+
+    private static bool HasPersistentMethod(Button button, string methodName)
+    {
+        int listenerCount = button.onClick.GetPersistentEventCount();
+        for (int i = 0; i < listenerCount; i++)
+            if (button.onClick.GetPersistentMethodName(i) == methodName)
+                return true;
+
+        return false;
+    }
+
+    private static void AlignStandaloneQuizButton(
+        Button button,
+        RectTransform gens,
+        RectTransform parent,
+        Vector3 referenceScale
+    )
+    {
+        if (!button || button.transform is not RectTransform rt || rt.parent != parent)
+            return;
+
+        var center = parent.InverseTransformPoint(rt.TransformPoint(rt.rect.center));
+        rt.anchorMin = gens.anchorMin;
+        rt.anchorMax = gens.anchorMax;
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = new Vector2(gens.anchoredPosition.x, center.y);
+        rt.sizeDelta = new Vector2(gens.sizeDelta.x, rt.sizeDelta.y);
+        rt.localScale = referenceScale;
     }
 
     private void ConfigureSettingsControls()

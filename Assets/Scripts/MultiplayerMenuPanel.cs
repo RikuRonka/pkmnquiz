@@ -611,7 +611,9 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
             if (showStatus)
             {
-                if (lobbies.Count == 0)
+                if (QuizNetworkRuntime.LastLobbySearchHadTransientFailure)
+                    SetStatus("Lobby search hit a temporary service hiccup. Retrying...");
+                else if (lobbies.Count == 0)
                     SetStatus("No open co-op lobbies found.");
                 else if (lobbies.Count > MaxVisibleLobbyRows)
                     SetStatus(
@@ -626,6 +628,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogException(ex);
+            nextLobbyBrowserRefresh = Time.unscaledTime + LobbyBrowserRefreshInterval;
             if (showStatus)
                 SetStatus($"Lobby search failed: {ReadableError(ex)}");
         }
@@ -1032,6 +1035,9 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     {
         if (ex == null)
             return "Unknown error";
+
+        if (QuizNetworkRuntime.IsLobbySdkWrappedNullReference(ex))
+            return "Unity Lobby service had a temporary response error. Try again.";
 
         if (ex is NullReferenceException)
             return "Unexpected setup error. Check the Unity Console for details.";

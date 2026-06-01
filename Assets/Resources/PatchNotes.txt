@@ -1,3 +1,9 @@
+1.3.1 - 1.6.2026
+- Fixed Unity Lobby SDK query hiccups showing an unexpected setup error while browsing open co-op lobbies
+- Fixed type quiz columns initially stretching off-screen until the column slider was changed
+- Fixed Full Quiz and Mega Evolutions menu buttons drifting out of alignment at some resolutions
+- Fixed Heracross and Ariados sprites
+
 1.3.0 - 1.6.2026
 - Fixed high-progress co-op resyncs dropping the full guessed Pokemon state once many Pokemon had been guessed (hopefully)
 

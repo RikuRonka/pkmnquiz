@@ -174,6 +174,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     Coroutine _localBuildRoutine;
     Coroutine _networkStateApplyRoutine;
     Coroutine _scrollRestoreRoutine;
+    Coroutine _typeColumnLayoutRefreshRoutine;
     int _scrollToken;
     int _appliedContentTopPadding = -1;
     private RectTransform _scrollViewportRt;
@@ -2556,6 +2557,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             FinalizeSection(fullHyperspaceMegas);
             FinalizeSection(unknownSec);
             RefreshTypeColumnsPreferredHeight();
+            ScheduleTypeColumnLayoutRefresh();
             ApplyQuizTitleColor(ShouldUseLightQuizTitles());
             RebuildHintShadowOrderFromSections();
             UpdateScore();
@@ -3031,12 +3033,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (!sec || sec == main)
                 continue;
 
+            ConfigureTypeColumnSection(sec);
             var targetColumn =
                 (_typeSectionColumnCursor++ & 1) == 0 ? _typeLeftColumn : _typeRightColumn;
             sec.transform.SetParent(targetColumn, false);
         }
 
         RefreshTypeColumnsPreferredHeight();
+        ScheduleTypeColumnLayoutRefresh();
     }
 
     private RectTransform CreateTypeColumnRoot()
@@ -3070,6 +3074,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         var element = rootGo.GetComponent<LayoutElement>();
+        element.minWidth = 0f;
+        element.preferredWidth = 0f;
         element.flexibleWidth = 1f;
         element.flexibleHeight = 0f;
 
@@ -3106,10 +3112,34 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         var element = columnGo.GetComponent<LayoutElement>();
+        element.minWidth = 0f;
+        element.preferredWidth = 0f;
         element.flexibleWidth = 1f;
         element.flexibleHeight = 0f;
 
         return rt;
+    }
+
+    private static void ConfigureTypeColumnSection(SectionGroup sec)
+    {
+        if (!sec)
+            return;
+
+        var fitter = sec.GetComponent<ContentSizeFitter>();
+        if (fitter)
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+        var element = sec.GetComponent<LayoutElement>() ?? sec.gameObject.AddComponent<LayoutElement>();
+        element.minWidth = 0f;
+        element.preferredWidth = 0f;
+        element.flexibleWidth = 1f;
+
+        if (sec.transform is RectTransform rt)
+        {
+            rt.anchorMin = new Vector2(0f, rt.anchorMin.y);
+            rt.anchorMax = new Vector2(1f, rt.anchorMax.y);
+            rt.sizeDelta = new Vector2(0f, rt.sizeDelta.y);
+        }
     }
 
     private void RefreshTypeColumnsPreferredHeight()
@@ -3359,6 +3389,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         {
             StopCoroutine(_scrollRestoreRoutine);
             _scrollRestoreRoutine = null;
+        }
+
+        if (_typeColumnLayoutRefreshRoutine != null)
+        {
+            StopCoroutine(_typeColumnLayoutRefreshRoutine);
+            _typeColumnLayoutRefreshRoutine = null;
         }
     }
 
@@ -3696,11 +3732,41 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
 
         Canvas.ForceUpdateCanvases();
+        if (content is RectTransform contentRt)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
         LayoutRebuilder.ForceRebuildLayoutImmediate(_typeColumnsRoot);
         if (_typeLeftColumn)
             LayoutRebuilder.ForceRebuildLayoutImmediate(_typeLeftColumn);
         if (_typeRightColumn)
             LayoutRebuilder.ForceRebuildLayoutImmediate(_typeRightColumn);
+    }
+
+    private void ScheduleTypeColumnLayoutRefresh()
+    {
+        if (!UseTypeQuizColumns || !_typeColumnsRoot || !isActiveAndEnabled)
+            return;
+
+        if (_typeColumnLayoutRefreshRoutine != null)
+            StopCoroutine(_typeColumnLayoutRefreshRoutine);
+
+        _typeColumnLayoutRefreshRoutine = StartCoroutine(
+            CoRefreshTypeColumnLayoutAfterBuild(_buildToken)
+        );
+    }
+
+    private IEnumerator CoRefreshTypeColumnLayoutAfterBuild(int token)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            yield return null;
+
+            if (token != _buildToken || !UseTypeQuizColumns || !_typeColumnsRoot)
+                break;
+
+            ApplyColumnsToAllSections();
+        }
+
+        _typeColumnLayoutRefreshRoutine = null;
     }
 
     private void OnCardSizeSliderChanged(float t)
