@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -14,12 +15,17 @@ public class PokemonCardHover
 {
     private PokemonCard card;
     private bool _hovering;
+    private RectTransform _tooltipBounds;
 
     // Global pinned state (one modal for all cards)
     private static bool s_pinned;
     private static int s_ctrlHandledFrame = -1;
 
-    void Awake() => card = GetComponent<PokemonCard>();
+    void Awake()
+    {
+        card = GetComponent<PokemonCard>();
+        _tooltipBounds = FindTooltipBounds();
+    }
 
     bool CanShowTooltip => card != null && card.IsRevealed && card.Pokemon != null;
     bool CanShowModal =>
@@ -50,7 +56,7 @@ public class PokemonCardHover
             return;
 
         var cam = e.pressEventCamera ?? e.enterEventCamera ?? Camera.main;
-        TooltipManager.Instance?.MoveFollow(e.position, cam);
+        TooltipManager.Instance?.MoveFollow(e.position, cam, TooltipBounds);
     }
 
     public void OnPointerExit(PointerEventData e)
@@ -102,7 +108,7 @@ public class PokemonCardHover
                     string t1 = p.types != null && p.types.Length > 0 ? p.types[0] : null;
                     string t2 = p.types != null && p.types.Length > 1 ? p.types[1] : null;
                     Vector2 pos = GetMousePos();
-                    TooltipManager.Instance?.ShowFollow(p.name, t1, t2, null, pos, null);
+                    TooltipManager.Instance?.ShowFollow(p.name, t1, t2, null, pos, null, TooltipBounds);
                 }
             }
         }
@@ -111,7 +117,7 @@ public class PokemonCardHover
         if (!s_pinned && _hovering && CanShowTooltip)
         {
             Vector2 pos = GetMousePos();
-            TooltipManager.Instance?.MoveFollow(pos, null); // overlay canvas
+            TooltipManager.Instance?.MoveFollow(pos, null, TooltipBounds); // overlay canvas
         }
 
         // While pinned, update preview live as you hover across cards (nice UX)
@@ -131,7 +137,81 @@ public class PokemonCardHover
         string t2 = p.types != null && p.types.Length > 1 ? p.types[1] : null;
 
         var cam = e.pressEventCamera ?? e.enterEventCamera ?? Camera.main;
-        TooltipManager.Instance?.ShowFollow(p.name, t1, t2, null, e.position, cam);
+        LogTooltipBounds(p.name, cam);
+        TooltipManager.Instance?.ShowFollow(p.name, t1, t2, null, e.position, cam, TooltipBounds);
+    }
+
+    private RectTransform TooltipBounds =>
+        _tooltipBounds ? _tooltipBounds : (_tooltipBounds = FindTooltipBounds());
+
+    private RectTransform FindTooltipBounds()
+    {
+        for (Transform t = transform.parent; t; t = t.parent)
+        {
+            var scrollRect = t.GetComponent<ScrollRect>();
+            if (scrollRect && scrollRect.viewport)
+                return scrollRect.viewport;
+
+            if (t.TryGetComponent<RectMask2D>(out _) || t.TryGetComponent<Mask>(out _))
+                return t as RectTransform;
+        }
+
+        return null;
+    }
+
+    private void LogTooltipBounds(string pokemonName, Camera cam)
+    {
+        var manager = TooltipManager.Instance;
+        if (!manager || !manager.debugPlacement)
+            return;
+
+        Debug.Log(
+            "[PokemonCardHover] "
+                + $"pokemon={pokemonName} "
+                + $"card={GetPath(transform)} "
+                + $"bounds={GetPath(TooltipBounds)} "
+                + $"cam={(cam ? cam.name : "null")} "
+                + $"boundsCandidates={DescribeBoundsCandidates()}"
+        );
+    }
+
+    private string DescribeBoundsCandidates()
+    {
+        string result = "";
+        for (Transform t = transform.parent; t; t = t.parent)
+        {
+            var scrollRect = t.GetComponent<ScrollRect>();
+            if (scrollRect && scrollRect.viewport)
+                result += $" ScrollRect:{GetPath(t)} viewport:{GetPath(scrollRect.viewport)};";
+
+            if (t.TryGetComponent<RectMask2D>(out _))
+                result += $" RectMask2D:{GetPath(t)};";
+
+            if (t.TryGetComponent<Mask>(out _))
+                result += $" Mask:{GetPath(t)};";
+        }
+
+        return string.IsNullOrWhiteSpace(result) ? "none" : result.Trim();
+    }
+
+    private static string GetPath(Component component)
+    {
+        if (!component)
+            return "null";
+
+        return GetPath(component.transform);
+    }
+
+    private static string GetPath(Transform transform)
+    {
+        if (!transform)
+            return "null";
+
+        string path = transform.name;
+        for (Transform t = transform.parent; t; t = t.parent)
+            path = $"{t.name}/{path}";
+
+        return path;
     }
 
     private static bool CtrlPressedThisFrame()

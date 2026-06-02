@@ -112,7 +112,7 @@ public class PokemonTooltip : MonoBehaviour
         nrt.offsetMin = new Vector2(0f, nrt.offsetMin.y);
         nrt.offsetMax = new Vector2(0f, nrt.offsetMax.y);
         nameLabel.textWrappingMode = TextWrappingModes.NoWrap;
-        nameLabel.overflowMode = TextOverflowModes.Overflow;
+        nameLabel.overflowMode = TextOverflowModes.Ellipsis;
         nameLabel.alignment = TextAlignmentOptions.Center;
 
         if (!type1Image || !type2Image)
@@ -260,6 +260,33 @@ public class PokemonTooltip : MonoBehaviour
             yield return null;
         }
         cg.alpha = target;
+    }
+
+    public bool ConstrainWidth(float maxAllowedWidth)
+    {
+        if (!layoutElement || maxAllowedWidth <= 0f)
+            return false;
+
+        float current = layoutElement.preferredWidth > 0f
+            ? layoutElement.preferredWidth
+            : PreferredSize.x;
+        float target = Mathf.Max(1f, Mathf.Min(current, maxAllowedWidth));
+
+        bool changed =
+            !Mathf.Approximately(layoutElement.preferredWidth, target)
+            || layoutElement.minWidth < 0f
+            || layoutElement.minWidth > target;
+
+        if (!changed)
+            return false;
+
+        layoutElement.preferredWidth = target;
+        layoutElement.minWidth = layoutElement.minWidth > 0f
+            ? Mathf.Min(layoutElement.minWidth, target)
+            : target;
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
+        return true;
     }
 
     void ApplyPokemonContent(string name, string type1, string type2)
