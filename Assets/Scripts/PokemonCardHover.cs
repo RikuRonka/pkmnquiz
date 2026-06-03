@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -14,6 +15,7 @@ public class PokemonCardHover
         IPointerMoveHandler
 {
     private PokemonCard card;
+    private QuizManager quiz;
     private bool _hovering;
     private RectTransform _tooltipBounds;
 
@@ -24,6 +26,7 @@ public class PokemonCardHover
     void Awake()
     {
         card = GetComponent<PokemonCard>();
+        quiz = FindFirstObjectByType<QuizManager>();
         _tooltipBounds = FindTooltipBounds();
     }
 
@@ -104,11 +107,8 @@ public class PokemonCardHover
                 // Optionally restore tooltip after unpin
                 if (CanShowTooltip)
                 {
-                    var p = card.Pokemon;
-                    string t1 = p.types != null && p.types.Length > 0 ? p.types[0] : null;
-                    string t2 = p.types != null && p.types.Length > 1 ? p.types[1] : null;
                     Vector2 pos = GetMousePos();
-                    TooltipManager.Instance?.ShowFollow(p.name, t1, t2, null, pos, null, TooltipBounds);
+                    ShowCardTooltip(pos, null);
                 }
             }
         }
@@ -132,13 +132,53 @@ public class PokemonCardHover
         if (!CanShowTooltip)
             return;
 
+        var cam = e.pressEventCamera ?? e.enterEventCamera ?? Camera.main;
+        LogTooltipBounds(card.Pokemon.name, cam);
+        ShowCardTooltip(e.position, cam);
+    }
+
+    private void ShowCardTooltip(Vector2 screenPos, Camera cam)
+    {
         var p = card.Pokemon;
         string t1 = p.types != null && p.types.Length > 0 ? p.types[0] : null;
         string t2 = p.types != null && p.types.Length > 1 ? p.types[1] : null;
+        var guessedIds = GetGuessedIdsForTooltip(p);
+        var activeQuizIds = GetActiveQuizIdsForTooltip(p);
 
-        var cam = e.pressEventCamera ?? e.enterEventCamera ?? Camera.main;
-        LogTooltipBounds(p.name, cam);
-        TooltipManager.Instance?.ShowFollow(p.name, t1, t2, null, e.position, cam, TooltipBounds);
+        TooltipManager.Instance?.ShowFollow(
+            p.name,
+            t1,
+            t2,
+            null,
+            screenPos,
+            cam,
+            TooltipBounds,
+            p,
+            guessedIds,
+            activeQuizIds
+        );
+    }
+
+    private IReadOnlyCollection<int> GetGuessedIdsForTooltip(Pokemon p)
+    {
+        if (!quiz)
+            quiz = FindFirstObjectByType<QuizManager>();
+
+        if (quiz)
+            return quiz.SolvedIds;
+
+        return p != null && card && card.IsRevealed ? new[] { p.id } : null;
+    }
+
+    private IReadOnlyCollection<int> GetActiveQuizIdsForTooltip(Pokemon p)
+    {
+        if (!quiz)
+            quiz = FindFirstObjectByType<QuizManager>();
+
+        if (quiz)
+            return quiz.CurrentQuizPokemonIds;
+
+        return p != null ? new[] { p.id } : null;
     }
 
     private RectTransform TooltipBounds =>

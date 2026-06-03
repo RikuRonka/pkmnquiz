@@ -89,7 +89,9 @@ public static class SingleplayerQuizProgressStore
                     session.generation,
                     session.typeFilter,
                     session.solvedIds,
+                    session.evolutionStageHintedIds,
                     session.hintedIds,
+                    session.firstLetterHintedIds,
                     session.shadowedIds,
                     session.elapsed,
                     session.running,
@@ -189,7 +191,9 @@ public static class SingleplayerQuizProgressStore
         public int generation;
         public string typeFilter;
         public List<int> solvedIds = new();
+        public List<int> evolutionStageHintedIds = new();
         public List<int> hintedIds = new();
+        public List<int> firstLetterHintedIds = new();
         public List<int> shadowedIds = new();
         public float elapsed;
         public bool running;
@@ -197,7 +201,12 @@ public static class SingleplayerQuizProgressStore
 
         public string Key => KeyFor(generation, typeFilter);
         public bool IsValid => generation >= 0;
-        public bool HasStarted => solvedIds != null && solvedIds.Count > 0;
+        public bool HasStarted =>
+            (solvedIds != null && solvedIds.Count > 0)
+            || (evolutionStageHintedIds != null && evolutionStageHintedIds.Count > 0)
+            || (hintedIds != null && hintedIds.Count > 0)
+            || (firstLetterHintedIds != null && firstLetterHintedIds.Count > 0)
+            || (shadowedIds != null && shadowedIds.Count > 0);
 
         public Session() { }
 
@@ -205,7 +214,9 @@ public static class SingleplayerQuizProgressStore
             int generation,
             string typeFilter,
             IReadOnlyCollection<int> solvedIds,
+            IReadOnlyCollection<int> evolutionStageHintedIds,
             IReadOnlyCollection<int> hintedIds,
+            IReadOnlyCollection<int> firstLetterHintedIds,
             IReadOnlyCollection<int> shadowedIds,
             float elapsed,
             bool running,
@@ -215,7 +226,15 @@ public static class SingleplayerQuizProgressStore
             this.generation = generation;
             this.typeFilter = NormalizeTypeFilter(typeFilter);
             this.solvedIds = solvedIds == null ? new List<int>() : new List<int>(solvedIds);
+            this.evolutionStageHintedIds =
+                evolutionStageHintedIds == null
+                    ? new List<int>()
+                    : new List<int>(evolutionStageHintedIds);
             this.hintedIds = hintedIds == null ? new List<int>() : new List<int>(hintedIds);
+            this.firstLetterHintedIds =
+                firstLetterHintedIds == null
+                    ? new List<int>()
+                    : new List<int>(firstLetterHintedIds);
             this.shadowedIds = shadowedIds == null ? new List<int>() : new List<int>(shadowedIds);
             this.elapsed = Mathf.Max(0f, elapsed);
             this.running = running;
@@ -236,7 +255,9 @@ public static class SingleplayerQuizProgressStore
         {
             typeFilter = NormalizeTypeFilter(typeFilter);
             solvedIds ??= new List<int>();
+            evolutionStageHintedIds ??= new List<int>();
             hintedIds ??= new List<int>();
+            firstLetterHintedIds ??= new List<int>();
             shadowedIds ??= new List<int>();
             elapsed = Mathf.Max(0f, elapsed);
         }

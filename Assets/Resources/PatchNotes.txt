@@ -1,3 +1,11 @@
+1.3.2 - 3.6.2026
+- Added one combined hint button that reveals evolution stage, type, first letter, then shadow
+- Evolution stage and first-letter hints now save, restore, and sync correctly in co-op
+- Added compact hover tooltips for guessed Pokemon showing their evolution family with sprites, type icons, and hidden placeholders for unguessed Pokemon
+- Evolution tooltips now handle branching paths correctly and omit Pokemon outside the current quiz or type filter
+- Mega and special forms now appear as separate tooltip form rows instead of being treated as normal evolution stages
+- Fixed tooltip positioning and layout so hover tooltips stay inside the screen and keep all content inside the panel
+
 1.3.1 - 1.6.2026
 - Fixed Unity Lobby SDK query hiccups showing an unexpected setup error while browsing open co-op lobbies
 - Fixed type quiz columns initially stretching off-screen until the column slider was changed

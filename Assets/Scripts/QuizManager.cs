@@ -63,8 +63,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly HashSet<int> solved = new();
     private readonly HashSet<int> hinted = new();
     public IReadOnlyCollection<int> SolvedIds => solved;
+    public IReadOnlyCollection<int> EvolutionStageHintedIds => evolutionStageHinted;
     public IReadOnlyCollection<int> HintedIds => hinted;
+    public IReadOnlyCollection<int> FirstLetterHintedIds => firstLetterHinted;
     public IReadOnlyCollection<int> ShadowedIds => shadowed;
+    public IReadOnlyCollection<int> CurrentQuizPokemonIds =>
+        cardById.Count > 0 ? cardById.Keys : targetList.Select(p => p.id).ToArray();
     public int CurrentQuizGeneration => generation;
     public string CurrentTypeFilter => selectedType;
     public float ElapsedSeconds => elapsed;
@@ -206,6 +210,29 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     int _hintUsedCount;
     int _shadowUsedCount;
 
+    private enum HintStep
+    {
+        None = 0,
+        EvolutionStage = 1,
+        Type = 2,
+        FirstLetter = 3,
+        Shadow = 4,
+    }
+
+    private readonly struct HintTarget
+    {
+        public readonly int Id;
+        public readonly HintStep Step;
+
+        public HintTarget(int id, HintStep step)
+        {
+            Id = id;
+            Step = step;
+        }
+
+        public bool HasValue => Id != 0 && Step != HintStep.None;
+    }
+
     [SerializeField]
     string selectedType;
     string TypeDisplay =>
@@ -240,6 +267,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private readonly Dictionary<int, PokemonCard> hyperspaceCardByBase = new();
     private readonly Dictionary<string, int> lumioseByBaseName = new();
     private readonly Dictionary<string, int> hyperspaceByBaseName = new();
+    private readonly HashSet<int> evolutionStageHinted = new();
+    private readonly HashSet<int> firstLetterHinted = new();
     private readonly HashSet<int> shadowed = new();
     private SavedQuizSessionSnapshot _pendingSavedMultiplayerSession;
     private bool redirectingToMainMenu;
@@ -259,21 +288,33 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private sealed class SavedQuizSessionSnapshot
     {
         public readonly List<int> SolvedIds;
+        public readonly List<int> EvolutionStageHintedIds;
         public readonly List<int> HintedIds;
+        public readonly List<int> FirstLetterHintedIds;
         public readonly List<int> ShadowedIds;
         public readonly float Elapsed;
         public readonly bool Running;
 
         public SavedQuizSessionSnapshot(
             IReadOnlyList<int> solvedIds,
+            IReadOnlyList<int> evolutionStageHintedIds,
             IReadOnlyList<int> hintedIds,
+            IReadOnlyList<int> firstLetterHintedIds,
             IReadOnlyList<int> shadowedIds,
             float elapsed,
             bool running
         )
         {
             SolvedIds = solvedIds != null ? new List<int>(solvedIds) : new List<int>();
+            EvolutionStageHintedIds =
+                evolutionStageHintedIds != null
+                    ? new List<int>(evolutionStageHintedIds)
+                    : new List<int>();
             HintedIds = hintedIds != null ? new List<int>(hintedIds) : new List<int>();
+            FirstLetterHintedIds =
+                firstLetterHintedIds != null
+                    ? new List<int>(firstLetterHintedIds)
+                    : new List<int>();
             ShadowedIds = shadowedIds != null ? new List<int>(shadowedIds) : new List<int>();
             Elapsed = Mathf.Max(0f, elapsed);
             Running = running;
@@ -345,7 +386,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
         TypeIconLibrary.Instance.Preload();
         if (hintTypeBtn)
-            hintTypeBtn.onClick.AddListener(RevealTypeHintForOne);
+        {
+            hintTypeBtn.onClick.RemoveListener(RevealTypeHintForOne);
+            hintTypeBtn.onClick.AddListener(OnHintButtonClicked);
+        }
+        if (shadowsBtn)
+            shadowsBtn.gameObject.SetActive(false);
+        RefreshHintButtonState();
 
         if (guessInput)
         {
@@ -448,6 +495,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
 
         RevealNextShadow();
+        RefreshHintButtonState();
     }
 
     void SetGridVisible(bool visible)
@@ -1361,6 +1409,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             _localBuildRoutine = StartCoroutine(LocalBuildWithOverlay());
         ResetTimerOnly();
         running = true;
+        RefreshHintButtonState(true);
         guessInput?.ActivateInputField();
         if (giveUpBtn)
             giveUpBtn.interactable = true;
@@ -2026,6 +2075,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         pokemonById.Clear();
         solved.Clear();
         hinted.Clear();
+        evolutionStageHinted.Clear();
+        firstLetterHinted.Clear();
         shadowed.Clear();
         _endStateBordersShowing = false;
         megaFormsByBase.Clear();
@@ -3669,17 +3720,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (pick == null || pickId == 0)
             return 0;
 
-        if (cardById.TryGetValue(pickId, out var targetCard) && targetCard)
-        {
-            shadowed.Add(pickId);
-            targetCard.SetShadowMode(true);
-            _shadowUsedCount++;
-            SaveLocalQuizSession();
-            MaybeScrollTo(pick, force: true);
-            return pickId;
-        }
-
-        return 0;
+        return ApplyShadowHintToId(pickId) ? pickId : 0;
     }
 
     private void FitSection(SectionGroup grp)
@@ -3894,6 +3935,208 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         Canvas.ForceUpdateCanvases();
     }
 
+    private void OnHintButtonClicked()
+    {
+        if (IsDialogOpen())
+            return;
+
+        var target = GetNextHintTarget();
+        if (!target.HasValue)
+        {
+            RefreshHintButtonState(false);
+            return;
+        }
+
+        switch (target.Step)
+        {
+            case HintStep.EvolutionStage:
+                if (QuizMultiplayerCoordinator.RequestRevealEvolutionStage())
+                    return;
+                break;
+            case HintStep.Type:
+                if (QuizMultiplayerCoordinator.RequestRevealType())
+                    return;
+                break;
+            case HintStep.FirstLetter:
+                if (QuizMultiplayerCoordinator.RequestRevealFirstLetter())
+                    return;
+                break;
+            case HintStep.Shadow:
+                if (QuizMultiplayerCoordinator.RequestRevealShadow())
+                    return;
+                break;
+        }
+
+        ApplyHintTarget(target);
+        RefreshHintButtonState();
+    }
+
+    private int ApplyHintTarget(HintTarget target)
+    {
+        if (!target.HasValue)
+            return 0;
+
+        bool applied = target.Step switch
+        {
+            HintStep.EvolutionStage => ApplyEvolutionStageHintToId(target.Id),
+            HintStep.Type => ApplyTypeHintToId(target.Id),
+            HintStep.FirstLetter => ApplyFirstLetterHintToId(target.Id),
+            HintStep.Shadow => ApplyShadowHintToId(target.Id),
+            _ => false,
+        };
+
+        return applied ? target.Id : 0;
+    }
+
+    private HintTarget GetNextHintTarget()
+    {
+        foreach (var id in _hintShadowOrder)
+        {
+            var step = GetNextHintStepForId(id);
+            if (step != HintStep.None)
+                return new HintTarget(id, step);
+        }
+
+        return default;
+    }
+
+    private int RevealNextHintOfStep(HintStep step)
+    {
+        if (step == HintStep.None)
+            return 0;
+
+        foreach (var id in _hintShadowOrder)
+        {
+            if (GetNextHintStepForId(id) != step)
+                continue;
+
+            return ApplyHintTarget(new HintTarget(id, step));
+        }
+
+        return 0;
+    }
+
+    private HintStep GetNextHintStepForId(int id)
+    {
+        if (id == 0 || solved.Contains(id))
+            return HintStep.None;
+
+        if (!cardById.ContainsKey(id) || !pokemonById.ContainsKey(id))
+            return HintStep.None;
+
+        if (!evolutionStageHinted.Contains(id))
+            return HintStep.EvolutionStage;
+
+        if (!hinted.Contains(id))
+            return HintStep.Type;
+
+        if (!firstLetterHinted.Contains(id))
+            return HintStep.FirstLetter;
+
+        if (!shadowed.Contains(id))
+            return HintStep.Shadow;
+
+        return HintStep.None;
+    }
+
+    private bool ApplyEvolutionStageHintToId(int id)
+    {
+        if (id == 0 || solved.Contains(id) || evolutionStageHinted.Contains(id))
+            return false;
+
+        if (!cardById.TryGetValue(id, out var card) || !card)
+            return false;
+
+        if (!pokemonById.TryGetValue(id, out var p) || p == null)
+            return false;
+
+        evolutionStageHinted.Add(id);
+        int stage = p.evolution != null ? p.evolution.stage : 0;
+        int totalStages = p.evolution != null ? p.evolution.totalStages : 0;
+        card.ShowEvolutionStageHint(stage, totalStages);
+        _hintUsedCount++;
+        SaveLocalQuizSession();
+        MaybeScrollTo(p, force: true);
+        RefreshHintButtonState();
+        return true;
+    }
+
+    private bool ApplyFirstLetterHintToId(int id)
+    {
+        if (id == 0 || solved.Contains(id) || firstLetterHinted.Contains(id))
+            return false;
+
+        if (!cardById.TryGetValue(id, out var card) || !card)
+            return false;
+
+        if (!pokemonById.TryGetValue(id, out var p) || p == null)
+            return false;
+
+        firstLetterHinted.Add(id);
+        card.ShowFirstLetterHint(p.name);
+        _hintUsedCount++;
+        SaveLocalQuizSession();
+        MaybeScrollTo(p, force: true);
+        RefreshHintButtonState();
+        return true;
+    }
+
+    private bool ApplyShadowHintToId(int id)
+    {
+        if (id == 0 || solved.Contains(id) || shadowed.Contains(id))
+            return false;
+
+        if (!cardById.TryGetValue(id, out var card) || !card)
+            return false;
+
+        if (!pokemonById.TryGetValue(id, out var p) || p == null)
+            return false;
+
+        shadowed.Add(id);
+        card.SetShadowMode(true);
+        _shadowUsedCount++;
+        SaveLocalQuizSession();
+        MaybeScrollTo(p, force: true);
+        RefreshHintButtonState();
+        return true;
+    }
+
+    private void RefreshHintButtonState(bool? canUseHintsOverride = null)
+    {
+        if (!hintTypeBtn)
+            return;
+
+        var target = GetNextHintTarget();
+        SetButtonLabel(hintTypeBtn, GetHintButtonLabel(target.Step), fitSingleLine: true);
+
+        bool canUseHints = canUseHintsOverride ?? CanUseHintButtonNow();
+        hintTypeBtn.interactable = canUseHints && target.HasValue;
+        RefreshButtonVisual(hintTypeBtn);
+    }
+
+    private bool CanUseHintButtonNow()
+    {
+        if (IsComplete())
+            return false;
+
+        if (finishedDialog && finishedDialog.IsShowing)
+            return false;
+
+        return running || (pauseMenu && pauseMenu.IsShowing);
+    }
+
+    private static string GetHintButtonLabel(HintStep step)
+    {
+        return step switch
+        {
+            HintStep.EvolutionStage => "Reveal evolution stage",
+            HintStep.Type => "Reveal type",
+            HintStep.FirstLetter => "Reveal first letter",
+            HintStep.Shadow => "Reveal shadow",
+            _ => "No more hints",
+        };
+    }
+
     private void RevealTypeHintForOne()
     {
         if (QuizMultiplayerCoordinator.RequestRevealType())
@@ -3904,24 +4147,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private int RevealTypeHintForOneInternal()
     {
-        int pickId = 0;
-
-        foreach (var id in _hintShadowOrder)
-        {
-            if (solved.Contains(id) || hinted.Contains(id) || shadowed.Contains(id))
-                continue;
-
-            if (!cardById.ContainsKey(id))
-                continue;
-
-            pickId = id;
-            break;
-        }
-
-        if (pickId == 0)
-            return 0;
-
-        return ApplyTypeHintToId(pickId) ? pickId : 0;
+        return RevealNextHintOfStep(HintStep.Type);
     }
 
     private bool ApplyTypeHintToId(int pickId)
@@ -3943,6 +4169,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         _hintUsedCount++;
         SaveLocalQuizSession();
         MaybeScrollTo(p, force: true);
+        RefreshHintButtonState();
         return true;
     }
 
@@ -4143,6 +4370,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         }
         running = true;
         finishedDialog.Hide();
+        RefreshHintButtonState(true);
     }
 
     private void UpdateScore()
@@ -4150,6 +4378,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         int total = cardById.Count;
         if (scoreText)
             scoreText.text = $"{solved.Count}/{total}";
+
+        RefreshHintButtonState();
     }
 
     private void ApplyMultiplayerUiState()
@@ -4174,6 +4404,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             hintTypeBtn.interactable = canUseQuizActions;
         if (shadowsBtn)
             shadowsBtn.interactable = canUseQuizActions;
+        RefreshHintButtonState(canUseQuizActions);
         if (resetBtn)
             resetBtn.interactable = canUseHostActions || QuizNetworkRuntime.IsMultiplayerClientOnly;
         if (backToMenuBtn)
@@ -4207,14 +4438,34 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             hover.RefreshDisabledVisual();
     }
 
-    private static void SetButtonLabel(Button button, string text)
+    private static void SetButtonLabel(Button button, string text, bool fitSingleLine = false)
     {
         if (!button)
             return;
 
         var label = button.GetComponentInChildren<TMP_Text>(true);
         if (label)
+        {
             label.text = text;
+
+            if (fitSingleLine)
+            {
+                label.alignment = TextAlignmentOptions.Center;
+                label.enableAutoSizing = true;
+                label.fontSizeMin = 8f;
+                label.fontSizeMax = Mathf.Min(label.fontSize > 0f ? label.fontSize : 24f, 24f);
+                label.textWrappingMode = TextWrappingModes.NoWrap;
+                label.overflowMode = TextOverflowModes.Truncate;
+
+                if (label.transform is RectTransform labelRt)
+                {
+                    labelRt.anchorMin = Vector2.zero;
+                    labelRt.anchorMax = Vector2.one;
+                    labelRt.offsetMin = new Vector2(6f, 0f);
+                    labelRt.offsetMax = new Vector2(-6f, 0f);
+                }
+            }
+        }
     }
 
     public List<int> AcceptNetworkGuessOnServer(string currentText, bool suppressLocalInput)
@@ -4249,7 +4500,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         int networkGeneration,
         string networkTypeFilter,
         IReadOnlyList<int> solvedIds,
+        IReadOnlyList<int> evolutionStageHintedIds,
         IReadOnlyList<int> hintedIds,
+        IReadOnlyList<int> firstLetterHintedIds,
         IReadOnlyList<int> shadowedIds,
         float networkElapsed,
         bool networkRunning
@@ -4260,7 +4513,11 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             : networkTypeFilter.Trim().ToLowerInvariant();
 
         var solvedSnapshot = solvedIds != null ? new List<int>(solvedIds) : new List<int>();
+        var evolutionStageHintedSnapshot =
+            evolutionStageHintedIds != null ? new List<int>(evolutionStageHintedIds) : new List<int>();
         var hintedSnapshot = hintedIds != null ? new List<int>(hintedIds) : new List<int>();
+        var firstLetterHintedSnapshot =
+            firstLetterHintedIds != null ? new List<int>(firstLetterHintedIds) : new List<int>();
         var shadowedSnapshot = shadowedIds != null ? new List<int>(shadowedIds) : new List<int>();
 
         _pendingSavedMultiplayerSession = null;
@@ -4273,7 +4530,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 networkGeneration,
                 normalizedType,
                 solvedSnapshot,
+                evolutionStageHintedSnapshot,
                 hintedSnapshot,
+                firstLetterHintedSnapshot,
                 shadowedSnapshot,
                 networkElapsed,
                 networkRunning
@@ -4283,7 +4542,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     public void ApplySavedMultiplayerSession(
         IReadOnlyList<int> solvedIds,
+        IReadOnlyList<int> evolutionStageHintedIds,
         IReadOnlyList<int> hintedIds,
+        IReadOnlyList<int> firstLetterHintedIds,
         IReadOnlyList<int> shadowedIds,
         float savedElapsed,
         bool savedRunning
@@ -4291,7 +4552,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         var snapshot = new SavedQuizSessionSnapshot(
             solvedIds,
+            evolutionStageHintedIds,
             hintedIds,
+            firstLetterHintedIds,
             shadowedIds,
             savedElapsed,
             savedRunning
@@ -4321,7 +4584,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         elapsed = snapshot.Elapsed;
         SetTimerText();
-        ApplyNetworkHintState(snapshot.HintedIds, snapshot.ShadowedIds);
+        ApplyNetworkHintState(
+            snapshot.EvolutionStageHintedIds,
+            snapshot.HintedIds,
+            snapshot.FirstLetterHintedIds,
+            snapshot.ShadowedIds
+        );
         ApplyNetworkSolvedIds(snapshot.SolvedIds, clearInput: false, playSound: false);
         running = snapshot.Running && !IsComplete();
         if (!running && !IsComplete())
@@ -4356,13 +4624,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         if (_localSessionDiscarded)
         {
-            if (solved.Count == 0)
+            if (!HasLocalQuizSessionProgress())
                 return;
 
             _localSessionDiscarded = false;
         }
 
-        if (solved.Count == 0)
+        if (!HasLocalQuizSessionProgress())
         {
             SingleplayerQuizProgressStore.Remove(generation, selectedType);
             return;
@@ -4373,7 +4641,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 generation,
                 selectedType,
                 solved,
+                evolutionStageHinted,
                 hinted,
+                firstLetterHinted,
                 shadowed,
                 elapsed,
                 running,
@@ -4398,12 +4668,23 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         _fillQuizUsed = session.usedFillQuiz;
         ApplySavedMultiplayerSession(
             session.solvedIds,
+            session.evolutionStageHintedIds,
             session.hintedIds,
+            session.firstLetterHintedIds,
             session.shadowedIds,
             session.elapsed,
             session.running
         );
         return true;
+    }
+
+    private bool HasLocalQuizSessionProgress()
+    {
+        return solved.Count > 0
+            || evolutionStageHinted.Count > 0
+            || hinted.Count > 0
+            || firstLetterHinted.Count > 0
+            || shadowed.Count > 0;
     }
 
     private void ClearLocalQuizSession(
@@ -4446,7 +4727,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         int networkGeneration,
         string normalizedType,
         IReadOnlyList<int> solvedIds,
+        IReadOnlyList<int> evolutionStageHintedIds,
         IReadOnlyList<int> hintedIds,
+        IReadOnlyList<int> firstLetterHintedIds,
         IReadOnlyList<int> shadowedIds,
         float networkElapsed,
         bool networkRunning
@@ -4473,7 +4756,12 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         RefreshNetworkGridLayout();
         elapsed = Mathf.Max(0f, networkElapsed);
         SetTimerText();
-        ApplyNetworkHintState(hintedIds, shadowedIds);
+        ApplyNetworkHintState(
+            evolutionStageHintedIds,
+            hintedIds,
+            firstLetterHintedIds,
+            shadowedIds
+        );
         ApplyNetworkSolvedIds(solvedIds, clearInput: false, playSound: false);
         running = networkRunning && !IsComplete();
         RefreshNetworkGridLayout();
@@ -4512,13 +4800,23 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     }
 
     private void ApplyNetworkHintState(
+        IReadOnlyList<int> evolutionStageHintedIds,
         IReadOnlyList<int> hintedIds,
+        IReadOnlyList<int> firstLetterHintedIds,
         IReadOnlyList<int> shadowedIds
     )
     {
+        if (evolutionStageHintedIds != null)
+            foreach (var id in evolutionStageHintedIds)
+                ApplyNetworkEvolutionStageHint(id);
+
         if (hintedIds != null)
             foreach (var id in hintedIds)
                 ApplyNetworkTypeHint(id);
+
+        if (firstLetterHintedIds != null)
+            foreach (var id in firstLetterHintedIds)
+                ApplyNetworkFirstLetterHint(id);
 
         if (shadowedIds != null)
             foreach (var id in shadowedIds)
@@ -4653,30 +4951,42 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     public int ApplyNetworkRevealShadow()
     {
-        return RevealNextShadow();
+        return RevealNextHintOfStep(HintStep.Shadow);
     }
 
     public void ApplyNetworkShadow(int id)
     {
-        if (id == 0 || solved.Contains(id) || shadowed.Contains(id))
-            return;
-        if (!cardById.TryGetValue(id, out var card) || !card)
-            return;
+        ApplyShadowHintToId(id);
+    }
 
-        shadowed.Add(id);
-        card.SetShadowMode(true);
-        _shadowUsedCount++;
-        SaveLocalQuizSession();
+    public int ApplyNetworkRevealEvolutionStage()
+    {
+        return RevealNextHintOfStep(HintStep.EvolutionStage);
+    }
+
+    public void ApplyNetworkEvolutionStageHint(int id)
+    {
+        ApplyEvolutionStageHintToId(id);
     }
 
     public int ApplyNetworkRevealType()
     {
-        return RevealTypeHintForOneInternal();
+        return RevealNextHintOfStep(HintStep.Type);
     }
 
     public void ApplyNetworkTypeHint(int id)
     {
         ApplyTypeHintToId(id);
+    }
+
+    public int ApplyNetworkRevealFirstLetter()
+    {
+        return RevealNextHintOfStep(HintStep.FirstLetter);
+    }
+
+    public void ApplyNetworkFirstLetterHint(int id)
+    {
+        ApplyFirstLetterHintToId(id);
     }
 
     public void ApplyNetworkReset()
@@ -5601,6 +5911,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         UpdateScore();
         ApplyMultiplayerUiState();
+        RefreshHintButtonState(running && !IsComplete());
         try
         {
             QuizMultiplayerCoordinator.Attach(this);

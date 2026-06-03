@@ -51,7 +51,7 @@ public class TooltipManager : MonoBehaviour
         _tipRT.anchorMin = anchor;
         _tipRT.anchorMax = anchor;
         _tipRT.pivot = new Vector2(0.5f, 0.5f);
-        _tipVisualRT = FindTooltipVisualRoot(_tipRT);
+        _tipVisualRT = _tip.VisualRoot ? _tip.VisualRoot : FindTooltipVisualRoot(_tipRT);
     }
 
     public void ShowFollow(
@@ -61,14 +61,17 @@ public class TooltipManager : MonoBehaviour
         string description,
         Vector2 screenPos,
         Camera eventCam,
-        RectTransform bounds = null
+        RectTransform bounds = null,
+        Pokemon pokemon = null,
+        IReadOnlyCollection<int> guessedIds = null,
+        IReadOnlyCollection<int> activeQuizIds = null
     )
     {
         _pinned = false;
         if (!string.IsNullOrWhiteSpace(description))
             _tip.SetNotes(title, description);
         else
-            _tip.SetContent(title, t1, t2);
+            _tip.SetContent(title, t1, t2, pokemon, guessedIds, activeQuizIds);
 
         ForceRebuildTooltipLayout();
 

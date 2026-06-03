@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -31,6 +32,11 @@ public class PokemonCard : MonoBehaviour
     private Sprite loadedSprite;
     private bool revealed,
         hintVisible;
+    private string evolutionStageHintText;
+    private string firstLetterHintText;
+    private RectTransform textHintRoot;
+    private TMP_Text textHintLabel;
+    private Image textHintBackground;
     private Coroutine highlightCo;
 
     [Header("Highlight/Shake")]
@@ -176,6 +182,7 @@ public class PokemonCard : MonoBehaviour
             placeholderImage.enabled = false;
 
         HideTypeIcons();
+        ClearTextHints();
         StopAllCoroutines();
     }
 
@@ -251,6 +258,7 @@ public class PokemonCard : MonoBehaviour
         data = p;
         revealed = false;
         hintVisible = false;
+        ClearTextHints();
 
         loadedSprite = SpriteLibrary.Instance.ByPokemon(p);
         if (spriteImage)
@@ -316,6 +324,8 @@ public class PokemonCard : MonoBehaviour
 
             if (placeholderImage)
                 placeholderImage.enabled = false;
+
+            LayoutTextHints();
         }
         else
         {
@@ -351,6 +361,7 @@ public class PokemonCard : MonoBehaviour
             spriteImage.transform.SetAsLastSibling();
         }
         HideTypeIcons();
+        ClearTextHints();
     }
 
     public void Reveal()
@@ -388,7 +399,27 @@ public class PokemonCard : MonoBehaviour
             if (placeholderImage)
                 placeholderImage.enabled = false;
             LayoutHintIcons();
+            LayoutTextHints();
         }
+    }
+
+    public void ShowEvolutionStageHint(int stage, int totalStages)
+    {
+        if (IsRevealed)
+            return;
+
+        evolutionStageHintText = FormatEvolutionStageHint(stage, totalStages);
+        RefreshTextHints();
+    }
+
+    public void ShowFirstLetterHint(string pokemonName)
+    {
+        if (IsRevealed || string.IsNullOrWhiteSpace(pokemonName))
+            return;
+
+        string trimmed = pokemonName.Trim();
+        firstLetterHintText = trimmed.Length > 0 ? $"First: {trimmed[0]}" : null;
+        RefreshTextHints();
     }
 
     private void StopHighlight()
@@ -419,10 +450,102 @@ public class PokemonCard : MonoBehaviour
         hintVisible = false;
     }
 
+    private void ClearTextHints()
+    {
+        evolutionStageHintText = null;
+        firstLetterHintText = null;
+
+        if (textHintRoot)
+            textHintRoot.gameObject.SetActive(false);
+    }
+
+    private static string FormatEvolutionStageHint(int stage, int totalStages)
+    {
+        if (stage <= 0)
+            return "Stage ?";
+
+        if (totalStages <= 1)
+            return "Single stage";
+
+        return $"Stage {stage}/{totalStages}";
+    }
+
+    private void RefreshTextHints()
+    {
+        if (IsRevealed)
+        {
+            ClearTextHints();
+            return;
+        }
+
+        bool hasEvolution = !string.IsNullOrWhiteSpace(evolutionStageHintText);
+        bool hasFirstLetter = !string.IsNullOrWhiteSpace(firstLetterHintText);
+        if (!hasEvolution && !hasFirstLetter)
+        {
+            if (textHintRoot)
+                textHintRoot.gameObject.SetActive(false);
+            return;
+        }
+
+        EnsureTextHintLabel();
+        if (!textHintRoot || !textHintLabel)
+            return;
+
+        textHintRoot.gameObject.SetActive(true);
+
+        if (hasEvolution && hasFirstLetter)
+            textHintLabel.text = $"{evolutionStageHintText}\n{firstLetterHintText}";
+        else
+            textHintLabel.text = hasEvolution ? evolutionStageHintText : firstLetterHintText;
+
+        LayoutTextHints();
+    }
+
+    private void EnsureTextHintLabel()
+    {
+        if (textHintRoot && textHintLabel)
+            return;
+
+        var rootGo = new GameObject("TextHints", typeof(RectTransform), typeof(Image));
+        rootGo.transform.SetParent(transform, false);
+        textHintRoot = (RectTransform)rootGo.transform;
+        textHintBackground = rootGo.GetComponent<Image>();
+        textHintBackground.color = new Color(0f, 0f, 0f, 0.72f);
+        textHintBackground.raycastTarget = false;
+
+        var labelGo = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        labelGo.transform.SetParent(textHintRoot, false);
+        var labelRt = (RectTransform)labelGo.transform;
+        labelRt.anchorMin = Vector2.zero;
+        labelRt.anchorMax = Vector2.one;
+        labelRt.offsetMin = new Vector2(4f, 1f);
+        labelRt.offsetMax = new Vector2(-4f, -1f);
+
+        textHintLabel = labelGo.GetComponent<TMP_Text>();
+        textHintLabel.alignment = TextAlignmentOptions.Center;
+        textHintLabel.color = Color.white;
+        textHintLabel.fontStyle = FontStyles.Bold;
+        textHintLabel.enableAutoSizing = true;
+        textHintLabel.fontSizeMin = 7f;
+        textHintLabel.fontSizeMax = 18f;
+        textHintLabel.lineSpacing = 0f;
+        textHintLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        textHintLabel.overflowMode = TextOverflowModes.Truncate;
+        textHintLabel.raycastTarget = false;
+
+        var shadow = labelGo.AddComponent<Shadow>();
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.9f);
+        shadow.effectDistance = new Vector2(1f, -1f);
+        shadow.useGraphicAlpha = true;
+    }
+
     private void OnRectTransformDimensionsChange()
     {
         if (hintVisible)
             LayoutHintIcons();
+
+        if (textHintRoot && textHintRoot.gameObject.activeSelf)
+            LayoutTextHints();
 
         FitImageAsCenteredSquare(spriteImage, spritePadding);
         FitImageAsCenteredSquare(placeholderImage, spritePadding);
@@ -646,6 +769,44 @@ public class PokemonCard : MonoBehaviour
         {
             float size = inner * 0.90f;
             Place(typeIconL, size, Vector2.zero);
+        }
+    }
+
+    private void LayoutTextHints()
+    {
+        if (!textHintRoot || !textHintRoot.gameObject.activeSelf)
+            return;
+
+        float inner = GetInnerSide();
+        if (inner <= 0f)
+            return;
+
+        textHintRoot.SetAsLastSibling();
+        if (highlight)
+            highlight.transform.SetAsLastSibling();
+
+        int lines =
+            !string.IsNullOrWhiteSpace(evolutionStageHintText)
+            && !string.IsNullOrWhiteSpace(firstLetterHintText)
+                ? 2
+                : 1;
+
+        textHintRoot.anchorMin = textHintRoot.anchorMax = new Vector2(0.5f, 0.5f);
+        textHintRoot.pivot = new Vector2(0.5f, 0.5f);
+        textHintRoot.anchoredPosition = new Vector2(0f, inner * (lines == 2 ? 0.26f : 0.34f));
+        textHintRoot.sizeDelta = new Vector2(
+            inner * 0.92f,
+            inner * (lines == 2 ? 0.46f : 0.22f)
+        );
+
+        if (textHintLabel)
+        {
+            textHintLabel.fontSizeMin = Mathf.Clamp(inner * 0.08f, 7f, 12f);
+            textHintLabel.fontSizeMax = Mathf.Clamp(
+                inner * (lines == 2 ? 0.12f : 0.16f),
+                10f,
+                18f
+            );
         }
     }
 }

@@ -125,7 +125,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             quizManager.CurrentQuizGeneration,
             quizManager.CurrentTypeFilter,
             solvedIds,
+            quizManager.EvolutionStageHintedIds,
             quizManager.HintedIds,
+            quizManager.FirstLetterHintedIds,
             quizManager.ShadowedIds,
             quizManager.ElapsedSeconds,
             quizManager.IsQuizRunning,
@@ -209,7 +211,12 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
     public static bool RequestRevealShadow() => RequestAction(CoopAction.RevealShadow);
 
+    public static bool RequestRevealEvolutionStage() =>
+        RequestAction(CoopAction.RevealEvolutionStage);
+
     public static bool RequestRevealType() => RequestAction(CoopAction.RevealType);
+
+    public static bool RequestRevealFirstLetter() => RequestAction(CoopAction.RevealFirstLetter);
 
     public static bool RequestReset() => RequestAction(CoopAction.Reset);
 
@@ -654,6 +661,13 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             case CoopAction.Resume:
                 quiz.ApplyNetworkPause(paused: false, quiz.ElapsedSeconds);
                 break;
+            case CoopAction.RevealEvolutionStage:
+                payload = quiz.ApplyNetworkRevealEvolutionStage();
+                if (payload == 0)
+                    return;
+                EnsurePlayer(senderClientId, null);
+                playerTypeHints[senderClientId]++;
+                break;
             case CoopAction.RevealShadow:
                 payload = quiz.ApplyNetworkRevealShadow();
                 if (payload == 0)
@@ -663,6 +677,13 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
                 break;
             case CoopAction.RevealType:
                 payload = quiz.ApplyNetworkRevealType();
+                if (payload == 0)
+                    return;
+                EnsurePlayer(senderClientId, null);
+                playerTypeHints[senderClientId]++;
+                break;
+            case CoopAction.RevealFirstLetter:
+                payload = quiz.ApplyNetworkRevealFirstLetter();
                 if (payload == 0)
                     return;
                 EnsurePlayer(senderClientId, null);
@@ -740,11 +761,17 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             case CoopAction.Resume:
                 quiz.ApplyNetworkPause(paused: false, elapsed);
                 break;
+            case CoopAction.RevealEvolutionStage:
+                quiz.ApplyNetworkEvolutionStageHint(payload);
+                break;
             case CoopAction.RevealShadow:
                 quiz.ApplyNetworkShadow(payload);
                 break;
             case CoopAction.RevealType:
                 quiz.ApplyNetworkTypeHint(payload);
+                break;
+            case CoopAction.RevealFirstLetter:
+                quiz.ApplyNetworkFirstLetterHint(payload);
                 break;
             case CoopAction.Reset:
                 solvedByClientId.Clear();
@@ -886,7 +913,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
         quiz.ApplySavedMultiplayerSession(
             session.SolvedIdsForRestore(),
+            session.EvolutionStageHintedIds,
             session.HintedIds,
+            session.FirstLetterHintedIds,
             session.ShadowedIds,
             session.Elapsed,
             session.Running
@@ -1038,7 +1067,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         writer.WriteValueSafe(quiz.ElapsedSeconds);
         writer.WriteValueSafe(quiz.IsQuizRunning);
         WriteIds(writer, BuildSolvedIdsSnapshot(quiz.SolvedIds, solvedByClientId));
+        WriteIds(writer, quiz.EvolutionStageHintedIds);
         WriteIds(writer, quiz.HintedIds);
+        WriteIds(writer, quiz.FirstLetterHintedIds);
         WriteIds(writer, quiz.ShadowedIds);
         WriteScoreboard(writer, BuildScoreboard());
         WriteSolvedOwners(writer);
@@ -1071,7 +1102,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         reader.ReadValueSafe(out float elapsed);
         reader.ReadValueSafe(out bool isRunning);
         var solvedIds = ReadIds(reader);
+        var evolutionStageHintedIds = ReadIds(reader);
         var hintedIds = ReadIds(reader);
+        var firstLetterHintedIds = ReadIds(reader);
         var shadowedIds = ReadIds(reader);
         var scoreboard = ReadScoreboard(reader);
         var solvedOwners = ReadSolvedOwners(reader);
@@ -1079,7 +1112,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             generation,
             typeFilter,
             solvedIds,
+            evolutionStageHintedIds,
             hintedIds,
+            firstLetterHintedIds,
             shadowedIds,
             elapsed,
             isRunning,
@@ -1139,7 +1174,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             snapshot.Generation,
             snapshot.TypeFilter,
             snapshot.SolvedIds,
+            snapshot.EvolutionStageHintedIds,
             snapshot.HintedIds,
+            snapshot.FirstLetterHintedIds,
             snapshot.ShadowedIds,
             snapshot.Elapsed,
             snapshot.Running
@@ -1501,7 +1538,7 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             sb.Append(score.Count);
             sb.Append(" guessed, ");
             sb.Append(score.TypeHints);
-            sb.Append(" type hints, ");
+            sb.Append(" hints, ");
             sb.Append(score.Shadows);
             sb.Append(" shadows");
         }
@@ -1590,7 +1627,11 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
     private static void WriteIds(FastBufferWriter writer, IReadOnlyCollection<int> ids)
     {
-        writer.WriteValueSafe(ids.Count);
+        int count = ids?.Count ?? 0;
+        writer.WriteValueSafe(count);
+        if (ids == null)
+            return;
+
         foreach (var id in ids)
             writer.WriteValueSafe(id);
     }
@@ -1670,7 +1711,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         public readonly int Generation;
         public readonly string TypeFilter;
         public readonly List<int> SolvedIds;
+        public readonly List<int> EvolutionStageHintedIds;
         public readonly List<int> HintedIds;
+        public readonly List<int> FirstLetterHintedIds;
         public readonly List<int> ShadowedIds;
         public readonly float Elapsed;
         public readonly bool Running;
@@ -1681,7 +1724,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             int generation,
             string typeFilter,
             List<int> solvedIds,
+            List<int> evolutionStageHintedIds,
             List<int> hintedIds,
+            List<int> firstLetterHintedIds,
             List<int> shadowedIds,
             float elapsed,
             bool running,
@@ -1691,7 +1736,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         {
             Generation = generation;
             TypeFilter = typeFilter;
+            EvolutionStageHintedIds = evolutionStageHintedIds ?? new List<int>();
             HintedIds = hintedIds ?? new List<int>();
+            FirstLetterHintedIds = firstLetterHintedIds ?? new List<int>();
             ShadowedIds = shadowedIds ?? new List<int>();
             Elapsed = Mathf.Max(0f, elapsed);
             Running = running;
@@ -1734,7 +1781,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         public readonly string TypeFilter;
         public readonly string Key;
         public readonly List<int> SolvedIds;
+        public readonly List<int> EvolutionStageHintedIds;
         public readonly List<int> HintedIds;
+        public readonly List<int> FirstLetterHintedIds;
         public readonly List<int> ShadowedIds;
         public readonly float Elapsed;
         public readonly bool Running;
@@ -1745,7 +1794,9 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             int generation,
             string typeFilter,
             IReadOnlyCollection<int> solvedIds,
+            IReadOnlyCollection<int> evolutionStageHintedIds,
             IReadOnlyCollection<int> hintedIds,
+            IReadOnlyCollection<int> firstLetterHintedIds,
             IReadOnlyCollection<int> shadowedIds,
             float elapsed,
             bool running,
@@ -1756,7 +1807,15 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             Generation = generation;
             TypeFilter = NormalizeSavedTypeFilter(typeFilter);
             Key = KeyFor(generation, typeFilter);
+            EvolutionStageHintedIds =
+                evolutionStageHintedIds == null
+                    ? new List<int>()
+                    : new List<int>(evolutionStageHintedIds);
             HintedIds = hintedIds == null ? new List<int>() : new List<int>(hintedIds);
+            FirstLetterHintedIds =
+                firstLetterHintedIds == null
+                    ? new List<int>()
+                    : new List<int>(firstLetterHintedIds);
             ShadowedIds = shadowedIds == null ? new List<int>() : new List<int>(shadowedIds);
             Elapsed = Mathf.Max(0f, elapsed);
             Running = running;
@@ -1823,6 +1882,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         Reset = 5,
         GiveUp = 6,
         ReturnToMenu = 7,
+        RevealEvolutionStage = 8,
+        RevealFirstLetter = 9,
     }
 
     private static bool IsHostControlledAction(CoopAction action)
