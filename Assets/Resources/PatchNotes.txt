@@ -1,3 +1,10 @@
+1.3.3 - 5.6.2026
+- Fixed type quiz grid squares so they match normal quiz cell sizing across all type filters
+- Fixed evolution stage and first-letter hint labels so they stay inside each Pokemon square without overlapping
+- Fixed Pokemon hover tooltips so they render above the grid, labels, side panels, and hint UI
+- Added a Show evolution tooltip checkbox that switches guessed Pokemon hover tooltips between rich evolution details and the simple name/type tooltip
+- Improved the Show evolution tooltip checkbox styling and top-bar placement, including multiplayer layouts
+
 1.3.2 - 3.6.2026
 - Added one combined hint button that reveals evolution stage, type, first letter, then shadow
 - Evolution stage and first-letter hints now save, restore, and sync correctly in co-op

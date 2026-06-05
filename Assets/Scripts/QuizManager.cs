@@ -173,6 +173,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     [SerializeField]
     Toggle alwaysScrollToggle;
+
+    [SerializeField]
+    Toggle evolutionTooltipToggle;
+
     Coroutine _scrollRoutine;
     Coroutine _scrollResetRoutine;
     Coroutine _localBuildRoutine;
@@ -278,7 +282,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     const string KEY_SPELLING_HELP = "spelling_help";
     bool _spellingHelpEnabled = true;
     const string KEY_ALWAYS_SCROLL = "always_scroll_to_pokemon";
+    const string KEY_SHOW_EVOLUTION_TOOLTIP = "show_evolution_tooltip";
     bool _alwaysScrollEnabled = true;
+    bool _showEvolutionTooltip = true;
+    public bool ShowEvolutionTooltip => _showEvolutionTooltip;
     private bool _testRunning;
     private bool _testCancel;
     private bool _localSessionDiscarded;
@@ -447,6 +454,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             pauseBtn.onClick.RemoveAllListeners();
             pauseBtn.onClick.AddListener(TogglePause);
         }
+        EnsureEvolutionTooltipToggle();
 
         if (pauseMenu)
         {
@@ -1444,6 +1452,9 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             alwaysScrollToggle.onValueChanged.RemoveAllListeners();
             alwaysScrollToggle.onValueChanged.AddListener(OnAlwaysScrollToggleChanged);
         }
+
+        _showEvolutionTooltip = PlayerPrefs.GetInt(KEY_SHOW_EVOLUTION_TOOLTIP, 1) == 1;
+        ConfigureEvolutionTooltipToggle();
     }
 
     private static bool ShouldRedirectAccidentalQuizStartup()
@@ -1463,6 +1474,299 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     {
         _alwaysScrollEnabled = on;
         PlayerPrefs.SetInt(KEY_ALWAYS_SCROLL, on ? 1 : 0);
+    }
+
+    private void ConfigureEvolutionTooltipToggle()
+    {
+        if (!evolutionTooltipToggle)
+            EnsureEvolutionTooltipToggle();
+        if (!evolutionTooltipToggle)
+            return;
+
+        evolutionTooltipToggle.SetIsOnWithoutNotify(_showEvolutionTooltip);
+        evolutionTooltipToggle.onValueChanged.RemoveListener(OnEvolutionTooltipToggleChanged);
+        evolutionTooltipToggle.onValueChanged.AddListener(OnEvolutionTooltipToggleChanged);
+        PositionEvolutionTooltipToggle();
+    }
+
+    private void OnEvolutionTooltipToggleChanged(bool on)
+    {
+        _showEvolutionTooltip = on;
+        PlayerPrefs.SetInt(KEY_SHOW_EVOLUTION_TOOLTIP, on ? 1 : 0);
+        TooltipManager.Instance?.Hide();
+    }
+
+    private void EnsureEvolutionTooltipToggle()
+    {
+        if (evolutionTooltipToggle)
+            return;
+
+        var existing = GameObject.Find("ShowEvolutionTooltipToggle");
+        if (existing && existing.TryGetComponent(out Toggle existingToggle))
+        {
+            evolutionTooltipToggle = existingToggle;
+            PositionEvolutionTooltipToggle();
+            return;
+        }
+
+        if (!pauseBtn || !(pauseBtn.transform.parent is RectTransform parent))
+            return;
+
+        var pauseRt = pauseBtn.transform as RectTransform;
+        Toggle sourceToggle = GetTopUiSourceToggle();
+        TMP_Text sourceLabel = GetTopUiSourceToggleLabel();
+        var rowGo = new GameObject("ShowEvolutionTooltipToggle", typeof(RectTransform), typeof(Toggle));
+        SetLayerRecursive(rowGo, pauseBtn.gameObject.layer);
+        rowGo.transform.SetParent(parent, false);
+
+        var rowRt = (RectTransform)rowGo.transform;
+        rowRt.anchorMin = pauseRt ? pauseRt.anchorMin : new Vector2(0.5f, 0.5f);
+        rowRt.anchorMax = pauseRt ? pauseRt.anchorMax : new Vector2(0.5f, 0.5f);
+        rowRt.pivot = new Vector2(0f, 0.5f);
+        rowRt.anchoredPosition = pauseRt ? pauseRt.anchoredPosition : Vector2.zero;
+        rowRt.sizeDelta = new Vector2(270f, 24f);
+        rowRt.SetAsLastSibling();
+
+        var toggle = rowGo.GetComponent<Toggle>();
+        CopyToggleStateStyle(sourceToggle, toggle);
+
+        var boxGo = new GameObject("Background", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        SetLayerRecursive(boxGo, pauseBtn.gameObject.layer);
+        boxGo.transform.SetParent(rowRt, false);
+        var boxRt = (RectTransform)boxGo.transform;
+        boxRt.anchorMin = boxRt.anchorMax = new Vector2(0f, 0.5f);
+        boxRt.pivot = new Vector2(0f, 0.5f);
+        boxRt.anchoredPosition = new Vector2(2f, 0f);
+        boxRt.sizeDelta = GetSourceToggleBoxSize(sourceToggle);
+
+        var boxImage = boxGo.GetComponent<Image>();
+        CopyImageStyle(sourceToggle?.targetGraphic as Image, boxImage);
+        boxImage.raycastTarget = true;
+
+        var checkGo = new GameObject("Check", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        SetLayerRecursive(checkGo, pauseBtn.gameObject.layer);
+        checkGo.transform.SetParent(boxRt, false);
+        var checkRt = (RectTransform)checkGo.transform;
+        checkRt.anchorMin = checkRt.anchorMax = new Vector2(0.5f, 0.5f);
+        checkRt.pivot = new Vector2(0.5f, 0.5f);
+        checkRt.anchoredPosition = Vector2.zero;
+        checkRt.sizeDelta = GetSourceToggleCheckSize(sourceToggle);
+
+        var checkImage = checkGo.GetComponent<Image>();
+        CopyImageStyle(sourceToggle?.graphic as Image, checkImage);
+        checkImage.raycastTarget = false;
+
+        var labelGo = new GameObject(
+            "Label",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(TextMeshProUGUI)
+        );
+        SetLayerRecursive(labelGo, pauseBtn.gameObject.layer);
+        labelGo.transform.SetParent(rowRt, false);
+        var labelRt = (RectTransform)labelGo.transform;
+        labelRt.anchorMin = new Vector2(0f, 0f);
+        labelRt.anchorMax = new Vector2(1f, 1f);
+        labelRt.pivot = new Vector2(0f, 0.5f);
+        labelRt.offsetMin = new Vector2(boxRt.sizeDelta.x + 10f, 0f);
+        labelRt.offsetMax = Vector2.zero;
+
+        var label = labelGo.GetComponent<TextMeshProUGUI>();
+        label.text = "Show evolution tooltip";
+        CopyTopUiLabelStyle(sourceLabel, label);
+        label.raycastTarget = false;
+
+        toggle.targetGraphic = boxImage;
+        toggle.graphic = checkImage;
+        toggle.SetIsOnWithoutNotify(true);
+        evolutionTooltipToggle = toggle;
+        PositionEvolutionTooltipToggle();
+    }
+
+    private void PositionEvolutionTooltipToggle()
+    {
+        if (!evolutionTooltipToggle || !pauseBtn)
+            return;
+
+        var rowRt = evolutionTooltipToggle.transform as RectTransform;
+        var pauseRt = pauseBtn.transform as RectTransform;
+        if (!rowRt || !pauseRt)
+            return;
+
+        rowRt.anchorMin = pauseRt.anchorMin;
+        rowRt.anchorMax = pauseRt.anchorMax;
+        rowRt.pivot = new Vector2(0f, 0.5f);
+
+        const float gapFromPause = 28f;
+        const float gapFromCols = 8f;
+        const float minWidth = 230f;
+        const float preferredWidth = 270f;
+        const float nudgeLeft = 12f;
+
+        float pauseLeft = GetRectLeftEdge(pauseRt);
+        float maxRight = pauseLeft - gapFromPause - nudgeLeft;
+        float width = preferredWidth;
+        float left = maxRight - width;
+        float y = cardSizeLabel ? cardSizeLabel.rectTransform.anchoredPosition.y - 2f : pauseRt.anchoredPosition.y - 20f;
+
+        if (cardSizeLabel)
+        {
+            float colsRight = GetTextVisualRightEdge(cardSizeLabel) + gapFromCols;
+            float available = maxRight - colsRight;
+            if (available >= preferredWidth)
+            {
+                width = preferredWidth;
+                left = maxRight - width;
+            }
+            else
+            {
+                width = Mathf.Max(minWidth, available);
+                left = maxRight - width;
+                if (left < colsRight)
+                    left = colsRight;
+            }
+        }
+
+        rowRt.anchoredPosition = new Vector2(left, y);
+        rowRt.sizeDelta = new Vector2(width, 24f);
+    }
+
+    private static float GetRectLeftEdge(RectTransform rt)
+    {
+        if (!rt)
+            return 0f;
+
+        return rt.anchoredPosition.x - rt.rect.width * rt.pivot.x;
+    }
+
+    private static float GetTextVisualRightEdge(TMP_Text text)
+    {
+        if (!text)
+            return 0f;
+
+        var rt = text.rectTransform;
+        float preferred = Mathf.Max(0f, text.GetPreferredValues(text.text).x);
+        float half = Mathf.Min(rt.rect.width, preferred) * 0.5f;
+        return rt.anchoredPosition.x + half;
+    }
+
+    private Toggle GetTopUiSourceToggle()
+    {
+        if (alwaysScrollToggle)
+            return alwaysScrollToggle;
+        if (spellingHelpToggle)
+            return spellingHelpToggle;
+
+        return GameObject.Find("alwaysScrollToToggle")?.GetComponent<Toggle>()
+            ?? GameObject.Find("spellingHelpToggle")?.GetComponent<Toggle>();
+    }
+
+    private TMP_Text GetTopUiSourceToggleLabel()
+    {
+        return GameObject.Find("alwaysScrollToText")?.GetComponent<TMP_Text>()
+            ?? GameObject.Find("spellingHelpText")?.GetComponent<TMP_Text>();
+    }
+
+    private static Vector2 GetSourceToggleBoxSize(Toggle source)
+    {
+        if (source?.targetGraphic is Image image && image.rectTransform)
+            return image.rectTransform.sizeDelta;
+
+        return new Vector2(20f, 20f);
+    }
+
+    private static Vector2 GetSourceToggleCheckSize(Toggle source)
+    {
+        if (source?.graphic is Image image && image.rectTransform)
+            return image.rectTransform.sizeDelta;
+
+        return new Vector2(20f, 20f);
+    }
+
+    private static void CopyToggleStateStyle(Toggle source, Toggle target)
+    {
+        if (!target)
+            return;
+
+        if (!source)
+        {
+            target.transition = Selectable.Transition.ColorTint;
+            return;
+        }
+
+        target.transition = source.transition;
+        target.colors = source.colors;
+        target.spriteState = source.spriteState;
+        target.animationTriggers = source.animationTriggers;
+        target.toggleTransition = source.toggleTransition;
+    }
+
+    private static void CopyImageStyle(Image source, Image target)
+    {
+        if (!target)
+            return;
+
+        if (!source)
+        {
+            target.color = Color.white;
+            return;
+        }
+
+        target.sprite = source.sprite;
+        target.type = source.type;
+        target.preserveAspect = source.preserveAspect;
+        target.fillCenter = source.fillCenter;
+        target.fillMethod = source.fillMethod;
+        target.fillAmount = source.fillAmount;
+        target.fillClockwise = source.fillClockwise;
+        target.fillOrigin = source.fillOrigin;
+        target.pixelsPerUnitMultiplier = source.pixelsPerUnitMultiplier;
+        target.color = source.color;
+        target.material = source.material;
+    }
+
+    private static void CopyTopUiLabelStyle(TMP_Text source, TMP_Text target)
+    {
+        if (!target)
+            return;
+
+        target.alignment = TextAlignmentOptions.MidlineLeft;
+        target.color = Color.white;
+        target.fontSize = 22f;
+        target.enableAutoSizing = true;
+        target.fontSizeMin = 18f;
+        target.fontSizeMax = 22f;
+        target.textWrappingMode = TextWrappingModes.NoWrap;
+        target.overflowMode = TextOverflowModes.Overflow;
+
+        if (!source)
+            return;
+
+        target.font = source.font;
+        target.fontSharedMaterial = source.fontSharedMaterial;
+        target.color = source.color;
+        target.fontStyle = source.fontStyle;
+        target.fontWeight = source.fontWeight;
+        target.textWrappingMode = source.textWrappingMode;
+
+        float sourceScale = Mathf.Max(0.001f, source.transform.lossyScale.x);
+        float targetScale = Mathf.Max(0.001f, target.transform.lossyScale.x);
+        float visibleFontSize = source.fontSize * sourceScale / targetScale;
+        target.enableAutoSizing = true;
+        target.fontSize = visibleFontSize;
+        target.fontSizeMax = visibleFontSize;
+        target.fontSizeMin = Mathf.Min(12f, visibleFontSize);
+        target.overflowMode = TextOverflowModes.Overflow;
+    }
+
+    private static void SetLayerRecursive(GameObject go, int layer)
+    {
+        if (!go)
+            return;
+
+        go.layer = layer;
+        for (int i = 0; i < go.transform.childCount; i++)
+            SetLayerRecursive(go.transform.GetChild(i).gameObject, layer);
     }
 
     private void OnApplicationQuit()
@@ -3743,8 +4047,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         fit.OuterMarginY = 16;
         fit.Spacing = 16;
 
-        fit.MinCols = currentCols;
-        fit.MaxCols = currentCols;
+        ConfigureGridFitColumns(fit);
 
         _fits.Add(fit);
         if (fit.WidthSource)
@@ -3765,6 +4068,19 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return parent;
 
         return null;
+    }
+
+    private void ConfigureGridFitColumns(GridAutoFit fit)
+    {
+        if (!fit)
+            return;
+
+        bool matchNormalCellSize = UseTypeQuizColumns && fit.WidthSource;
+        fit.MatchReferenceCellSize = matchNormalCellSize;
+        fit.ReferenceWidthSource = matchNormalCellSize && scrollRect ? scrollRect.viewport : null;
+        fit.ReferenceColumnCount = currentCols;
+        fit.MinCols = matchNormalCellSize ? 1 : currentCols;
+        fit.MaxCols = currentCols;
     }
 
     private void ForceTypeColumnsLayoutImmediate()
@@ -3854,12 +4170,13 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (cardSizeLabel)
             cardSizeLabel.text = $"{currentCols} cols";
 
+        PositionEvolutionTooltipToggle();
+
         foreach (var fit in _fits)
         {
             if (!fit)
                 continue;
-            fit.MinCols = currentCols;
-            fit.MaxCols = currentCols;
+            ConfigureGridFitColumns(fit);
         }
 
         ForceTypeColumnsLayoutImmediate();

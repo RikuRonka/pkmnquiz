@@ -21,6 +21,11 @@ public class GridAutoFit : MonoBehaviour
     [Header("Data")]
     public int ItemCount = 0;
 
+    [Header("Reference Sizing")]
+    public bool MatchReferenceCellSize = false;
+    public RectTransform ReferenceWidthSource;
+    public int ReferenceColumnCount = 0;
+
     GridLayoutGroup grid;
     LayoutElement layoutElem;
 
@@ -48,13 +53,16 @@ public class GridAutoFit : MonoBehaviour
         var vp = Viewport.rect;
         var pad = grid.padding;
 
-        float sourceWidth = ResolveSourceWidth(vp.width);
+        float sourceWidth = ResolveSourceWidth(WidthSource, vp.width);
 
         float availW = Mathf.Max(1f, sourceWidth - 2f * OuterMarginX - (pad.left + pad.right));
 
         int colsByMaxCell = Mathf.FloorToInt(availW / MaxCell);
         int bestCols = Mathf.Clamp(colsByMaxCell, MinCols, MaxCols);
-        if (ItemCount < bestCols)
+        if (MatchReferenceCellSize)
+            bestCols = ResolveReferenceSizedColumnCount(availW);
+
+        if (!MatchReferenceCellSize && ItemCount < bestCols)
             bestCols = Mathf.Max(MinCols, ItemCount);
         if (bestCols <= 0)
             bestCols = Mathf.Clamp(MinCols, 1, MaxCols);
@@ -85,15 +93,42 @@ public class GridAutoFit : MonoBehaviour
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
     }
 
-    private float ResolveSourceWidth(float fallbackWidth)
+    private int ResolveReferenceSizedColumnCount(float availW)
     {
-        if (!WidthSource)
+        int referenceCols = Mathf.Max(1, ReferenceColumnCount);
+        float referenceWidth = ResolveSourceWidth(ReferenceWidthSource, Viewport ? Viewport.rect.width : availW);
+        float referenceAvailW = Mathf.Max(
+            1f,
+            referenceWidth - 2f * OuterMarginX - (grid.padding.left + grid.padding.right)
+        );
+
+        float k = Mathf.Max(0f, SpacingRatio);
+        float referenceCell = CalculateCellSize(referenceAvailW, referenceCols, k);
+        if (referenceCell <= 0f)
+            return Mathf.Clamp(referenceCols, Mathf.Max(1, MinCols), Mathf.Max(MinCols, MaxCols));
+
+        float colsForReferenceCell = (availW / referenceCell + k) / (1f + k);
+        int resolved = Mathf.Max(1, Mathf.RoundToInt(colsForReferenceCell));
+        return Mathf.Clamp(resolved, Mathf.Max(1, MinCols), Mathf.Max(MinCols, MaxCols));
+    }
+
+    private float CalculateCellSize(float availW, int cols, float spacingRatio)
+    {
+        cols = Mathf.Max(1, cols);
+        float denom = cols + Mathf.Max(0, cols - 1) * spacingRatio;
+        float cell = availW / Mathf.Max(1f, denom);
+        return Mathf.Min(cell, MaxCell);
+    }
+
+    private float ResolveSourceWidth(RectTransform source, float fallbackWidth)
+    {
+        if (!source)
             return fallbackWidth;
 
-        if (WidthSource.rect.width > 1f)
-            return WidthSource.rect.width;
+        if (source.rect.width > 1f)
+            return source.rect.width;
 
-        if (WidthSource.parent is RectTransform parent)
+        if (source.parent is RectTransform parent)
         {
             float estimated = EstimateLayoutChildWidth(parent);
             if (estimated > 1f)

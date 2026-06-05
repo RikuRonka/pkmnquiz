@@ -19,11 +19,15 @@ public class TooltipManager : MonoBehaviour
     public bool debugPlacement = false;
     public float debugLogInterval = 0.25f;
 
+    const int TooltipSortingOrder = 32767;
+
     PokemonTooltip _tip;
     RectTransform _tipRT;
     RectTransform _tipVisualRT;
     bool _pinned;
     float _nextDebugLogTime;
+
+    public bool IsVisible => _tip && _tip.IsVisible;
 
     void Awake()
     {
@@ -52,6 +56,7 @@ public class TooltipManager : MonoBehaviour
         _tipRT.anchorMax = anchor;
         _tipRT.pivot = new Vector2(0.5f, 0.5f);
         _tipVisualRT = _tip.VisualRoot ? _tip.VisualRoot : FindTooltipVisualRoot(_tipRT);
+        BringTooltipToFront();
     }
 
     public void ShowFollow(
@@ -68,6 +73,7 @@ public class TooltipManager : MonoBehaviour
     )
     {
         _pinned = false;
+        BringTooltipToFront();
         if (!string.IsNullOrWhiteSpace(description))
             _tip.SetNotes(title, description);
         else
@@ -88,6 +94,7 @@ public class TooltipManager : MonoBehaviour
     )
     {
         _pinned = false;
+        BringTooltipToFront();
         _tip.SetPlayerList(title, playerNames);
         ForceRebuildTooltipLayout();
 
@@ -106,6 +113,7 @@ public class TooltipManager : MonoBehaviour
     public void ShowUpdate(string version, string notes)
     {
         _pinned = true;
+        BringTooltipToFront();
         _tip.SetNotes($"Update v{version}", notes);
         ForceRebuildTooltipLayout();
         ConstrainTooltipToLayer(12f);
@@ -140,6 +148,7 @@ public class TooltipManager : MonoBehaviour
     )
     {
         _pinned = true;
+        BringTooltipToFront();
 
         _tip.SetNotes($"Update {version}", notes);
         ForceRebuildTooltipLayout();
@@ -166,7 +175,7 @@ public class TooltipManager : MonoBehaviour
         ClampTooltipToScreen(EDGE, GetCanvasCamera(null), null, "update-under");
 
         _tip.SetVisible(true, fadeTime <= 0f, fadeTime);
-        _tipRT.SetAsLastSibling();
+        BringTooltipToFront();
     }
 
     void PositionFollow(Vector2 screenPos, Camera eventCam, RectTransform bounds)
@@ -174,6 +183,7 @@ public class TooltipManager : MonoBehaviour
         if (!uiCanvas || !_tipRT || !_tip)
             return;
 
+        BringTooltipToFront();
         const float EDGE = 8f; // margin to screen edge
         Camera cam = GetCanvasCamera(eventCam);
 
@@ -191,7 +201,7 @@ public class TooltipManager : MonoBehaviour
         _tipRT.anchoredPosition = RoundForCanvas(localPos);
         AlignFollowTooltipToCursor(screenPos, cam);
         ClampTooltipToScreen(EDGE, cam, bounds, "follow", screenPos, localPos);
-        _tipRT.SetAsLastSibling();
+        BringTooltipToFront();
     }
 
     void AlignFollowTooltipToCursor(Vector2 screenPos, Camera cam)
@@ -224,6 +234,32 @@ public class TooltipManager : MonoBehaviour
         tooltipLayer.offsetMax = Vector2.zero;
         tooltipLayer.anchoredPosition = Vector2.zero;
         tooltipLayer.sizeDelta = Vector2.zero;
+
+        var layerCanvas = tooltipLayer.GetComponent<Canvas>();
+        if (!layerCanvas)
+            layerCanvas = tooltipLayer.gameObject.AddComponent<Canvas>();
+        layerCanvas.overrideSorting = true;
+        layerCanvas.sortingOrder = TooltipSortingOrder;
+
+        tooltipLayer.SetAsLastSibling();
+    }
+
+    void BringTooltipToFront()
+    {
+        if (tooltipLayer)
+        {
+            var layerCanvas = tooltipLayer.GetComponent<Canvas>();
+            if (layerCanvas)
+            {
+                layerCanvas.overrideSorting = true;
+                layerCanvas.sortingOrder = TooltipSortingOrder;
+            }
+
+            tooltipLayer.SetAsLastSibling();
+        }
+
+        if (_tipRT)
+            _tipRT.SetAsLastSibling();
     }
 
     void ConstrainTooltipToLayer(float edge)

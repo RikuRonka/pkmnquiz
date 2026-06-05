@@ -42,12 +42,15 @@ public class PokemonTooltip : MonoBehaviour
     private const float EvolutionSpriteSize = 36f;
     private const float EvolutionTypeIconSize = 12f;
     private const float EvolutionTypeIconRowHeight = 12f;
+    private const float SimpleTypeIconSize = 22f;
+    private const float SimpleTypeIconRowHeight = 24f;
     private const float EvolutionArrowWidth = 14f;
     private const float EvolutionRowSpacing = 4f;
     private const int EvolutionEntriesPerRow = 4;
 
     private RectTransform tooltipPanelRect;
     private RectTransform contentRootRect;
+    private RectTransform simpleTypeRowRect;
     private RectTransform evolutionStackRect;
     private TMP_Text titleText;
     private TMP_Text notesText;
@@ -56,10 +59,13 @@ public class PokemonTooltip : MonoBehaviour
     private VerticalLayoutGroup panelLayout;
     private VerticalLayoutGroup contentLayout;
     private VerticalLayoutGroup evolutionStackLayout;
+    private HorizontalLayoutGroup simpleTypeRowLayout;
     private ContentSizeFitter panelSizeFitter;
     private ContentSizeFitter contentSizeFitter;
     private LayoutElement contentLayoutElement;
+    private LayoutElement simpleTypeRowElement;
     private LayoutElement evolutionStackElement;
+    private float simpleTypePreferredWidth;
     private float evolutionPreferredWidth;
     private float evolutionPreferredHeight;
 
@@ -163,6 +169,21 @@ public class PokemonTooltip : MonoBehaviour
 
         nameLabel = titleText;
 
+        simpleTypeRowRect = CreateRectChild(contentRootRect, "SimpleTypeIcons");
+        simpleTypeRowLayout = simpleTypeRowRect.gameObject.AddComponent<HorizontalLayoutGroup>();
+        simpleTypeRowLayout.childAlignment = TextAnchor.MiddleCenter;
+        simpleTypeRowLayout.childControlWidth = true;
+        simpleTypeRowLayout.childControlHeight = true;
+        simpleTypeRowLayout.childForceExpandWidth = false;
+        simpleTypeRowLayout.childForceExpandHeight = false;
+        simpleTypeRowLayout.spacing = 4f;
+        simpleTypeRowLayout.padding = new RectOffset(0, 0, 0, 0);
+        simpleTypeRowElement = SetLayout(
+            simpleTypeRowRect.gameObject,
+            preferredHeight: SimpleTypeIconRowHeight
+        );
+        simpleTypeRowRect.gameObject.SetActive(false);
+
         notesText = CreateTextChild(contentRootRect, "DescriptionText");
         notesText.alignment = TextAlignmentOptions.TopLeft;
         notesText.color = Color.white;
@@ -223,10 +244,12 @@ public class PokemonTooltip : MonoBehaviour
         titleText.gameObject.SetActive(true);
         notesText.gameObject.SetActive(false);
 
+        bool showEvolution = pokemon != null && guessedIds != null && guessedIds.Contains(pokemon.id);
+        ApplySimpleTypeIcons(type1, type2, !showEvolution);
         ApplyEvolutionContent(pokemon, guessedIds, activeQuizIds);
 
         float titleWidth = titleText.GetPreferredValues(titleText.text, PokemonMaxTooltipWidth, 0f).x;
-        float contentWidth = Mathf.Max(titleWidth, evolutionPreferredWidth);
+        float contentWidth = Mathf.Max(titleWidth, simpleTypePreferredWidth, evolutionPreferredWidth);
         float targetWidth = Mathf.Clamp(
             contentWidth + contentLayout.padding.left + contentLayout.padding.right,
             PokemonMinTooltipWidth,
@@ -241,6 +264,7 @@ public class PokemonTooltip : MonoBehaviour
         tooltipBackground.color = new Color(0f, 0f, 0f, 1f);
         titleText.text = title ?? string.Empty;
         titleText.gameObject.SetActive(true);
+        HideSimpleTypeIcons();
         HideEvolutionContent();
 
         notesText.gameObject.SetActive(true);
@@ -262,6 +286,7 @@ public class PokemonTooltip : MonoBehaviour
         tooltipBackground.color = new Color(0f, 0f, 0f, 1f);
         titleText.text = title ?? string.Empty;
         titleText.gameObject.SetActive(true);
+        HideSimpleTypeIcons();
         HideEvolutionContent();
 
         notesText.gameObject.SetActive(true);
@@ -910,6 +935,69 @@ public class PokemonTooltip : MonoBehaviour
         );
 
         return width;
+    }
+
+    private void ApplySimpleTypeIcons(string type1, string type2, bool visible)
+    {
+        HideSimpleTypeIcons();
+        if (!visible || !simpleTypeRowRect)
+            return;
+
+        var sprites = new List<Sprite>();
+        AddTypeIconSprite(sprites, type1);
+        AddTypeIconSprite(sprites, type2);
+        if (sprites.Count == 0)
+            return;
+
+        simpleTypeRowRect.gameObject.SetActive(true);
+        simpleTypePreferredWidth =
+            sprites.Count * SimpleTypeIconSize + Mathf.Max(0, sprites.Count - 1) * simpleTypeRowLayout.spacing;
+
+        SetLayout(
+            simpleTypeRowRect.gameObject,
+            preferredWidth: simpleTypePreferredWidth,
+            preferredHeight: SimpleTypeIconRowHeight
+        );
+        simpleTypeRowElement = simpleTypeRowRect.GetComponent<LayoutElement>();
+
+        for (int i = 0; i < sprites.Count; i++)
+        {
+            var iconRect = CreateRectChild(simpleTypeRowRect, "TypeIcon");
+            var icon = iconRect.gameObject.AddComponent<Image>();
+            icon.sprite = sprites[i];
+            icon.preserveAspect = true;
+            icon.raycastTarget = false;
+            icon.color = Color.white;
+            SetLayout(
+                iconRect.gameObject,
+                preferredWidth: SimpleTypeIconSize,
+                preferredHeight: SimpleTypeIconSize,
+                minWidth: SimpleTypeIconSize,
+                minHeight: SimpleTypeIconSize
+            );
+        }
+    }
+
+    private void HideSimpleTypeIcons()
+    {
+        simpleTypePreferredWidth = 0f;
+        if (!simpleTypeRowRect)
+            return;
+
+        for (int i = simpleTypeRowRect.childCount - 1; i >= 0; i--)
+            Destroy(simpleTypeRowRect.GetChild(i).gameObject);
+
+        simpleTypeRowRect.gameObject.SetActive(false);
+    }
+
+    private static void AddTypeIconSprite(List<Sprite> sprites, string typeName)
+    {
+        if (sprites == null || string.IsNullOrWhiteSpace(typeName))
+            return;
+
+        var sprite = TypeIconLibrary.Instance.Get(typeName);
+        if (sprite)
+            sprites.Add(sprite);
     }
 
     private static List<Sprite> GetTypeIconSprites(Pokemon pokemon)

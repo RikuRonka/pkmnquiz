@@ -117,7 +117,11 @@ public class PokemonCardHover
         if (!s_pinned && _hovering && CanShowTooltip)
         {
             Vector2 pos = GetMousePos();
-            TooltipManager.Instance?.MoveFollow(pos, null, TooltipBounds); // overlay canvas
+            var tooltip = TooltipManager.Instance;
+            if (tooltip && tooltip.IsVisible)
+                tooltip.MoveFollow(pos, null, TooltipBounds); // overlay canvas
+            else
+                ShowCardTooltip(pos, null);
         }
 
         // While pinned, update preview live as you hover across cards (nice UX)
@@ -142,8 +146,9 @@ public class PokemonCardHover
         var p = card.Pokemon;
         string t1 = p.types != null && p.types.Length > 0 ? p.types[0] : null;
         string t2 = p.types != null && p.types.Length > 1 ? p.types[1] : null;
-        var guessedIds = GetGuessedIdsForTooltip(p);
-        var activeQuizIds = GetActiveQuizIdsForTooltip(p);
+        bool showEvolutionTooltip = quiz == null || quiz.ShowEvolutionTooltip;
+        var guessedIds = showEvolutionTooltip ? GetGuessedIdsForTooltip(p) : null;
+        var activeQuizIds = showEvolutionTooltip ? GetActiveQuizIdsForTooltip(p) : null;
 
         TooltipManager.Instance?.ShowFollow(
             p.name,
@@ -153,7 +158,7 @@ public class PokemonCardHover
             screenPos,
             cam,
             TooltipBounds,
-            p,
+            showEvolutionTooltip ? p : null,
             guessedIds,
             activeQuizIds
         );

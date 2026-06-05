@@ -36,7 +36,10 @@ public class PokemonCard : MonoBehaviour
     private string firstLetterHintText;
     private RectTransform textHintRoot;
     private TMP_Text textHintLabel;
+    private TMP_Text evolutionStageHintLabel;
+    private TMP_Text firstLetterHintLabel;
     private Image textHintBackground;
+    private VerticalLayoutGroup textHintLayout;
     private Coroutine highlightCo;
 
     [Header("Highlight/Shake")]
@@ -455,6 +458,11 @@ public class PokemonCard : MonoBehaviour
         evolutionStageHintText = null;
         firstLetterHintText = null;
 
+        if (evolutionStageHintLabel)
+            evolutionStageHintLabel.gameObject.SetActive(false);
+        if (firstLetterHintLabel)
+            firstLetterHintLabel.gameObject.SetActive(false);
+
         if (textHintRoot)
             textHintRoot.gameObject.SetActive(false);
     }
@@ -492,18 +500,17 @@ public class PokemonCard : MonoBehaviour
             return;
 
         textHintRoot.gameObject.SetActive(true);
-
-        if (hasEvolution && hasFirstLetter)
-            textHintLabel.text = $"{evolutionStageHintText}\n{firstLetterHintText}";
-        else
-            textHintLabel.text = hasEvolution ? evolutionStageHintText : firstLetterHintText;
+        evolutionStageHintLabel.gameObject.SetActive(hasEvolution);
+        firstLetterHintLabel.gameObject.SetActive(hasFirstLetter);
+        evolutionStageHintLabel.text = hasEvolution ? evolutionStageHintText : string.Empty;
+        firstLetterHintLabel.text = hasFirstLetter ? firstLetterHintText : string.Empty;
 
         LayoutTextHints();
     }
 
     private void EnsureTextHintLabel()
     {
-        if (textHintRoot && textHintLabel)
+        if (textHintRoot && textHintLabel && evolutionStageHintLabel && firstLetterHintLabel)
             return;
 
         var rootGo = new GameObject("TextHints", typeof(RectTransform), typeof(Image));
@@ -513,30 +520,52 @@ public class PokemonCard : MonoBehaviour
         textHintBackground.color = new Color(0f, 0f, 0f, 0.72f);
         textHintBackground.raycastTarget = false;
 
-        var labelGo = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textHintLayout = rootGo.AddComponent<VerticalLayoutGroup>();
+        textHintLayout.childAlignment = TextAnchor.UpperLeft;
+        textHintLayout.childControlWidth = true;
+        textHintLayout.childControlHeight = true;
+        textHintLayout.childForceExpandWidth = true;
+        textHintLayout.childForceExpandHeight = false;
+        textHintLayout.spacing = 0f;
+        textHintLayout.padding = new RectOffset(4, 4, 2, 2);
+
+        evolutionStageHintLabel = CreateTextHintLine("StageLabel");
+        firstLetterHintLabel = CreateTextHintLine("FirstLetterLabel");
+        textHintLabel = evolutionStageHintLabel;
+    }
+
+    private TMP_Text CreateTextHintLine(string objectName)
+    {
+        var labelGo = new GameObject(objectName, typeof(RectTransform), typeof(TextMeshProUGUI));
         labelGo.transform.SetParent(textHintRoot, false);
         var labelRt = (RectTransform)labelGo.transform;
-        labelRt.anchorMin = Vector2.zero;
-        labelRt.anchorMax = Vector2.one;
-        labelRt.offsetMin = new Vector2(4f, 1f);
-        labelRt.offsetMax = new Vector2(-4f, -1f);
+        labelRt.anchorMin = new Vector2(0f, 1f);
+        labelRt.anchorMax = new Vector2(1f, 1f);
+        labelRt.pivot = new Vector2(0f, 1f);
 
-        textHintLabel = labelGo.GetComponent<TMP_Text>();
-        textHintLabel.alignment = TextAlignmentOptions.Center;
-        textHintLabel.color = Color.white;
-        textHintLabel.fontStyle = FontStyles.Bold;
-        textHintLabel.enableAutoSizing = true;
-        textHintLabel.fontSizeMin = 7f;
-        textHintLabel.fontSizeMax = 18f;
-        textHintLabel.lineSpacing = 0f;
-        textHintLabel.textWrappingMode = TextWrappingModes.NoWrap;
-        textHintLabel.overflowMode = TextOverflowModes.Truncate;
-        textHintLabel.raycastTarget = false;
+        var label = labelGo.GetComponent<TMP_Text>();
+        label.alignment = TextAlignmentOptions.MidlineLeft;
+        label.color = Color.white;
+        label.fontStyle = FontStyles.Bold;
+        label.enableAutoSizing = true;
+        label.fontSizeMin = 6f;
+        label.fontSizeMax = 14f;
+        label.lineSpacing = 0f;
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.overflowMode = TextOverflowModes.Ellipsis;
+        label.raycastTarget = false;
+
+        var layout = labelGo.AddComponent<LayoutElement>();
+        layout.flexibleWidth = 1f;
+        layout.flexibleHeight = 0f;
 
         var shadow = labelGo.AddComponent<Shadow>();
         shadow.effectColor = new Color(0f, 0f, 0f, 0.9f);
         shadow.effectDistance = new Vector2(1f, -1f);
         shadow.useGraphicAlpha = true;
+
+        labelGo.SetActive(false);
+        return label;
     }
 
     private void OnRectTransformDimensionsChange()
@@ -791,22 +820,53 @@ public class PokemonCard : MonoBehaviour
                 ? 2
                 : 1;
 
-        textHintRoot.anchorMin = textHintRoot.anchorMax = new Vector2(0.5f, 0.5f);
-        textHintRoot.pivot = new Vector2(0.5f, 0.5f);
-        textHintRoot.anchoredPosition = new Vector2(0f, inner * (lines == 2 ? 0.26f : 0.34f));
+        var cell = (RectTransform)transform;
+        float cellW = Mathf.Max(1f, cell.rect.width);
+        float cellH = Mathf.Max(1f, cell.rect.height);
+        float pad = Mathf.Clamp(inner * 0.06f, 2f, 6f);
+        float lineHeight = Mathf.Clamp(inner * 0.15f, 8f, 14f);
+        float verticalPadding = Mathf.Clamp(inner * 0.04f, 2f, 5f);
+        float maxHeight = Mathf.Max(8f, cellH - pad * 2f);
+        float desiredHeight = lines * lineHeight + verticalPadding * 2f;
+
+        textHintRoot.anchorMin = textHintRoot.anchorMax = new Vector2(0f, 1f);
+        textHintRoot.pivot = new Vector2(0f, 1f);
+        textHintRoot.anchoredPosition = new Vector2(pad, -pad);
         textHintRoot.sizeDelta = new Vector2(
-            inner * 0.92f,
-            inner * (lines == 2 ? 0.46f : 0.22f)
+            Mathf.Max(12f, cellW - pad * 2f),
+            Mathf.Min(maxHeight, desiredHeight)
         );
 
-        if (textHintLabel)
+        if (textHintLayout)
         {
-            textHintLabel.fontSizeMin = Mathf.Clamp(inner * 0.08f, 7f, 12f);
-            textHintLabel.fontSizeMax = Mathf.Clamp(
-                inner * (lines == 2 ? 0.12f : 0.16f),
-                10f,
-                18f
-            );
+            int insetX = Mathf.RoundToInt(Mathf.Clamp(inner * 0.045f, 2f, 5f));
+            int insetY = Mathf.RoundToInt(verticalPadding);
+            textHintLayout.padding = new RectOffset(insetX, insetX, insetY, insetY);
+            textHintLayout.spacing = lines == 2 ? Mathf.Clamp(inner * 0.01f, 0f, 1f) : 0f;
+        }
+
+        float minFont = Mathf.Clamp(inner * 0.075f, 5f, 9f);
+        float maxFont = Mathf.Clamp(inner * 0.135f, 8f, 14f);
+        ApplyHintLineSizing(evolutionStageHintLabel, lineHeight, minFont, maxFont);
+        ApplyHintLineSizing(firstLetterHintLabel, lineHeight, minFont, maxFont);
+    }
+
+    private static void ApplyHintLineSizing(
+        TMP_Text label,
+        float lineHeight,
+        float minFont,
+        float maxFont
+    )
+    {
+        if (!label)
+            return;
+
+        label.fontSizeMin = minFont;
+        label.fontSizeMax = Mathf.Max(minFont, maxFont);
+        if (label.TryGetComponent(out LayoutElement layout))
+        {
+            layout.minHeight = lineHeight;
+            layout.preferredHeight = lineHeight;
         }
     }
 }
