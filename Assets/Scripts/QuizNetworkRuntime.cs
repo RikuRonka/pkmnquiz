@@ -29,7 +29,9 @@ public static class QuizNetworkRuntime
     private const string PlayerNameKey = "name";
     private const string PlayerColorKey = "color";
     private const string QuizSelectionMessage = "pkmnquiz_quiz_selection";
+    private const string LobbyPresenceMessage = "pkmnquiz_lobby_presence";
     private const int QuizSelectionMessageSize = 256;
+    private const int LobbyPresenceMessageSize = 512;
     private const int LobbyQueryMaxAttempts = 2;
     private const int LobbyQueryRetryDelayMs = 250;
     private const string HostProfilePrefix = "pkmn_host";
@@ -95,6 +97,8 @@ public static class QuizNetworkRuntime
     private static bool applicationQuitting;
     private static bool quitCleanupStarted;
     private static bool quitCleanupComplete;
+    private static NetworkManager lobbyPresenceManager;
+    private static readonly Dictionary<ulong, string> lobbyPlayerIdsByClientId = new();
     private const int QuitCleanupTimeoutMs = 1800;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -218,6 +222,7 @@ public static class QuizNetworkRuntime
         if (!manager.StartHost())
             throw new InvalidOperationException("Could not start Netcode host.");
 
+        RegisterLobbyPresenceHandlers(manager);
         QuizMultiplayerChatOverlay.Ensure();
         StatusChanged?.Invoke("Players: 1");
 
@@ -283,7 +288,7 @@ public static class QuizNetworkRuntime
         }
         else
         {
-            QuizMultiplayerCoordinator.QueueSavedQuizSessionRestore(generation, typeFilter);
+            QuizMultiplayerCoordinator.PrepareFreshHostedQuizSelection(generation, typeFilter);
         }
 
         ApplyQuizSettings(generation, typeFilter);
@@ -345,6 +350,7 @@ public static class QuizNetworkRuntime
         if (!manager.StartClient())
             throw new InvalidOperationException("Could not start Netcode client.");
 
+        RegisterLobbyPresenceHandlers(manager);
         RegisterQuizSelectionHandler(manager);
         QuizMultiplayerChatOverlay.Ensure();
         StatusChanged?.Invoke("Joined co-op. Waiting for host...");
@@ -528,6 +534,7 @@ public static class QuizNetworkRuntime
     private static void ShutdownInternal(bool allowLobbyServiceCleanup)
     {
         var manager = NetworkManager.Singleton;
+        UnregisterLobbyPresenceHandlers(manager);
         if (manager && manager.CustomMessagingManager != null)
             manager.CustomMessagingManager.UnregisterNamedMessageHandler(QuizSelectionMessage);
 
@@ -1143,6 +1150,126 @@ public static class QuizNetworkRuntime
         );
     }
 
+    private static void RegisterLobbyPresenceHandlers(NetworkManager manager)
+    {
+        if (!manager || manager.CustomMessagingManager == null)
+            return;
+
+        if (lobbyPresenceManager == manager)
+            return;
+
+        UnregisterLobbyPresenceHandlers(lobbyPresenceManager);
+        lobbyPresenceManager = manager;
+        manager.OnClientConnectedCallback += OnLobbyClientConnected;
+        manager.OnClientDisconnectCallback += OnLobbyClientDisconnected;
+
+        if (manager.IsServer)
+        {
+            manager.CustomMessagingManager.RegisterNamedMessageHandler(
+                LobbyPresenceMessage,
+                OnLobbyPresenceMessage
+            );
+            string hostPlayerId = GetSignedInPlayerId();
+            if (!string.IsNullOrEmpty(hostPlayerId))
+                lobbyPlayerIdsByClientId[manager.LocalClientId] = hostPlayerId;
+        }
+
+        if (manager.IsClient && manager.IsConnectedClient)
+            SendLobbyPresence(manager);
+    }
+
+    private static void UnregisterLobbyPresenceHandlers(NetworkManager manager)
+    {
+        if (!manager)
+            return;
+
+        manager.OnClientConnectedCallback -= OnLobbyClientConnected;
+        manager.OnClientDisconnectCallback -= OnLobbyClientDisconnected;
+
+        if (manager.CustomMessagingManager != null)
+        {
+            try
+            {
+                manager.CustomMessagingManager.UnregisterNamedMessageHandler(LobbyPresenceMessage);
+            }
+            catch
+            {
+                // Handler may not have been registered on client-only sessions.
+            }
+        }
+
+        if (lobbyPresenceManager == manager)
+            lobbyPresenceManager = null;
+        lobbyPlayerIdsByClientId.Clear();
+    }
+
+    private static void OnLobbyClientConnected(ulong clientId)
+    {
+        var manager = NetworkManager.Singleton;
+        if (!manager || manager != lobbyPresenceManager)
+            return;
+
+        if (manager.IsServer && clientId == manager.LocalClientId)
+        {
+            string hostPlayerId = GetSignedInPlayerId();
+            if (!string.IsNullOrEmpty(hostPlayerId))
+                lobbyPlayerIdsByClientId[clientId] = hostPlayerId;
+            return;
+        }
+
+        if (manager.IsClient && !manager.IsServer && clientId == manager.LocalClientId)
+            SendLobbyPresence(manager);
+    }
+
+    private static void OnLobbyClientDisconnected(ulong clientId)
+    {
+        var manager = NetworkManager.Singleton;
+        if (!manager || manager != lobbyPresenceManager || !manager.IsServer)
+            return;
+        if (clientId == manager.LocalClientId)
+            return;
+
+        if (!lobbyPlayerIdsByClientId.TryGetValue(clientId, out var playerId))
+            return;
+
+        lobbyPlayerIdsByClientId.Remove(clientId);
+        if (!string.IsNullOrEmpty(LobbyId) && !string.IsNullOrEmpty(playerId))
+            _ = TryRemovePlayerAsync(LobbyId, playerId);
+    }
+
+    private static void OnLobbyPresenceMessage(ulong senderClientId, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out string playerId);
+        if (string.IsNullOrWhiteSpace(playerId))
+            return;
+
+        lobbyPlayerIdsByClientId[senderClientId] = playerId;
+    }
+
+    private static void SendLobbyPresence(NetworkManager manager)
+    {
+        if (
+            !manager
+            || !manager.IsClient
+            || manager.IsServer
+            || manager.CustomMessagingManager == null
+        )
+            return;
+
+        string playerId = GetSignedInPlayerId();
+        if (string.IsNullOrEmpty(playerId))
+            return;
+
+        using var writer = new FastBufferWriter(LobbyPresenceMessageSize, Allocator.Temp);
+        writer.WriteValueSafe(playerId);
+        manager.CustomMessagingManager.SendNamedMessage(
+            LobbyPresenceMessage,
+            0UL,
+            writer,
+            NetworkDelivery.ReliableSequenced
+        );
+    }
+
     private static void BroadcastQuizSelection(
         NetworkManager manager,
         int generation,
@@ -1410,6 +1537,7 @@ public static class QuizNetworkRuntime
         if (manager.IsListening || manager.ShutdownInProgress)
         {
             QuizMultiplayerChatOverlay.ResetSession();
+            UnregisterLobbyPresenceHandlers(manager);
             manager.Shutdown();
 
             const int maxFrames = 120;

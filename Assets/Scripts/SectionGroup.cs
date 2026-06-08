@@ -38,11 +38,24 @@ public class SectionGroup : MonoBehaviour
     [SerializeField]
     float baseFontSize = 36f;
     private bool _isMainHeader;
+    private string _baseTitle = "";
     private const float HeaderTextMinSize = 14f;
     private const float HeaderHeight = 52f;
 
     [SerializeField]
     float mainHeaderIconSpacing = 24f;
+    private bool _mainOnlyScreen;
+    private bool _fitStateCaptured;
+    private ContentSizeFitter.FitMode _normalHorizontalFit;
+    private ContentSizeFitter.FitMode _normalVerticalFit;
+    private Vector2 _normalRootAnchorMin;
+    private Vector2 _normalRootAnchorMax;
+    private Vector2 _normalRootPivot;
+    private Vector2 _normalRootSizeDelta;
+    private Vector2 _normalRootAnchoredPosition;
+    private const float FitMinTitleFont = 5f;
+    private const float FitMinHeaderHeight = 7f;
+    private const float FitMinSpacing = 0f;
 
     public void SetCardCount(int n)
     {
@@ -191,10 +204,11 @@ public class SectionGroup : MonoBehaviour
             return;
 
         _isMainHeader = isMain;
+        _baseTitle = text ?? "";
         titleText.enableAutoSizing = false;
         titleText.textWrappingMode = TextWrappingModes.NoWrap;
         titleText.overflowMode = TextOverflowModes.Overflow;
-        titleText.text = text ?? "";
+        titleText.text = _baseTitle;
         titleText.color = Color.black;
 
         var titleRT = titleText.rectTransform;
@@ -265,6 +279,25 @@ public class SectionGroup : MonoBehaviour
         }
     }
 
+    public void SetSectionProgress(int guessed, int total)
+    {
+        if (!titleText || _isMainHeader)
+            return;
+
+        string baseTitle = string.IsNullOrEmpty(_baseTitle) ? titleText.text : _baseTitle;
+        guessed = Mathf.Clamp(guessed, 0, Mathf.Max(0, total));
+        total = Mathf.Max(0, total);
+        titleText.text = $"{baseTitle} - {guessed}/{total}";
+    }
+
+    public void ClearSectionProgress()
+    {
+        if (!titleText || _isMainHeader || string.IsNullOrEmpty(_baseTitle))
+            return;
+
+        titleText.text = _baseTitle;
+    }
+
     private void ConfigureSingleLineTitle(RectTransform titleRT, float maxFontSize)
     {
         if (!titleText || !titleRT)
@@ -285,6 +318,7 @@ public class SectionGroup : MonoBehaviour
 
     public void SetHeaderGap(bool mainOnlyScreen)
     {
+        _mainOnlyScreen = mainOnlyScreen;
         if (!headerSpacer)
             return;
         if (headerSpacer.GetComponent<LayoutElement>() == null)
@@ -299,8 +333,313 @@ public class SectionGroup : MonoBehaviour
         RefreshPreferredHeight();
     }
 
+    public float GetFitSectionHeight(float cell, float gap, int columns, float scale)
+    {
+        float total = 0f;
+        int activeParts = 0;
+
+        if (headerRect && headerRect.gameObject.activeSelf)
+        {
+            total += FitHeaderHeight(scale);
+            activeParts++;
+        }
+
+        if (headerSpacer && headerSpacer != headerRect && headerSpacer.gameObject.activeSelf)
+        {
+            total += FitHeaderGap(scale);
+            activeParts++;
+        }
+
+        if (HasActiveGrid())
+        {
+            total += FitGridHeight(cell, gap, columns);
+            activeParts++;
+        }
+
+        if (activeParts > 1)
+            total += FitGroupSpacing(scale) * (activeParts - 1);
+
+        return Mathf.Max(0f, total);
+    }
+
+    public void ApplyFitLayout(float cell, float gap, int columns, float scale)
+    {
+        scale = Mathf.Max(0.001f, scale);
+        CaptureFitState();
+        ApplyFitRootGeometry();
+
+        var vlg = GetComponent<VerticalLayoutGroup>();
+        if (vlg)
+        {
+            vlg.spacing = FitGroupSpacing(scale);
+            vlg.childAlignment = TextAnchor.UpperLeft;
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+        }
+
+        ApplyHeaderFit(scale);
+        ApplyHeaderSpacerFit(scale);
+        ApplyGridFit(cell, gap, columns);
+        RefreshPreferredHeight();
+    }
+
+    public void RestoreNormalLayout()
+    {
+        RestoreFitState();
+
+        var vlg = GetComponent<VerticalLayoutGroup>();
+        if (vlg)
+        {
+            vlg.spacing = 16f;
+            vlg.childAlignment = TextAnchor.UpperLeft;
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+        }
+
+        if (headerRect)
+        {
+            headerRect.sizeDelta = new Vector2(headerRect.sizeDelta.x, HeaderHeight);
+            var headerLayout =
+                headerRect.GetComponent<LayoutElement>()
+                ?? headerRect.gameObject.AddComponent<LayoutElement>();
+            headerLayout.minHeight = HeaderHeight;
+            headerLayout.preferredHeight = HeaderHeight;
+            headerLayout.flexibleHeight = 0f;
+        }
+
+        if (titleText)
+        {
+            if (_isMainHeader)
+            {
+                Sprite icon = typeIcon && typeIcon.enabled ? typeIcon.sprite : null;
+                SetTitle(titleText.text, true, icon);
+            }
+
+            float maxFont = _isMainHeader ? baseFontSize : titleText.fontSizeMax;
+            if (!_isMainHeader)
+                ConfigureSingleLineTitle(titleText.rectTransform, maxFont);
+            titleText.fontSize = maxFont;
+            titleText.fontSizeMax = maxFont;
+            titleText.fontSizeMin = HeaderTextMinSize;
+        }
+
+        if (typeIcon)
+            typeIcon.rectTransform.sizeDelta = new Vector2(38f, 38f);
+
+        if (gridRoot)
+        {
+            var grid = gridRoot.GetComponent<GridLayoutGroup>();
+            if (grid)
+            {
+                grid.childAlignment = TextAnchor.UpperLeft;
+                grid.spacing = new Vector2(12f, 12f);
+                grid.padding = new RectOffset(0, 0, 0, 0);
+            }
+        }
+
+        SetHeaderGap(_mainOnlyScreen);
+    }
+
+    private void CaptureFitState()
+    {
+        if (_fitStateCaptured)
+            return;
+
+        var fitter = GetComponent<ContentSizeFitter>();
+        if (fitter)
+        {
+            _normalHorizontalFit = fitter.horizontalFit;
+            _normalVerticalFit = fitter.verticalFit;
+        }
+
+        if (transform is RectTransform rt)
+        {
+            _normalRootAnchorMin = rt.anchorMin;
+            _normalRootAnchorMax = rt.anchorMax;
+            _normalRootPivot = rt.pivot;
+            _normalRootSizeDelta = rt.sizeDelta;
+            _normalRootAnchoredPosition = rt.anchoredPosition;
+        }
+
+        _fitStateCaptured = true;
+    }
+
+    private void RestoreFitState()
+    {
+        if (!_fitStateCaptured)
+            return;
+
+        var fitter = GetComponent<ContentSizeFitter>();
+        if (fitter)
+        {
+            fitter.horizontalFit = _normalHorizontalFit;
+            fitter.verticalFit = _normalVerticalFit;
+        }
+
+        if (transform is RectTransform rt)
+        {
+            rt.anchorMin = _normalRootAnchorMin;
+            rt.anchorMax = _normalRootAnchorMax;
+            rt.pivot = _normalRootPivot;
+            rt.sizeDelta = _normalRootSizeDelta;
+            rt.anchoredPosition = _normalRootAnchoredPosition;
+        }
+
+        _fitStateCaptured = false;
+    }
+
+    private void ApplyFitRootGeometry()
+    {
+        var fitter = GetComponent<ContentSizeFitter>();
+        if (fitter)
+        {
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        }
+
+        if (transform is RectTransform rt)
+        {
+            rt.anchorMin = new Vector2(0f, rt.anchorMin.y);
+            rt.anchorMax = new Vector2(1f, rt.anchorMax.y);
+            rt.pivot = new Vector2(0.5f, rt.pivot.y);
+            rt.sizeDelta = new Vector2(0f, rt.sizeDelta.y);
+            rt.anchoredPosition = new Vector2(0f, rt.anchoredPosition.y);
+        }
+    }
+
+    private bool HasActiveGrid()
+    {
+        return gridRoot && gridRoot.gameObject.activeSelf && CardCount > 0;
+    }
+
+    private float FitHeaderHeight(float scale)
+    {
+        return Mathf.Max(FitMinHeaderHeight, HeaderHeight * scale);
+    }
+
+    private float FitHeaderGap(float scale)
+    {
+        float gap = _mainOnlyScreen ? mainOnlyGap : normalGap;
+        return Mathf.Max(FitMinSpacing, gap * scale);
+    }
+
+    private float FitGroupSpacing(float scale)
+    {
+        return Mathf.Max(FitMinSpacing, 16f * scale);
+    }
+
+    private float FitGridHeight(float cell, float gap, int columns)
+    {
+        int cols = Mathf.Max(1, columns);
+        int rows = Mathf.CeilToInt((float)CardCount / cols);
+        return rows * cell + Mathf.Max(0, rows - 1) * gap;
+    }
+
+    private void ApplyHeaderFit(float scale)
+    {
+        if (!headerRect)
+            return;
+
+        float headerHeight = FitHeaderHeight(scale);
+        headerRect.anchorMin = new Vector2(0f, 1f);
+        headerRect.anchorMax = new Vector2(1f, 1f);
+        headerRect.pivot = new Vector2(0.5f, 1f);
+        headerRect.anchoredPosition = new Vector2(0f, headerRect.anchoredPosition.y);
+        headerRect.sizeDelta = new Vector2(0f, headerHeight);
+
+        var headerLayout =
+            headerRect.GetComponent<LayoutElement>()
+            ?? headerRect.gameObject.AddComponent<LayoutElement>();
+        headerLayout.minHeight = headerHeight;
+        headerLayout.preferredHeight = headerHeight;
+        headerLayout.flexibleHeight = 0f;
+
+        if (titleText)
+        {
+            float maxFont = Mathf.Max(FitMinTitleFont, baseFontSize * scale);
+            ConfigureSingleLineTitle(titleText.rectTransform, maxFont);
+            titleText.alignment = TextAlignmentOptions.MidlineLeft;
+            titleText.enableAutoSizing = true;
+            titleText.fontSizeMin = Mathf.Min(FitMinTitleFont, maxFont);
+            titleText.fontSizeMax = maxFont;
+            titleText.fontSize = maxFont;
+        }
+
+        if (typeIcon)
+        {
+            var iconRt = typeIcon.rectTransform;
+            float iconSide = Mathf.Max(4f, 38f * scale);
+            iconRt.anchorMin = iconRt.anchorMax = new Vector2(0f, 0.5f);
+            iconRt.pivot = new Vector2(0f, 0.5f);
+            iconRt.anchoredPosition = Vector2.zero;
+            iconRt.sizeDelta = new Vector2(iconSide, iconSide);
+
+            if (titleText && typeIcon.enabled)
+            {
+                float iconGap = Mathf.Max(2f, mainHeaderIconSpacing * scale * 0.5f);
+                titleText.rectTransform.offsetMin = new Vector2(iconSide + iconGap, 0f);
+            }
+        }
+    }
+
+    private void ApplyHeaderSpacerFit(float scale)
+    {
+        if (!headerSpacer || headerSpacer == headerRect)
+            return;
+
+        var spacerLayout =
+            headerSpacer.GetComponent<LayoutElement>()
+            ?? headerSpacer.gameObject.AddComponent<LayoutElement>();
+        float gap = FitHeaderGap(scale);
+        spacerLayout.minHeight = gap;
+        spacerLayout.preferredHeight = gap;
+        spacerLayout.flexibleHeight = 0f;
+    }
+
+    private void ApplyGridFit(float cell, float gap, int columns)
+    {
+        if (!gridRoot)
+            return;
+
+        gridRoot.anchorMin = new Vector2(0f, 1f);
+        gridRoot.anchorMax = new Vector2(1f, 1f);
+        gridRoot.pivot = new Vector2(0.5f, 1f);
+        gridRoot.anchoredPosition = new Vector2(0f, gridRoot.anchoredPosition.y);
+        gridRoot.sizeDelta = new Vector2(0f, gridRoot.sizeDelta.y);
+
+        var grid = gridRoot.GetComponent<GridLayoutGroup>();
+        if (grid)
+        {
+            grid.startAxis = GridLayoutGroup.Axis.Horizontal;
+            grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
+            grid.childAlignment = TextAnchor.UpperLeft;
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = Mathf.Max(1, columns);
+            grid.cellSize = new Vector2(cell, cell);
+            grid.spacing = new Vector2(gap, gap);
+            grid.padding = new RectOffset(0, 0, 0, 0);
+        }
+
+        var layout = gridRoot.GetComponent<LayoutElement>();
+        if (layout)
+        {
+            float gridHeight = HasActiveGrid()
+                ? FitGridHeight(cell, gap, Mathf.Max(1, columns))
+                : 0f;
+            layout.minHeight = gridHeight;
+            layout.preferredHeight = gridHeight;
+            layout.flexibleHeight = 0f;
+        }
+    }
+
     public void RefreshPreferredHeight()
     {
+        RefreshGridPreferredHeight();
+
         float total = 0f;
         int activeParts = 0;
 
@@ -320,6 +659,48 @@ public class SectionGroup : MonoBehaviour
 
         if (transform is RectTransform rt)
             rt.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, total);
+    }
+
+    private void RefreshGridPreferredHeight()
+    {
+        if (!gridRoot || !gridRoot.gameObject.activeSelf)
+            return;
+
+        var grid = gridRoot.GetComponent<GridLayoutGroup>();
+        if (!grid)
+            return;
+
+        var layout = gridRoot.GetComponent<LayoutElement>()
+            ?? gridRoot.gameObject.AddComponent<LayoutElement>();
+        int cols = Mathf.Max(1, grid.constraintCount);
+        int count = ActiveGridChildCount();
+        int rows = Mathf.CeilToInt((float)count / cols);
+        float height =
+            grid.padding.top
+            + grid.padding.bottom
+            + rows * grid.cellSize.y
+            + Mathf.Max(0, rows - 1) * grid.spacing.y;
+
+        layout.minHeight = height;
+        layout.preferredHeight = height;
+        layout.flexibleHeight = 0f;
+        gridRoot.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
+    }
+
+    private int ActiveGridChildCount()
+    {
+        if (!gridRoot)
+            return 0;
+
+        int count = 0;
+        for (int i = 0; i < gridRoot.childCount; i++)
+        {
+            var child = gridRoot.GetChild(i);
+            if (child && child.gameObject.activeSelf)
+                count++;
+        }
+
+        return count;
     }
 
     private static void AddLayoutHeight(

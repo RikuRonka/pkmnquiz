@@ -77,6 +77,24 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         return true;
     }
 
+    public static void PrepareFreshHostedQuizSelection(int generation, string typeFilter)
+    {
+        ClearSavedQuizSession(generation, typeFilter);
+        restoreSavedQuizSessionKey = null;
+
+        if (instance)
+        {
+            instance.pendingState = null;
+            instance.stateReceived = false;
+            instance.ResetScores();
+            instance.solvedByClientId.Clear();
+            ApplyScoreboard(instance.BuildScoreboard());
+            return;
+        }
+
+        ResetLatestScoreboardCounts();
+    }
+
     public static void ClearSavedQuizSession()
     {
         savedQuizSessions.Clear();
@@ -1060,6 +1078,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     {
         if (!quiz)
             return;
+        if (!CurrentQuizMatchesActiveSelection())
+            return;
 
         using var writer = new FastBufferWriter(MessageSize, Allocator.Temp);
         writer.WriteValueSafe(quiz.CurrentQuizGeneration);
@@ -1093,6 +1113,19 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
 
             SendStateToClient(clientId);
         }
+    }
+
+    private bool CurrentQuizMatchesActiveSelection()
+    {
+        if (!quiz || !QuizNetworkRuntime.HasActiveQuizSelection)
+            return true;
+
+        return quiz.CurrentQuizGeneration == QuizNetworkRuntime.ActiveQuizGeneration
+            && string.Equals(
+                NormalizeSavedTypeFilter(quiz.CurrentTypeFilter),
+                NormalizeSavedTypeFilter(QuizNetworkRuntime.ActiveQuizTypeFilter),
+                System.StringComparison.Ordinal
+            );
     }
 
     private void OnStateMessage(ulong senderClientId, FastBufferReader reader)
@@ -1150,15 +1183,15 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             return;
         }
 
-        QuizNetworkRuntime.ApplyAuthoritativeQuizSelection(snapshot.Generation, snapshot.TypeFilter);
-
-        if (!SnapshotMatchesActiveQuiz(snapshot))
+        if (!SnapshotMatchesActiveQuiz(snapshot) || !SnapshotMatchesCurrentQuiz(snapshot))
         {
             pendingState = null;
             stateReceived = false;
             nextStateRequest = 0f;
             return;
         }
+
+        QuizNetworkRuntime.ApplyAuthoritativeQuizSelection(snapshot.Generation, snapshot.TypeFilter);
 
         bool scoreboardAhead = IsScoreboardAheadOfSolvedState(snapshot);
         if (scoreboardAhead)
@@ -1198,6 +1231,19 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
             && string.Equals(
                 NormalizeSavedTypeFilter(snapshot.TypeFilter),
                 NormalizeSavedTypeFilter(QuizNetworkRuntime.ActiveQuizTypeFilter),
+                System.StringComparison.Ordinal
+            );
+    }
+
+    private bool SnapshotMatchesCurrentQuiz(NetworkStateSnapshot snapshot)
+    {
+        if (!QuizNetworkRuntime.IsMultiplayerClientOnly || !quiz)
+            return true;
+
+        return snapshot.Generation == quiz.CurrentQuizGeneration
+            && string.Equals(
+                NormalizeSavedTypeFilter(snapshot.TypeFilter),
+                NormalizeSavedTypeFilter(quiz.CurrentTypeFilter),
                 System.StringComparison.Ordinal
             );
     }
@@ -1414,22 +1460,8 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
     {
         if (!manager || !manager.IsServer || clientId == manager.LocalClientId)
             return;
-        if (!hostJoinNotifiedClientIds.Add(clientId))
-            return;
 
-        if (!quiz)
-            quiz = FindFirstObjectByType<QuizManager>();
-
-        string destination = IsQuizSceneActive() ? "quiz" : "lobby";
-        string message =
-            $"{QuizNetworkRuntime.NormalizeNickname(playerName)} joined the {destination}.";
-        WindowsAppNotifier.NotifyLobbyJoin();
-
-        if (quiz && quiz.toast)
-            quiz.toast.Show(message, 2.5f);
-
-        if (IsQuizSceneActive())
-            BroadcastPlayerNotice(message, false, clientId);
+        hostJoinNotifiedClientIds.Add(clientId);
     }
 
     private List<PlayerScore> BuildScoreboard()
@@ -1476,6 +1508,23 @@ public sealed class QuizMultiplayerCoordinator : MonoBehaviour
         var currentQuiz = FindFirstObjectByType<QuizManager>();
         if (currentQuiz)
             currentQuiz.RefreshMultiplayerEndStateColors();
+    }
+
+    private static void ResetLatestScoreboardCounts()
+    {
+        if (latestScoreboard == null || latestScoreboard.Count == 0)
+        {
+            latestScoreboard = new List<PlayerScore>();
+            return;
+        }
+
+        var reset = new List<PlayerScore>(latestScoreboard.Count);
+        foreach (var score in latestScoreboard)
+        {
+            reset.Add(new PlayerScore(score.ClientId, score.Name, score.ColorHex, 0, 0, 0));
+        }
+
+        ApplyScoreboard(reset);
     }
 
     private static void ApplyLocalPlayerColorToScoreboard(ulong localClientId, string colorHex)

@@ -283,9 +283,49 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     bool _spellingHelpEnabled = true;
     const string KEY_ALWAYS_SCROLL = "always_scroll_to_pokemon";
     const string KEY_SHOW_EVOLUTION_TOOLTIP = "show_evolution_tooltip";
+    const string KEY_FIT_ALL_ON_SCREEN = "fit_all_pokemon_on_screen";
+    private const float FitAllViewportPadding = 2f;
+    private const float FitAllMinCellSize = 4f;
+    private const float FitAllMaxCellSize = 260f;
+    private const float FitAllBaseCellSize = 140f;
+    private const float FitAllSpacingRatio = 0.15f;
+    private const float FitAllMinChromeScale = 0.08f;
+    private const float FitAllMaxChromeScale = 1.25f;
+    private const int FitAllSearchIterations = 24;
+    private const float FitAllNormalContentSpacing = 24f;
+    private const float FitAllTypeColumnSpacing = 20f;
+    private const float FitAllTypeColumnSectionSpacing = 10f;
     bool _alwaysScrollEnabled = true;
     bool _showEvolutionTooltip = true;
+    bool _fitAllOnScreenEnabled;
     public bool ShowEvolutionTooltip => _showEvolutionTooltip;
+    public bool FitAllOnScreen => _fitAllOnScreenEnabled;
+    [SerializeField]
+    Toggle fitAllOnScreenToggle;
+    private RectTransform _fitAllContentRt;
+    private Vector3 _fitAllOriginalContentScale = Vector3.one;
+    private Vector2 _fitAllOriginalContentPivot = new(0f, 1f);
+    private bool _fitAllContentStateCaptured;
+    private ScrollRect _fitAllScrollRect;
+    private bool _fitAllScrollStateCaptured;
+    private bool _fitAllOriginalScrollVertical;
+    private bool _fitAllOriginalScrollHorizontal;
+    private bool _fitAllOriginalScrollInertia;
+    private ScrollRect.MovementType _fitAllOriginalMovementType;
+    private ScrollRect.ScrollbarVisibility _fitAllOriginalVerticalScrollbarVisibility;
+    private ScrollRect.ScrollbarVisibility _fitAllOriginalHorizontalScrollbarVisibility;
+    private bool _fitAllOriginalVerticalScrollbarActive;
+    private bool _fitAllOriginalHorizontalScrollbarActive;
+    private bool _fitAllContentLayoutCaptured;
+    private RectOffset _fitAllOriginalContentPadding;
+    private float _fitAllOriginalContentSpacing;
+    private TextAnchor _fitAllOriginalContentAlignment;
+    private bool _fitAllOriginalContentControlWidth;
+    private bool _fitAllOriginalContentControlHeight;
+    private bool _fitAllOriginalContentExpandWidth;
+    private bool _fitAllOriginalContentExpandHeight;
+    private Vector2 _lastFitAllViewportSize = new(-1f, -1f);
+    private Vector2 _lastFitAllContentSize = new(-1f, -1f);
     private bool _testRunning;
     private bool _testCancel;
     private bool _localSessionDiscarded;
@@ -455,6 +495,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             pauseBtn.onClick.AddListener(TogglePause);
         }
         EnsureEvolutionTooltipToggle();
+        EnsureFitAllOnScreenToggle();
 
         if (pauseMenu)
         {
@@ -822,6 +863,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private void HandleKeyboardScroll()
     {
         if (!scrollRect || !scrollRect.content)
+            return;
+        if (_fitAllOnScreenEnabled)
             return;
 
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
@@ -1407,6 +1450,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         ApplySavedLocalBackgroundColor();
         _pauseOnFocusLossEnabled = PlayerPrefs.GetInt(KEY_PAUSE_ON_FOCUS_LOSS, 1) == 1;
+        _fitAllOnScreenEnabled = PlayerPrefs.GetInt(KEY_FIT_ALL_ON_SCREEN, 0) == 1;
 
         EnsureLoader();
         SetSpellingHelp(null);
@@ -1455,6 +1499,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
         _showEvolutionTooltip = PlayerPrefs.GetInt(KEY_SHOW_EVOLUTION_TOOLTIP, 1) == 1;
         ConfigureEvolutionTooltipToggle();
+        ConfigureFitAllOnScreenToggle();
     }
 
     private static bool ShouldRedirectAccidentalQuizStartup()
@@ -1496,26 +1541,78 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         TooltipManager.Instance?.Hide();
     }
 
+    private void ConfigureFitAllOnScreenToggle()
+    {
+        if (!fitAllOnScreenToggle)
+            EnsureFitAllOnScreenToggle();
+        if (!fitAllOnScreenToggle)
+            return;
+
+        fitAllOnScreenToggle.SetIsOnWithoutNotify(_fitAllOnScreenEnabled);
+        fitAllOnScreenToggle.onValueChanged.RemoveListener(OnFitAllOnScreenToggleChanged);
+        fitAllOnScreenToggle.onValueChanged.AddListener(OnFitAllOnScreenToggleChanged);
+        PositionFitAllOnScreenToggle();
+        ApplyFitAllOnScreenState(force: true);
+    }
+
+    private void OnFitAllOnScreenToggleChanged(bool on)
+    {
+        _fitAllOnScreenEnabled = on;
+        PlayerPrefs.SetInt(KEY_FIT_ALL_ON_SCREEN, on ? 1 : 0);
+        TooltipManager.Instance?.Hide();
+
+        if (on)
+        {
+            CancelActiveSmartScroll();
+            CancelPendingResetScrollToTop();
+            ApplyColumnsToAllSections();
+        }
+        else
+        {
+            ApplyFitAllOnScreenState(force: true);
+            ApplyColumnsToAllSections();
+        }
+    }
+
     private void EnsureEvolutionTooltipToggle()
     {
         if (evolutionTooltipToggle)
             return;
 
-        var existing = GameObject.Find("ShowEvolutionTooltipToggle");
-        if (existing && existing.TryGetComponent(out Toggle existingToggle))
-        {
-            evolutionTooltipToggle = existingToggle;
-            PositionEvolutionTooltipToggle();
+        evolutionTooltipToggle = CreateOrFindTopUiToggle(
+            "ShowEvolutionTooltipToggle",
+            "Show evolution tooltip",
+            270f
+        );
+        PositionEvolutionTooltipToggle();
+    }
+
+    private void EnsureFitAllOnScreenToggle()
+    {
+        if (fitAllOnScreenToggle)
             return;
-        }
+
+        fitAllOnScreenToggle = CreateOrFindTopUiToggle(
+            "FitAllPokemonOnScreenToggle",
+            "Fit all Pokémon on screen",
+            300f
+        );
+        PositionFitAllOnScreenToggle();
+    }
+
+    private Toggle CreateOrFindTopUiToggle(string rowName, string labelText, float preferredWidth)
+    {
+        var existing = GameObject.Find(rowName);
+        if (existing && existing.TryGetComponent(out Toggle existingToggle))
+            return existingToggle;
 
         if (!pauseBtn || !(pauseBtn.transform.parent is RectTransform parent))
-            return;
+            return null;
 
         var pauseRt = pauseBtn.transform as RectTransform;
         Toggle sourceToggle = GetTopUiSourceToggle();
         TMP_Text sourceLabel = GetTopUiSourceToggleLabel();
-        var rowGo = new GameObject("ShowEvolutionTooltipToggle", typeof(RectTransform), typeof(Toggle));
+        var rowGo = new GameObject(rowName, typeof(RectTransform), typeof(Toggle));
         SetLayerRecursive(rowGo, pauseBtn.gameObject.layer);
         rowGo.transform.SetParent(parent, false);
 
@@ -1524,7 +1621,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         rowRt.anchorMax = pauseRt ? pauseRt.anchorMax : new Vector2(0.5f, 0.5f);
         rowRt.pivot = new Vector2(0f, 0.5f);
         rowRt.anchoredPosition = pauseRt ? pauseRt.anchoredPosition : Vector2.zero;
-        rowRt.sizeDelta = new Vector2(270f, 24f);
+        rowRt.sizeDelta = new Vector2(preferredWidth, 24f);
         rowRt.SetAsLastSibling();
 
         var toggle = rowGo.GetComponent<Toggle>();
@@ -1572,63 +1669,428 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         labelRt.offsetMax = Vector2.zero;
 
         var label = labelGo.GetComponent<TextMeshProUGUI>();
-        label.text = "Show evolution tooltip";
+        label.text = labelText;
         CopyTopUiLabelStyle(sourceLabel, label);
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.overflowMode = TextOverflowModes.Overflow;
         label.raycastTarget = false;
 
         toggle.targetGraphic = boxImage;
         toggle.graphic = checkImage;
-        toggle.SetIsOnWithoutNotify(true);
-        evolutionTooltipToggle = toggle;
-        PositionEvolutionTooltipToggle();
+        toggle.SetIsOnWithoutNotify(false);
+        return toggle;
     }
 
     private void PositionEvolutionTooltipToggle()
     {
-        if (!evolutionTooltipToggle || !pauseBtn)
+        PositionTopUiOptionToggles();
+    }
+
+    private void PositionFitAllOnScreenToggle()
+    {
+        PositionTopUiOptionToggles();
+    }
+
+    private void PositionTopUiOptionToggles()
+    {
+        var parent = GetTopUiOptionControlParent();
+        if (!parent || !TryGetSpellingHelpOptionBounds(parent, out var spellingBounds))
             return;
 
-        var rowRt = evolutionTooltipToggle.transform as RectTransform;
-        var pauseRt = pauseBtn.transform as RectTransform;
-        if (!rowRt || !pauseRt)
+        if (!evolutionTooltipToggle || !fitAllOnScreenToggle)
+        {
+            PositionSingleTopUiOptionToggle(evolutionTooltipToggle, parent, spellingBounds);
+            PositionSingleTopUiOptionToggle(fitAllOnScreenToggle, parent, spellingBounds);
+            return;
+        }
+
+        var firstRt = evolutionTooltipToggle.transform as RectTransform;
+        var secondRt = fitAllOnScreenToggle.transform as RectTransform;
+        if (!firstRt || !secondRt)
             return;
 
-        rowRt.anchorMin = pauseRt.anchorMin;
-        rowRt.anchorMax = pauseRt.anchorMax;
+        if (firstRt.parent != parent)
+            firstRt.SetParent(parent, false);
+        if (secondRt.parent != parent)
+            secondRt.SetParent(parent, false);
+
+        firstRt.anchorMin = secondRt.anchorMin = new Vector2(0.5f, 0.5f);
+        firstRt.anchorMax = secondRt.anchorMax = new Vector2(0.5f, 0.5f);
+        firstRt.pivot = secondRt.pivot = new Vector2(0f, 0.5f);
+
+        const float preferredGap = 18f;
+        const float minGap = 8f;
+        const float minFontSize = 14f;
+        const float rowHeight = 24f;
+        const float stackGap = 2f;
+        const float spellingGap = 18f;
+
+        float minLeft = spellingBounds.max.x + spellingGap;
+        float maxRight = GetTopUiOptionRowMaxRight(parent, spellingBounds.max.x);
+        float available = Mathf.Max(1f, maxRight - minLeft);
+
+        float gap = available < 560f ? minGap : preferredGap;
+        float fontSize = ResolveTopUiOptionFontSize(
+            evolutionTooltipToggle,
+            fitAllOnScreenToggle,
+            available,
+            gap,
+            minFontSize
+        );
+        float firstWidth = GetTopUiOptionPreferredWidth(evolutionTooltipToggle, fontSize);
+        float secondWidth = GetTopUiOptionPreferredWidth(fitAllOnScreenToggle, fontSize);
+        float totalWidth = firstWidth + gap + secondWidth;
+
+        bool stack = totalWidth > available;
+        if (!stack)
+        {
+            float y = spellingBounds.center.y;
+            float left = minLeft;
+
+            firstRt.anchoredPosition = new Vector2(left, y);
+            firstRt.sizeDelta = new Vector2(firstWidth, rowHeight);
+            secondRt.anchoredPosition = new Vector2(left + firstWidth + gap, y);
+            secondRt.sizeDelta = new Vector2(secondWidth, rowHeight);
+
+            ConfigureTopUiOptionLabel(evolutionTooltipToggle, fontSize, false);
+            ConfigureTopUiOptionLabel(fitAllOnScreenToggle, fontSize, false);
+            return;
+        }
+
+        fontSize = ResolveStackedTopUiOptionFontSize(
+            evolutionTooltipToggle,
+            fitAllOnScreenToggle,
+            available,
+            minFontSize
+        );
+        firstWidth = GetTopUiOptionPreferredWidth(evolutionTooltipToggle, fontSize);
+        secondWidth = GetTopUiOptionPreferredWidth(fitAllOnScreenToggle, fontSize);
+        float firstLeft = minLeft;
+        float secondLeft = minLeft;
+        float firstY = spellingBounds.center.y + (rowHeight + stackGap) * 0.5f;
+        float secondY = firstY - rowHeight - stackGap;
+
+        firstRt.anchoredPosition = new Vector2(firstLeft, firstY);
+        firstRt.sizeDelta = new Vector2(firstWidth, rowHeight);
+        secondRt.anchoredPosition = new Vector2(secondLeft, secondY);
+        secondRt.sizeDelta = new Vector2(secondWidth, rowHeight);
+
+        ConfigureTopUiOptionLabel(evolutionTooltipToggle, fontSize, true);
+        ConfigureTopUiOptionLabel(fitAllOnScreenToggle, fontSize, true);
+    }
+
+    private void PositionSingleTopUiOptionToggle(
+        Toggle toggle,
+        RectTransform parent,
+        Bounds spellingBounds
+    )
+    {
+        if (!toggle || !parent)
+            return;
+
+        var rowRt = toggle.transform as RectTransform;
+        if (!rowRt)
+            return;
+
+        if (rowRt.parent != parent)
+            rowRt.SetParent(parent, false);
+
+        rowRt.anchorMin = new Vector2(0.5f, 0.5f);
+        rowRt.anchorMax = new Vector2(0.5f, 0.5f);
         rowRt.pivot = new Vector2(0f, 0.5f);
 
-        const float gapFromPause = 28f;
-        const float gapFromCols = 8f;
-        const float minWidth = 230f;
-        const float preferredWidth = 270f;
-        const float nudgeLeft = 12f;
+        const float rowHeight = 24f;
+        const float spellingGap = 18f;
+        float minLeft = spellingBounds.max.x + spellingGap;
+        float maxRight = GetTopUiOptionRowMaxRight(parent, spellingBounds.max.x);
+        float available = Mathf.Max(1f, maxRight - minLeft);
+        float fontSize = GetTopUiOptionCurrentFontSize(toggle);
+        if (GetTopUiOptionPreferredWidth(toggle, fontSize) > available)
+            fontSize = ResolveStackedTopUiOptionFontSize(toggle, toggle, available, 14f);
+        float width = GetTopUiOptionPreferredWidth(toggle, fontSize);
+        float y = spellingBounds.center.y;
 
-        float pauseLeft = GetRectLeftEdge(pauseRt);
-        float maxRight = pauseLeft - gapFromPause - nudgeLeft;
-        float width = preferredWidth;
-        float left = maxRight - width;
-        float y = cardSizeLabel ? cardSizeLabel.rectTransform.anchoredPosition.y - 2f : pauseRt.anchoredPosition.y - 20f;
+        rowRt.anchoredPosition = new Vector2(minLeft, y);
+        rowRt.sizeDelta = new Vector2(width, rowHeight);
+        ConfigureTopUiOptionLabel(toggle, fontSize, false);
+    }
 
-        if (cardSizeLabel)
+    private RectTransform GetTopUiOptionControlParent()
+    {
+        var spellingRoot = GetSpellingHelpRoot();
+        if (spellingRoot && spellingRoot.parent is RectTransform spellingParent)
+            return spellingParent;
+
+        foreach (var button in GetTopActionButtons())
         {
-            float colsRight = GetTextVisualRightEdge(cardSizeLabel) + gapFromCols;
-            float available = maxRight - colsRight;
-            if (available >= preferredWidth)
+            if (button && button.transform.parent is RectTransform parent)
+                return parent;
+        }
+
+        return pauseBtn ? pauseBtn.transform.parent as RectTransform : null;
+    }
+
+    private RectTransform GetSpellingHelpRoot()
+    {
+        if (spellingHelpToggle && spellingHelpToggle.transform.parent is RectTransform root)
+            return root;
+
+        return GameObject.Find("spellingHelp")?.transform as RectTransform;
+    }
+
+    private bool TryGetSpellingHelpOptionBounds(RectTransform parent, out Bounds bounds)
+    {
+        bounds = new Bounds();
+        if (!parent)
+            return false;
+
+        Bounds combinedBounds = new Bounds();
+        bool hasBounds = false;
+        void Encapsulate(RectTransform rt)
+        {
+            if (!rt)
+                return;
+
+            var partBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, rt);
+            if (!hasBounds)
             {
-                width = preferredWidth;
-                left = maxRight - width;
+                combinedBounds = partBounds;
+                hasBounds = true;
             }
             else
             {
-                width = Mathf.Max(minWidth, available);
-                left = maxRight - width;
-                if (left < colsRight)
-                    left = colsRight;
+                combinedBounds.Encapsulate(partBounds.min);
+                combinedBounds.Encapsulate(partBounds.max);
             }
         }
 
-        rowRt.anchoredPosition = new Vector2(left, y);
-        rowRt.sizeDelta = new Vector2(width, 24f);
+        if (spellingHelpToggle)
+        {
+            if (spellingHelpToggle.targetGraphic is Graphic boxGraphic)
+                Encapsulate(boxGraphic.rectTransform);
+            else
+                Encapsulate(spellingHelpToggle.transform as RectTransform);
+        }
+
+        var label = GetSpellingHelpToggleLabel();
+        if (label)
+            Encapsulate(label.rectTransform);
+
+        if (hasBounds)
+        {
+            bounds = combinedBounds;
+            return true;
+        }
+
+        Encapsulate(GetSpellingHelpRoot());
+        if (hasBounds)
+            bounds = combinedBounds;
+        return hasBounds;
+    }
+
+    private IEnumerable<Button> GetTopActionButtons()
+    {
+        yield return resetBtn;
+        yield return backToMenuBtn;
+        yield return pauseBtn;
+        yield return hintTypeBtn;
+        yield return giveUpBtn;
+        yield return shadowsBtn;
+        yield return testBtn;
+    }
+
+    private bool TryGetTopActionControlsBounds(RectTransform parent, out Bounds bounds)
+    {
+        bounds = new Bounds();
+        bool hasBounds = false;
+
+        foreach (var button in GetTopActionButtons())
+        {
+            if (!button || !button.gameObject.activeInHierarchy)
+                continue;
+
+            var rt = button.transform as RectTransform;
+            if (!rt)
+                continue;
+
+            var buttonBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, rt);
+            if (!hasBounds)
+            {
+                bounds = buttonBounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(buttonBounds.min);
+                bounds.Encapsulate(buttonBounds.max);
+            }
+        }
+
+        return hasBounds;
+    }
+
+    private float GetTopUiOptionRowMaxRight(RectTransform parent, float spellingRight)
+    {
+        const float multiplayerPanelGap = 10f;
+        const float controlsGap = 10f;
+
+        float maxRight = float.PositiveInfinity;
+        bool hasLimit = false;
+
+        void AddLimit(float candidate)
+        {
+            if (candidate <= spellingRight + 120f)
+                return;
+
+            maxRight = Mathf.Min(maxRight, candidate);
+            hasLimit = true;
+        }
+
+        if (pauseBtn && pauseBtn.transform.parent is RectTransform controlsRoot && parent)
+        {
+            var controlsBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+                parent,
+                controlsRoot
+            );
+            AddLimit(controlsBounds.min.x - controlsGap);
+        }
+
+        if (!hasLimit && TryGetTopActionControlsBounds(parent, out var actionBounds))
+            AddLimit(actionBounds.min.x - controlsGap);
+
+        if (
+            (QuizNetworkRuntime.IsMultiplayerActive || GameSettings.IsMultiplayer)
+            && scrollRect
+            && scrollRect.viewport
+            && parent
+        )
+        {
+            var viewportBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+                parent,
+                scrollRect.viewport
+            );
+            float viewportRight = viewportBounds.max.x - multiplayerPanelGap;
+            AddLimit(viewportRight);
+        }
+
+        return hasLimit ? maxRight : spellingRight + 640f;
+    }
+
+    private static float ResolveTopUiOptionFontSize(
+        Toggle first,
+        Toggle second,
+        float available,
+        float gap,
+        float minFontSize
+    )
+    {
+        float firstFont = GetTopUiOptionCurrentFontSize(first);
+        float secondFont = GetTopUiOptionCurrentFontSize(second);
+        float fontSize = Mathf.Max(minFontSize, Mathf.Min(firstFont, secondFont));
+
+        float width = GetTopUiOptionPreferredWidth(first, fontSize)
+            + gap
+            + GetTopUiOptionPreferredWidth(second, fontSize);
+        if (width <= available)
+            return fontSize;
+
+        float scale = available / Mathf.Max(1f, width);
+        return Mathf.Max(minFontSize, fontSize * scale);
+    }
+
+    private static float ResolveStackedTopUiOptionFontSize(
+        Toggle first,
+        Toggle second,
+        float available,
+        float minFontSize
+    )
+    {
+        float fontSize = Mathf.Max(
+            minFontSize,
+            Mathf.Min(GetTopUiOptionCurrentFontSize(first), GetTopUiOptionCurrentFontSize(second))
+        );
+
+        float maxWidth = Mathf.Max(
+            GetTopUiOptionPreferredWidth(first, fontSize),
+            GetTopUiOptionPreferredWidth(second, fontSize)
+        );
+        if (maxWidth <= available)
+            return fontSize;
+
+        float scale = available / Mathf.Max(1f, maxWidth);
+        return Mathf.Max(minFontSize, fontSize * scale);
+    }
+
+    private static float GetTopUiOptionCurrentFontSize(Toggle toggle)
+    {
+        var label = toggle ? toggle.GetComponentInChildren<TMP_Text>(true) : null;
+        if (!label)
+            return 22f;
+
+        return Mathf.Max(22f, Mathf.Max(label.fontSize, label.fontSizeMax));
+    }
+
+    private static float GetTopUiOptionPreferredWidth(Toggle toggle, float fontSize)
+    {
+        const float fallbackWidth = 260f;
+        const float edgePadding = 8f;
+
+        if (!toggle)
+            return fallbackWidth;
+
+        var label = toggle.GetComponentInChildren<TMP_Text>(true);
+        var boxRt = (toggle.targetGraphic as Image)?.rectTransform;
+        float boxWidth = boxRt ? boxRt.sizeDelta.x : 20f;
+        float labelGap = 10f;
+        float labelWidth = 220f;
+
+        if (label)
+        {
+            float previousFont = label.fontSize;
+            float previousMax = label.fontSizeMax;
+            bool previousAutoSizing = label.enableAutoSizing;
+            var previousOverflow = label.overflowMode;
+
+            label.enableAutoSizing = false;
+            label.fontSize = fontSize;
+            label.fontSizeMax = fontSize;
+            label.overflowMode = TextOverflowModes.Overflow;
+            labelWidth = label.GetPreferredValues(label.text).x;
+
+            label.enableAutoSizing = previousAutoSizing;
+            label.fontSize = previousFont;
+            label.fontSizeMax = previousMax;
+            label.overflowMode = previousOverflow;
+        }
+
+        return Mathf.Ceil(boxWidth + labelGap + labelWidth + edgePadding);
+    }
+
+    private static void ConfigureTopUiOptionLabel(Toggle toggle, float fontSize, bool tight)
+    {
+        if (!toggle)
+            return;
+
+        var label = toggle.GetComponentInChildren<TMP_Text>(true);
+        if (!label)
+            return;
+
+        var labelRt = label.rectTransform;
+        var boxRt = (toggle.targetGraphic as Image)?.rectTransform;
+        float boxWidth = boxRt ? boxRt.sizeDelta.x : 20f;
+        float labelGap = tight ? 6f : 10f;
+
+        labelRt.offsetMin = new Vector2(boxWidth + labelGap, 0f);
+        labelRt.offsetMax = Vector2.zero;
+        label.enableAutoSizing = false;
+        if (fontSize > 0f)
+        {
+            label.fontSize = fontSize;
+            label.fontSizeMax = fontSize;
+        }
+        label.fontSizeMin = Mathf.Min(label.fontSizeMin, fontSize > 0f ? fontSize : 14f);
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.overflowMode = TextOverflowModes.Overflow;
     }
 
     private static float GetRectLeftEdge(RectTransform rt)
@@ -1652,19 +2114,38 @@ public class QuizManager : MonoBehaviour, IQuizProgress
 
     private Toggle GetTopUiSourceToggle()
     {
-        if (alwaysScrollToggle)
-            return alwaysScrollToggle;
         if (spellingHelpToggle)
             return spellingHelpToggle;
+        if (alwaysScrollToggle)
+            return alwaysScrollToggle;
 
-        return GameObject.Find("alwaysScrollToToggle")?.GetComponent<Toggle>()
-            ?? GameObject.Find("spellingHelpToggle")?.GetComponent<Toggle>();
+        return GameObject.Find("spellingHelpToggle")?.GetComponent<Toggle>()
+            ?? GameObject.Find("alwaysScrollToToggle")?.GetComponent<Toggle>();
     }
 
     private TMP_Text GetTopUiSourceToggleLabel()
     {
-        return GameObject.Find("alwaysScrollToText")?.GetComponent<TMP_Text>()
-            ?? GameObject.Find("spellingHelpText")?.GetComponent<TMP_Text>();
+        return GetSpellingHelpToggleLabel()
+            ?? GameObject.Find("alwaysScrollToText")?.GetComponent<TMP_Text>();
+    }
+
+    private TMP_Text GetSpellingHelpToggleLabel()
+    {
+        var spellingRoot = GetSpellingHelpRoot();
+        if (!spellingRoot)
+            return null;
+
+        var labels = spellingRoot.GetComponentsInChildren<TMP_Text>(true);
+        return labels.FirstOrDefault(label => label && label.text == "Spelling help")
+            ?? labels.FirstOrDefault(
+                label =>
+                    label
+                    && label.name.IndexOf(
+                        "spellingHelpText",
+                        StringComparison.OrdinalIgnoreCase
+                    ) >= 0
+            )
+            ?? labels.FirstOrDefault();
     }
 
     private static Vector2 GetSourceToggleBoxSize(Toggle source)
@@ -1869,6 +2350,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             HandleKeyboardScroll();
             HandleKeyboardColumns();
         }
+
+        HandleFitAllScreenResize();
     }
 
     private bool IsTextInputFocused()
@@ -1971,6 +2454,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     void MaybeScrollTo(Pokemon p, float duration = 0.25f, bool force = false)
     {
         if (!scrollRect || !scrollRect.content || !scrollRect.viewport)
+            return;
+        if (_fitAllOnScreenEnabled)
             return;
         if (p == null)
             return;
@@ -2369,7 +2854,10 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         foreach (Transform c in content)
+        {
+            c.gameObject.SetActive(false);
             Destroy(c.gameObject);
+        }
         DestroyBackgroundColorSlider();
         _typeColumnsRoot = null;
         _typeLeftColumn = null;
@@ -3338,6 +3826,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         main.SetHeaderGap(noSubSections);
         ApplyQuizTitleColor(ShouldUseLightQuizTitles());
         QueueResetScrollToTop();
+        RebuildSectionContentLayoutImmediate();
         ApplyPendingSavedMultiplayerSessionRestore();
     }
 
@@ -3587,7 +4076,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
 
         float scrollOffsetY = 0f;
-        bool hasScrollSnapshot = preserveScroll && TryCaptureScrollOffset(out scrollOffsetY);
+        bool hasScrollSnapshot =
+            preserveScroll && !_fitAllOnScreenEnabled && TryCaptureScrollOffset(out scrollOffsetY);
 
         var contentRt = content as RectTransform;
         if (!contentRt)
@@ -3657,7 +4147,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             return;
 
         float scrollOffsetY = 0f;
-        bool hasScrollSnapshot = preserveScroll && TryCaptureScrollOffset(out scrollOffsetY);
+        bool hasScrollSnapshot =
+            preserveScroll && !_fitAllOnScreenEnabled && TryCaptureScrollOffset(out scrollOffsetY);
 
         if (_scrollRectRt)
         {
@@ -3722,6 +4213,553 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         var offsetMax = rt.offsetMax;
         offsetMax.y -= offset;
         rt.offsetMax = offsetMax;
+    }
+
+    private void HandleFitAllScreenResize()
+    {
+        if (!_fitAllOnScreenEnabled || !scrollRect || !scrollRect.viewport || !content)
+            return;
+
+        var contentRt = content as RectTransform;
+        if (!contentRt)
+            return;
+
+        Vector2 viewportSize = scrollRect.viewport.rect.size;
+        Vector2 contentSize = contentRt.rect.size;
+        if (
+            !HasFitAllSizeChanged(viewportSize, _lastFitAllViewportSize)
+            && !HasFitAllSizeChanged(contentSize, _lastFitAllContentSize)
+        )
+            return;
+
+        ApplyColumnsToAllSections();
+    }
+
+    private static bool HasFitAllSizeChanged(Vector2 a, Vector2 b)
+    {
+        return Mathf.Abs(a.x - b.x) > 0.5f || Mathf.Abs(a.y - b.y) > 0.5f;
+    }
+
+    private void ApplyFitAllOnScreenState(bool force = false)
+    {
+        if (!_fitAllOnScreenEnabled)
+        {
+            RestoreFitAllSectionLayout();
+            RestoreFitAllContentLayoutState();
+            RestoreFitAllContentState();
+            RestoreFitAllScrollState();
+            _appliedContentTopPadding = -1;
+            ApplyContentTopPadding(preserveScroll: false);
+            _lastFitAllViewportSize = new Vector2(-1f, -1f);
+            _lastFitAllContentSize = new Vector2(-1f, -1f);
+            return;
+        }
+
+        if (!scrollRect || !scrollRect.viewport || !content)
+            return;
+
+        var contentRt = content as RectTransform;
+        if (!contentRt)
+            return;
+
+        CaptureFitAllContentState(contentRt);
+        CaptureFitAllScrollState(scrollRect);
+        CaptureFitAllContentLayoutState(contentRt);
+
+        contentRt.localScale = _fitAllOriginalContentScale;
+        contentRt.pivot = _fitAllOriginalContentPivot;
+        contentRt.anchoredPosition = Vector2.zero;
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
+        Canvas.ForceUpdateCanvases();
+
+        Vector2 viewportSize = scrollRect.viewport.rect.size;
+        if (viewportSize.x <= 1f || viewportSize.y <= 1f)
+            return;
+
+        float availableW = Mathf.Max(1f, viewportSize.x - FitAllViewportPadding * 2f);
+        float availableH = Mathf.Max(1f, viewportSize.y - FitAllViewportPadding * 2f);
+        var plan = CreateFitAllLayoutPlan(availableW, availableH);
+        ApplyFitAllLayoutPlan(plan, availableW);
+
+        PinFitAllContentToTop();
+        ApplyFitAllScrollLock();
+
+        _lastFitAllViewportSize = viewportSize;
+        _lastFitAllContentSize = contentRt.rect.size;
+    }
+
+    private sealed class FitAllLayoutPlan
+    {
+        public float Cell;
+        public float Gap;
+        public float ChromeScale;
+        public float ContentHeight;
+        public float ContentSpacing;
+        public float TypeColumnSpacing;
+        public float TypeColumnSectionSpacing;
+        public float TopPadding;
+        public float BottomPadding;
+        public int EdgePadding;
+        public readonly Dictionary<SectionGroup, int> Columns = new();
+    }
+
+    private FitAllLayoutPlan CreateFitAllLayoutPlan(float availableW, float availableH)
+    {
+        FitAllLayoutPlan best = BuildFitAllLayoutPlan(FitAllMinCellSize, availableW);
+        float low = FitAllMinCellSize;
+        float high = Mathf.Max(low, Mathf.Min(FitAllMaxCellSize, availableW, availableH));
+
+        for (int i = 0; i < FitAllSearchIterations; i++)
+        {
+            float mid = (low + high) * 0.5f;
+            var candidate = BuildFitAllLayoutPlan(mid, availableW);
+            if (candidate.ContentHeight <= availableH)
+            {
+                best = candidate;
+                low = mid;
+            }
+            else
+            {
+                high = mid;
+            }
+        }
+
+        float extra = Mathf.Max(0f, availableH - best.ContentHeight);
+        best.TopPadding = best.EdgePadding + extra * 0.5f;
+        best.BottomPadding = best.EdgePadding + extra * 0.5f;
+        return best;
+    }
+
+    private FitAllLayoutPlan BuildFitAllLayoutPlan(float cell, float availableW)
+    {
+        float chromeScale = Mathf.Clamp(
+            cell / FitAllBaseCellSize,
+            FitAllMinChromeScale,
+            FitAllMaxChromeScale
+        );
+
+        var plan = new FitAllLayoutPlan
+        {
+            Cell = cell,
+            Gap = Mathf.Max(0f, cell * FitAllSpacingRatio),
+            ChromeScale = chromeScale,
+            ContentSpacing = Mathf.Max(0f, FitAllNormalContentSpacing * chromeScale),
+            TypeColumnSpacing = Mathf.Max(0f, FitAllTypeColumnSpacing * chromeScale),
+            TypeColumnSectionSpacing = Mathf.Max(0f, FitAllTypeColumnSectionSpacing * chromeScale),
+            EdgePadding = Mathf.RoundToInt(FitAllViewportPadding),
+        };
+
+        float contentWidth = Mathf.Max(1f, availableW - plan.EdgePadding * 2f);
+        plan.ContentHeight =
+            plan.EdgePadding * 2f + CalculateFitAllContentHeight(contentWidth, plan);
+        return plan;
+    }
+
+    private float CalculateFitAllContentHeight(float contentWidth, FitAllLayoutPlan plan)
+    {
+        if (!content)
+            return 0f;
+
+        float total = 0f;
+        int activeChildren = 0;
+
+        for (int i = 0; i < content.childCount; i++)
+        {
+            var child = content.GetChild(i);
+            if (!child.gameObject.activeSelf)
+                continue;
+
+            float childHeight = CalculateFitAllDirectChildHeight(child, contentWidth, plan);
+            if (childHeight <= 0f)
+                continue;
+
+            total += childHeight;
+            activeChildren++;
+        }
+
+        if (activeChildren > 1)
+            total += plan.ContentSpacing * (activeChildren - 1);
+
+        return total;
+    }
+
+    private float CalculateFitAllDirectChildHeight(
+        Transform child,
+        float contentWidth,
+        FitAllLayoutPlan plan
+    )
+    {
+        if (_typeColumnsRoot && child == _typeColumnsRoot)
+            return CalculateFitAllTypeColumnsHeight(contentWidth, plan);
+
+        var sec = child.GetComponent<SectionGroup>();
+        if (!sec)
+            return LayoutUtility.GetPreferredHeight(child as RectTransform);
+
+        return CalculateFitAllSectionHeight(sec, contentWidth, plan);
+    }
+
+    private float CalculateFitAllTypeColumnsHeight(float contentWidth, FitAllLayoutPlan plan)
+    {
+        float columnWidth = Mathf.Max(1f, (contentWidth - plan.TypeColumnSpacing) * 0.5f);
+        float leftHeight = CalculateFitAllColumnHeight(_typeLeftColumn, columnWidth, plan);
+        float rightHeight = CalculateFitAllColumnHeight(_typeRightColumn, columnWidth, plan);
+        return Mathf.Max(leftHeight, rightHeight);
+    }
+
+    private float CalculateFitAllColumnHeight(
+        RectTransform column,
+        float columnWidth,
+        FitAllLayoutPlan plan
+    )
+    {
+        if (!column || !column.gameObject.activeSelf)
+            return 0f;
+
+        float total = 0f;
+        int sections = 0;
+
+        for (int i = 0; i < column.childCount; i++)
+        {
+            var child = column.GetChild(i);
+            if (!child.gameObject.activeSelf)
+                continue;
+
+            var sec = child.GetComponent<SectionGroup>();
+            if (!sec)
+                continue;
+
+            total += CalculateFitAllSectionHeight(sec, columnWidth, plan);
+            sections++;
+        }
+
+        if (sections > 1)
+            total += plan.TypeColumnSectionSpacing * (sections - 1);
+
+        return total;
+    }
+
+    private float CalculateFitAllSectionHeight(
+        SectionGroup sec,
+        float width,
+        FitAllLayoutPlan plan
+    )
+    {
+        int columns = CalculateFitAllColumnCount(sec.CardCount, width, plan.Cell, plan.Gap);
+        plan.Columns[sec] = columns;
+        return sec.GetFitSectionHeight(plan.Cell, plan.Gap, columns, plan.ChromeScale);
+    }
+
+    private static int CalculateFitAllColumnCount(int itemCount, float width, float cell, float gap)
+    {
+        int maxByWidth = Mathf.FloorToInt((Mathf.Max(1f, width) + gap) / Mathf.Max(1f, cell + gap));
+        int maxByItems = Mathf.Max(1, itemCount);
+        return Mathf.Clamp(maxByWidth, 1, maxByItems);
+    }
+
+    private void ApplyFitAllLayoutPlan(FitAllLayoutPlan plan, float availableW)
+    {
+        if (plan == null || !content)
+            return;
+
+        var contentRt = content as RectTransform;
+        if (!contentRt)
+            return;
+
+        var contentLayout = contentRt.GetOrAdd<VerticalLayoutGroup>();
+        contentLayout.padding = new RectOffset(
+            plan.EdgePadding,
+            plan.EdgePadding,
+            Mathf.RoundToInt(plan.TopPadding),
+            Mathf.RoundToInt(plan.BottomPadding)
+        );
+        contentLayout.spacing = plan.ContentSpacing;
+        contentLayout.childAlignment = TextAnchor.UpperLeft;
+        contentLayout.childControlWidth = true;
+        contentLayout.childControlHeight = false;
+        contentLayout.childForceExpandWidth = true;
+        contentLayout.childForceExpandHeight = false;
+
+        ApplyFitAllTypeColumnLayout(plan);
+
+        float contentWidth = Mathf.Max(1f, availableW - plan.EdgePadding * 2f);
+        foreach (var sec in _sections)
+        {
+            if (!sec)
+                continue;
+
+            float sectionWidth = GetFitAllSectionWidth(sec, contentWidth, plan);
+            if (!plan.Columns.TryGetValue(sec, out int columns))
+                columns = CalculateFitAllColumnCount(sec.CardCount, sectionWidth, plan.Cell, plan.Gap);
+
+            sec.ApplyFitLayout(plan.Cell, plan.Gap, columns, plan.ChromeScale);
+            if (sec.transform is RectTransform secRt)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(secRt);
+        }
+
+        RefreshTypeColumnsPreferredHeight();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
+        Canvas.ForceUpdateCanvases();
+    }
+
+    private float GetFitAllSectionWidth(
+        SectionGroup sec,
+        float contentWidth,
+        FitAllLayoutPlan plan
+    )
+    {
+        if (!sec)
+            return contentWidth;
+
+        var parent = sec.transform.parent as RectTransform;
+        if (_typeColumnsRoot && parent && (parent == _typeLeftColumn || parent == _typeRightColumn))
+            return Mathf.Max(1f, (contentWidth - plan.TypeColumnSpacing) * 0.5f);
+
+        return contentWidth;
+    }
+
+    private void ApplyFitAllTypeColumnLayout(FitAllLayoutPlan plan)
+    {
+        if (!_typeColumnsRoot)
+            return;
+
+        var rootLayout = _typeColumnsRoot.GetComponent<HorizontalLayoutGroup>();
+        if (rootLayout)
+        {
+            rootLayout.spacing = plan.TypeColumnSpacing;
+            rootLayout.childAlignment = TextAnchor.UpperLeft;
+            rootLayout.childControlWidth = true;
+            rootLayout.childControlHeight = true;
+            rootLayout.childForceExpandWidth = true;
+            rootLayout.childForceExpandHeight = false;
+        }
+
+        ApplyFitAllTypeColumnLayout(_typeLeftColumn, plan.TypeColumnSectionSpacing);
+        ApplyFitAllTypeColumnLayout(_typeRightColumn, plan.TypeColumnSectionSpacing);
+    }
+
+    private static void ApplyFitAllTypeColumnLayout(RectTransform column, float spacing)
+    {
+        if (!column)
+            return;
+
+        var layout = column.GetComponent<VerticalLayoutGroup>();
+        if (!layout)
+            return;
+
+        layout.spacing = spacing;
+        layout.childAlignment = TextAnchor.UpperLeft;
+        layout.childControlWidth = true;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+    }
+
+    private void CaptureFitAllContentState(RectTransform contentRt)
+    {
+        if (_fitAllContentStateCaptured && _fitAllContentRt == contentRt)
+            return;
+
+        _fitAllContentRt = contentRt;
+        _fitAllOriginalContentScale = contentRt.localScale;
+        _fitAllOriginalContentPivot = contentRt.pivot;
+        _fitAllContentStateCaptured = true;
+    }
+
+    private void RestoreFitAllContentState()
+    {
+        var contentRt = _fitAllContentRt ? _fitAllContentRt : content as RectTransform;
+        if (!contentRt)
+            return;
+
+        if (_fitAllContentStateCaptured)
+        {
+            contentRt.localScale = _fitAllOriginalContentScale;
+            contentRt.pivot = _fitAllOriginalContentPivot;
+        }
+        else
+        {
+            contentRt.localScale = Vector3.one;
+        }
+
+        _fitAllContentStateCaptured = false;
+        _fitAllContentRt = null;
+    }
+
+    private void CaptureFitAllContentLayoutState(RectTransform contentRt)
+    {
+        if (_fitAllContentLayoutCaptured || !contentRt)
+            return;
+
+        var layout = contentRt.GetComponent<VerticalLayoutGroup>();
+        if (!layout)
+            return;
+
+        _fitAllOriginalContentPadding = CopyRectOffset(layout.padding);
+        _fitAllOriginalContentSpacing = layout.spacing;
+        _fitAllOriginalContentAlignment = layout.childAlignment;
+        _fitAllOriginalContentControlWidth = layout.childControlWidth;
+        _fitAllOriginalContentControlHeight = layout.childControlHeight;
+        _fitAllOriginalContentExpandWidth = layout.childForceExpandWidth;
+        _fitAllOriginalContentExpandHeight = layout.childForceExpandHeight;
+        _fitAllContentLayoutCaptured = true;
+    }
+
+    private void RestoreFitAllContentLayoutState()
+    {
+        var contentRt = content as RectTransform;
+        if (!contentRt || !_fitAllContentLayoutCaptured)
+            return;
+
+        var layout = contentRt.GetComponent<VerticalLayoutGroup>();
+        if (layout)
+        {
+            layout.padding = CopyRectOffset(_fitAllOriginalContentPadding);
+            layout.spacing = _fitAllOriginalContentSpacing;
+            layout.childAlignment = _fitAllOriginalContentAlignment;
+            layout.childControlWidth = _fitAllOriginalContentControlWidth;
+            layout.childControlHeight = _fitAllOriginalContentControlHeight;
+            layout.childForceExpandWidth = _fitAllOriginalContentExpandWidth;
+            layout.childForceExpandHeight = _fitAllOriginalContentExpandHeight;
+        }
+
+        RestoreFitAllTypeColumnLayout();
+        _fitAllContentLayoutCaptured = false;
+    }
+
+    private static RectOffset CopyRectOffset(RectOffset source)
+    {
+        if (source == null)
+            return new RectOffset();
+
+        return new RectOffset(source.left, source.right, source.top, source.bottom);
+    }
+
+    private void RestoreFitAllSectionLayout()
+    {
+        foreach (var sec in _sections)
+        {
+            if (!sec)
+                continue;
+
+            sec.RestoreNormalLayout();
+            sec.UpdateHeaderForCols(currentCols, minColsLarge, maxColsSmall);
+        }
+
+        if (content is RectTransform contentRt)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
+    }
+
+    private void RestoreFitAllTypeColumnLayout()
+    {
+        if (_typeColumnsRoot)
+        {
+            var rootLayout = _typeColumnsRoot.GetComponent<HorizontalLayoutGroup>();
+            if (rootLayout)
+            {
+                rootLayout.spacing = FitAllTypeColumnSpacing;
+                rootLayout.childAlignment = TextAnchor.UpperLeft;
+                rootLayout.childControlWidth = true;
+                rootLayout.childControlHeight = true;
+                rootLayout.childForceExpandWidth = true;
+                rootLayout.childForceExpandHeight = false;
+            }
+        }
+
+        RestoreFitAllTypeColumnLayout(_typeLeftColumn);
+        RestoreFitAllTypeColumnLayout(_typeRightColumn);
+    }
+
+    private static void RestoreFitAllTypeColumnLayout(RectTransform column)
+    {
+        if (!column)
+            return;
+
+        var layout = column.GetComponent<VerticalLayoutGroup>();
+        if (!layout)
+            return;
+
+        layout.spacing = FitAllTypeColumnSectionSpacing;
+        layout.childAlignment = TextAnchor.UpperLeft;
+        layout.childControlWidth = true;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+    }
+
+    private void CaptureFitAllScrollState(ScrollRect sr)
+    {
+        if (_fitAllScrollStateCaptured && _fitAllScrollRect == sr)
+            return;
+
+        _fitAllScrollRect = sr;
+        _fitAllOriginalScrollVertical = sr.vertical;
+        _fitAllOriginalScrollHorizontal = sr.horizontal;
+        _fitAllOriginalScrollInertia = sr.inertia;
+        _fitAllOriginalMovementType = sr.movementType;
+        _fitAllOriginalVerticalScrollbarVisibility = sr.verticalScrollbarVisibility;
+        _fitAllOriginalHorizontalScrollbarVisibility = sr.horizontalScrollbarVisibility;
+        _fitAllOriginalVerticalScrollbarActive =
+            sr.verticalScrollbar && sr.verticalScrollbar.gameObject.activeSelf;
+        _fitAllOriginalHorizontalScrollbarActive =
+            sr.horizontalScrollbar && sr.horizontalScrollbar.gameObject.activeSelf;
+        _fitAllScrollStateCaptured = true;
+    }
+
+    private void ApplyFitAllScrollLock()
+    {
+        if (!scrollRect)
+            return;
+
+        scrollRect.StopMovement();
+        scrollRect.velocity = Vector2.zero;
+        scrollRect.vertical = false;
+        scrollRect.horizontal = false;
+        scrollRect.inertia = false;
+        scrollRect.movementType = ScrollRect.MovementType.Clamped;
+
+        if (scrollRect.verticalScrollbar)
+            scrollRect.verticalScrollbar.gameObject.SetActive(false);
+        if (scrollRect.horizontalScrollbar)
+            scrollRect.horizontalScrollbar.gameObject.SetActive(false);
+    }
+
+    private void RestoreFitAllScrollState()
+    {
+        if (!_fitAllScrollStateCaptured || !_fitAllScrollRect)
+            return;
+
+        _fitAllScrollRect.vertical = _fitAllOriginalScrollVertical;
+        _fitAllScrollRect.horizontal = _fitAllOriginalScrollHorizontal;
+        _fitAllScrollRect.inertia = _fitAllOriginalScrollInertia;
+        _fitAllScrollRect.movementType = _fitAllOriginalMovementType;
+        _fitAllScrollRect.verticalScrollbarVisibility = _fitAllOriginalVerticalScrollbarVisibility;
+        _fitAllScrollRect.horizontalScrollbarVisibility = _fitAllOriginalHorizontalScrollbarVisibility;
+
+        if (_fitAllScrollRect.verticalScrollbar)
+            _fitAllScrollRect.verticalScrollbar.gameObject.SetActive(
+                _fitAllOriginalVerticalScrollbarActive
+            );
+        if (_fitAllScrollRect.horizontalScrollbar)
+            _fitAllScrollRect.horizontalScrollbar.gameObject.SetActive(
+                _fitAllOriginalHorizontalScrollbarActive
+            );
+
+        _fitAllScrollStateCaptured = false;
+        _fitAllScrollRect = null;
+    }
+
+    private void PinFitAllContentToTop()
+    {
+        if (!scrollRect || !scrollRect.content)
+            return;
+
+        scrollRect.StopMovement();
+        scrollRect.velocity = Vector2.zero;
+        scrollRect.content.anchoredPosition = Vector2.zero;
+        scrollRect.verticalNormalizedPosition = 1f;
     }
 
     private void CancelGridTransientCoroutines()
@@ -4160,7 +5198,8 @@ public class QuizManager : MonoBehaviour, IQuizProgress
     private void ApplyColumnsToAllSections(bool preserveScroll = false)
     {
         float scrollOffsetY = 0f;
-        bool hasScrollSnapshot = preserveScroll && TryCaptureScrollOffset(out scrollOffsetY);
+        bool hasScrollSnapshot =
+            preserveScroll && !_fitAllOnScreenEnabled && TryCaptureScrollOffset(out scrollOffsetY);
         if (preserveScroll)
         {
             CancelActiveSmartScroll();
@@ -4171,6 +5210,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             cardSizeLabel.text = $"{currentCols} cols";
 
         PositionEvolutionTooltipToggle();
+        PositionFitAllOnScreenToggle();
 
         foreach (var fit in _fits)
         {
@@ -4244,12 +5284,14 @@ public class QuizManager : MonoBehaviour, IQuizProgress
                 LayoutRebuilder.ForceRebuildLayoutImmediate(secRt);
         }
 
+        ForceTypeColumnsLayoutImmediate();
         RefreshTypeColumnsPreferredHeight();
 
         if (content is RectTransform contentRt)
             LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
 
         Canvas.ForceUpdateCanvases();
+        ApplyFitAllOnScreenState();
     }
 
     private void OnHintButtonClicked()
@@ -4696,7 +5738,60 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (scoreText)
             scoreText.text = $"{solved.Count}/{total}";
 
+        RefreshFullQuizSectionProgress();
         RefreshHintButtonState();
+    }
+
+    private void RefreshFullQuizSectionProgress()
+    {
+        if (generation != 0)
+        {
+            ClearSectionProgressTitles();
+            return;
+        }
+
+        foreach (var sec in _sections)
+        {
+            if (!sec || !sec.gridRoot || !sec.gridRoot.gameObject.activeSelf || sec.CardCount <= 0)
+                continue;
+
+            CountSectionProgress(sec, out int guessed, out int total);
+            if (total > 0)
+                sec.SetSectionProgress(guessed, total);
+        }
+    }
+
+    private void ClearSectionProgressTitles()
+    {
+        foreach (var sec in _sections)
+        {
+            if (sec)
+                sec.ClearSectionProgress();
+        }
+    }
+
+    private void CountSectionProgress(SectionGroup sec, out int guessed, out int total)
+    {
+        guessed = 0;
+        total = 0;
+
+        if (!sec || !sec.gridRoot)
+            return;
+
+        foreach (Transform child in sec.gridRoot)
+        {
+            if (!child || !child.gameObject.activeSelf)
+                continue;
+
+            var card = child.GetComponent<PokemonCard>();
+            int id = card ? card.PokemonId : 0;
+            if (id == 0)
+                continue;
+
+            total++;
+            if (solved.Contains(id))
+                guessed++;
+        }
     }
 
     private void ApplyMultiplayerUiState()
@@ -4705,6 +5800,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         ApplyResetButtonMode(multiplayerUi);
         ApplyContentTopPadding(preserveScroll: true);
         ApplyMultiplayerRightDock(multiplayerUi, preserveScroll: true);
+        PositionTopUiOptionToggles();
 
         if (testBtn)
             testBtn.gameObject.SetActive(ShouldShowAutofillTestButton());
@@ -5113,6 +6209,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
         if (scrollRect && scrollRect.content)
             LayoutRebuilder.ForceRebuildLayoutImmediate(scrollRect.content);
 
+        RebuildSectionContentLayoutImmediate();
         Canvas.ForceUpdateCanvases();
     }
 
@@ -6199,6 +7296,7 @@ public class QuizManager : MonoBehaviour, IQuizProgress
             if (fit)
                 fit.Recalculate();
         }
+        RebuildSectionContentLayoutImmediate();
     }
 
     public IEnumerator BuildWithExternalProgress(Action<float> report, float from, float to)

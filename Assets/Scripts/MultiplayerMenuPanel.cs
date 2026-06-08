@@ -22,6 +22,9 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     private const float LobbyEntryHeight = 28f;
     private const float LobbyEntryJoinWidth = 60f;
     private const float LobbyBrowserRefreshInterval = 2.5f;
+    private const float PlayerListMinHeight = 18f;
+    private const float PlayerListLineHeight = 16f;
+    private const int MaxDisplayedLobbyMembers = 6;
     private const int MaxVisibleLobbyRows = 3;
     private const string ReadyActionText = "Choose a quiz button.";
     private const string PlayerCountColor = "#7DD3FC";
@@ -46,7 +49,6 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     private TMP_InputField nicknameInput;
     private TMP_Text statusLabel;
     private TMP_Text playersListLabel;
-    private TMP_Text hostNoticeLabel;
     private Button hostButton;
     private Button refreshLobbiesButton;
     private Button returnToQuizButton;
@@ -66,15 +68,13 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
     private bool joinedLobby;
     private bool operationBusy;
     private int lastObservedPlayerCount = -1;
-    private Coroutine hostNoticeRoutine;
     private float nextStatusRefresh;
     private string rawStatusMessage;
     private readonly Dictionary<string, string> observedLobbyMembers = new();
     private bool lobbyMemberSnapshotRunning;
     private bool lobbyBrowserAutoRefresh;
     private bool lobbyBrowserRefreshRunning;
-    private bool pendingLobbyJoinNotice;
-    private int pendingLobbyJoinNoticeCount;
+    private int lobbyMemberDisplayRows;
     private string selectedColorHex = QuizNetworkRuntime.PlayerColorHex;
     private float nextLobbyMemberRefresh;
     private float nextLobbyBrowserRefresh;
@@ -175,15 +175,11 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         statusLabel.color = new Color(0.82f, 0.88f, 0.93f, 1f);
         statusLabel.textWrappingMode = TextWrappingModes.Normal;
         statusLabel.richText = true;
-        playersListLabel = CreateLabel(string.Empty, 12f, FontStyles.Normal, 0f);
+        playersListLabel = CreateLabel(string.Empty, 12f, FontStyles.Normal, PlayerListMinHeight);
         playersListLabel.color = new Color(0.9f, 0.9f, 0.9f, 1f);
-        playersListLabel.textWrappingMode = TextWrappingModes.Normal;
+        playersListLabel.textWrappingMode = TextWrappingModes.NoWrap;
         playersListLabel.richText = true;
         playersListLabel.text = string.Empty;
-
-        hostNoticeLabel = CreateLabel("", 12f, FontStyles.Bold, 20f);
-        hostNoticeLabel.color = new Color(1f, 0.92f, 0.08f, 1f);
-        hostNoticeLabel.gameObject.SetActive(false);
 
         nicknameInput = CreateInput("Nickname", 14);
         PlayerPrefs.DeleteKey(NicknamePrefsKey);
@@ -889,10 +885,34 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
         var rt = (RectTransform)transform;
         var size = rt.sizeDelta;
-        size.y = canBrowse ? BrowserPanelHeight : CompactPanelHeight;
+        size.y = canBrowse
+            ? BrowserPanelHeight
+            : CompactPanelHeight
+                + Mathf.Max(0f, CurrentPlayersListHeight() - PlayerListMinHeight);
         rt.sizeDelta = size;
 
         ApplyMenuQuizButtonInteractivity();
+    }
+
+    private float CurrentPlayersListHeight()
+    {
+        int rows = Mathf.Clamp(lobbyMemberDisplayRows, 1, MaxDisplayedLobbyMembers);
+        return Mathf.Max(PlayerListMinHeight, rows * PlayerListLineHeight + 2f);
+    }
+
+    private void ApplyPlayersListHeight(int rows)
+    {
+        lobbyMemberDisplayRows = Mathf.Clamp(rows, 0, MaxDisplayedLobbyMembers);
+        if (!playersListLabel)
+            return;
+
+        var layout = playersListLabel.GetComponent<LayoutElement>();
+        if (!layout)
+            return;
+
+        float height = lobbyMemberDisplayRows > 0 ? CurrentPlayersListHeight() : PlayerListMinHeight;
+        layout.minHeight = height;
+        layout.preferredHeight = height;
     }
 
     private void ApplyMenuQuizButtonInteractivity()
@@ -1076,6 +1096,7 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
         if ((hostingLobby || joinedLobby) && !operationBusy && !networkActive)
         {
+            QuizNetworkRuntime.Shutdown();
             hostingLobby = false;
             joinedLobby = false;
             observedLobbyMembers.Clear();
@@ -1144,12 +1165,6 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
 
     private void QueueLobbyMemberSnapshot(bool showJoinNotice, int joinCount = 0)
     {
-        if (showJoinNotice)
-        {
-            pendingLobbyJoinNotice = true;
-            pendingLobbyJoinNoticeCount += Mathf.Max(1, joinCount);
-        }
-
         if (!lobbyMemberSnapshotRunning)
             RefreshLobbyMemberSnapshotAsync();
     }
@@ -1162,18 +1177,11 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
         {
             while (true)
             {
-                bool showJoinNotice = pendingLobbyJoinNotice;
-                int fallbackJoinCount = pendingLobbyJoinNoticeCount;
-                pendingLobbyJoinNotice = false;
-                pendingLobbyJoinNoticeCount = 0;
-
                 IReadOnlyList<QuizNetworkRuntime.LobbyMemberInfo> members =
                     await QuizNetworkRuntime.GetCurrentLobbyMembersAsync();
                 if (!this)
                     return;
 
-                var joinedNames = new List<string>();
-                var nonLocalNames = new List<string>();
                 var currentMembers = new Dictionary<string, string>();
                 var currentMemberColors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 var currentOccupiedColors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1186,21 +1194,11 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
                     currentMemberColors[member.Id] = QuizNetworkRuntime.NormalizeColorHex(member.ColorHex);
                     if (!member.IsLocalPlayer)
                     {
-                        nonLocalNames.Add(member.Name);
                         currentOccupiedColors.Add(currentMemberColors[member.Id]);
                     }
                     else
                     {
                         selectedColorHex = QuizNetworkRuntime.SetPlayerColorHex(member.ColorHex);
-                    }
-
-                    if (
-                        showJoinNotice
-                        && !member.IsLocalPlayer
-                        && !observedLobbyMembers.ContainsKey(member.Id)
-                    )
-                    {
-                        joinedNames.Add(member.Name);
                     }
                 }
 
@@ -1214,27 +1212,43 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
                     if (observedLobbyMembers.Count == 0)
                     {
                         playersListLabel.text = string.Empty;
+                        ApplyPlayersListHeight(0);
                     }
                     else
                     {
                         var sb = new System.Text.StringBuilder();
+                        var displayMembers = new List<QuizNetworkRuntime.LobbyMemberInfo>();
                         foreach (var m in members)
                         {
                             if (string.IsNullOrEmpty(m.Id))
                                 continue;
-                            if (!currentMembers.TryGetValue(m.Id, out var nm))
-                                nm = m.Name;
-                            var hex = currentMemberColors.TryGetValue(m.Id, out var ch) ? ch : "#6FEA72";
-                            sb.Append('<');
-                            sb.Append("color=");
-                            sb.Append(hex);
-                            sb.Append('>');
-                            sb.Append(EscapeRichText(QuizNetworkRuntime.NormalizeNickname(nm)));
-                            if (m.IsHost)
-                                sb.Append(" (Host)");
-                            sb.Append("</color>\n");
+
+                            displayMembers.Add(m);
                         }
+
+                        int visibleMemberCount = displayMembers.Count;
+                        bool hasHiddenMembers = visibleMemberCount > MaxDisplayedLobbyMembers;
+                        if (hasHiddenMembers)
+                            visibleMemberCount = MaxDisplayedLobbyMembers - 1;
+
+                        for (int i = 0; i < visibleMemberCount; i++)
+                            AppendLobbyMemberLine(
+                                sb,
+                                displayMembers[i],
+                                currentMembers,
+                                currentMemberColors
+                            );
+
+                        if (hasHiddenMembers)
+                        {
+                            int hiddenCount = displayMembers.Count - visibleMemberCount;
+                            sb.Append("<color=#CBD5E1>+");
+                            sb.Append(hiddenCount);
+                            sb.Append(" more</color>\n");
+                        }
+
                         playersListLabel.text = sb.ToString().TrimEnd('\n');
+                        ApplyPlayersListHeight(visibleMemberCount + (hasHiddenMembers ? 1 : 0));
                     }
                 }
 
@@ -1243,77 +1257,39 @@ public sealed class MultiplayerMenuPanel : MonoBehaviour
                     occupiedColorHexes.Add(colorHex);
                 RefreshColorSwatches();
 
-                if (showJoinNotice && joinedNames.Count == 0 && fallbackJoinCount > 0)
-                {
-                    int fallbackNames = Mathf.Min(fallbackJoinCount, nonLocalNames.Count);
-                    for (int i = nonLocalNames.Count - fallbackNames; i < nonLocalNames.Count; i++)
-                        if (i >= 0)
-                            joinedNames.Add(nonLocalNames[i]);
-                }
-
-                if (showJoinNotice)
-                    ShowHostNotice(BuildLobbyJoinNotice(joinedNames, fallbackJoinCount));
-
-                if (!pendingLobbyJoinNotice)
-                    break;
+                break;
             }
         }
         catch (Exception ex)
         {
             Debug.LogException(ex);
-            if (pendingLobbyJoinNoticeCount > 0)
-                ShowHostNotice(BuildLobbyJoinNotice(null, pendingLobbyJoinNoticeCount));
-            pendingLobbyJoinNotice = false;
-            pendingLobbyJoinNoticeCount = 0;
         }
         finally
         {
             lobbyMemberSnapshotRunning = false;
-            if (pendingLobbyJoinNotice && this)
-                RefreshLobbyMemberSnapshotAsync();
         }
     }
 
-    private static string BuildLobbyJoinNotice(IReadOnlyList<string> joinedNames, int fallbackJoinCount)
+    private static void AppendLobbyMemberLine(
+        System.Text.StringBuilder sb,
+        QuizNetworkRuntime.LobbyMemberInfo member,
+        Dictionary<string, string> currentMembers,
+        Dictionary<string, string> currentMemberColors
+    )
     {
-        if (joinedNames != null && joinedNames.Count == 1)
-            return $"{FormatNoticeName(joinedNames[0])} joined the lobby.";
+        if (!currentMembers.TryGetValue(member.Id, out var name))
+            name = member.Name;
 
-        if (joinedNames != null && joinedNames.Count == 2)
-            return $"{FormatNoticeName(joinedNames[0])} and {FormatNoticeName(joinedNames[1])} joined the lobby.";
-
-        if (joinedNames != null && joinedNames.Count > 2)
-            return $"{FormatNoticeName(joinedNames[0])} and {joinedNames.Count - 1} others joined the lobby.";
-
-        int joined = Mathf.Max(1, fallbackJoinCount);
-        return joined == 1 ? "A player joined the lobby." : $"{joined} players joined the lobby.";
-    }
-
-    private static string FormatNoticeName(string name)
-    {
-        return $"<color={PlayerCountColor}><b>{EscapeRichText(QuizNetworkRuntime.NormalizeNickname(name))}</b></color>";
-    }
-
-    private void ShowHostNotice(string message)
-    {
-        if (!hostNoticeLabel || string.IsNullOrWhiteSpace(message))
-            return;
-
-        hostNoticeLabel.text = message;
-        hostNoticeLabel.gameObject.SetActive(true);
-        WindowsAppNotifier.NotifyLobbyJoin();
-
-        if (hostNoticeRoutine != null)
-            StopCoroutine(hostNoticeRoutine);
-        hostNoticeRoutine = StartCoroutine(CoHideHostNotice());
-    }
-
-    private IEnumerator CoHideHostNotice()
-    {
-        yield return new WaitForSecondsRealtime(3f);
-        if (hostNoticeLabel)
-            hostNoticeLabel.gameObject.SetActive(false);
-        hostNoticeRoutine = null;
+        var hex = currentMemberColors.TryGetValue(member.Id, out var color)
+            ? color
+            : "#6FEA72";
+        sb.Append("<color=");
+        sb.Append(hex);
+        sb.Append('>');
+        sb.Append(EscapeRichText(QuizNetworkRuntime.NormalizeNickname(name)));
+        if (member.IsHost)
+            sb.Append(" (Host)");
+        sb.Append("</color>\n");
     }
 
     private string CurrentNickname()

@@ -1,3 +1,13 @@
+1.3.4 - 8.6.2026
+- Added a Fit all Pokemon on screen checkbox that scales the active quiz overview to fit without scrolling
+- Improved fit-all layouts so Full Quiz, type quizzes, Mega Evolution sections, Gigantamax, and special sections use the available play area cleanly
+- Fixed grouped section alignment so section titles and white Pokemon squares stay left-aligned inside each section
+- Added per-section progress to Full Quiz section titles, such as Kanto (Gen 1) - 100/151
+- Fixed normal non-fit-all grouped layouts so changing the column count no longer lets white squares overlap later sections
+- Fixed co-op clients getting stuck on stale completed quiz state when the host switches from Full Quiz to another quiz
+- Improved co-op lobby cleanup so disconnected or crashed players are removed from the lobby
+- Improved co-op lobby player list spacing for three or more players and removed the separate joined-the-lobby notice
+
 1.3.3 - 5.6.2026
 - Fixed type quiz grid squares so they match normal quiz cell sizing across all type filters
 - Fixed evolution stage and first-letter hint labels so they stay inside each Pokemon square without overlapping

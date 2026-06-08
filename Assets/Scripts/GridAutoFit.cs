@@ -88,7 +88,12 @@ public class GridAutoFit : MonoBehaviour
         int rows = Mathf.CeilToInt((float)ItemCount / Mathf.Max(1, bestCols));
         float gridHeight = rows * cell + Mathf.Max(0, rows - 1) * gap;
 
+        layoutElem.minHeight = gridHeight;
         layoutElem.preferredHeight = gridHeight;
+        layoutElem.flexibleHeight = 0f;
+
+        if (transform is RectTransform rt)
+            rt.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, gridHeight);
 
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
     }
